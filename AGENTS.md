@@ -3,6 +3,7 @@
 This is a private, prerelease library, not an app or a public package.
 
 - Run `npm ci --ignore-scripts --no-audit --no-fund`, `npm run check`, and `npm run test:consumer` before a draft PR.
+- Do not add or run GitHub CI jobs/workflows. Run the full checks locally on the exact snapshot before pushing, and record results in the draft PR.
 - Keep portable data/policy in `src/core`; React and DOM dependencies stay out.
 - Reader folding is local UI state, never document mutation or authorization.
 - Use one interaction owner per element: React Aria by default, Ark through explicit optional primitives in the same token-based component layer. Never combine two focus/overlay managers on one primitive.

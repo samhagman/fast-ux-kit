@@ -9,7 +9,9 @@
 - [ ] Desktop keyboard/browser + narrow mobile layout reviewed; real Android
       touch/TalkBack remains a separate device gate, not inferred from jsdom.
 - [ ] Independent review closes correctness/accessibility findings.
-- [ ] CI verifies the exact draft PR head; report absent CI separately from passing CI.
+- [ ] Run all checks locally on the exact source snapshot before pushing; record
+      the results and verify the remote commit matches that reviewed snapshot.
+      GitHub CI jobs/workflows are intentionally not used.
 
 ## Consumer migration sequence
 

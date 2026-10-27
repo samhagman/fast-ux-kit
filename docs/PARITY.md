@@ -31,7 +31,7 @@ This is an independently authored, native React implementation. This document re
 
 The independent reviewer additionally exercised 9,000 deterministic randomized editor transitions: previous roots remained unchanged, all resulting outlines validated, IDs remained unique, and replaying content intents in default reader mode retained the exact authoritative roots. This is invariant evidence, not proof of every user-visible transition.
 
-Test counts can change with the draft. Use the final `npm run check` log and the exact commit's CI result as the aggregate result; do not infer that all stages passed merely from a focused test invocation.
+Test counts can change with the draft. Use the final local `npm run check` and `npm run test:consumer` logs for the exact pushed source snapshot as the aggregate result; do not infer that all stages passed merely from a focused test invocation.
 
 ## Deliberate contracts, not accidental omissions
 

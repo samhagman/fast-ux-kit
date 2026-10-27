@@ -58,8 +58,8 @@
     "test:consumer": "node scripts/test-consumer.mjs",
     "demo:build": "node scripts/build-demo.mjs",
     "prebuild": "node scripts/clean-dist.mjs",
-    "format": "prettier --write src tests scripts examples docs *.json *.md .github/workflows/*.yml",
-    "format:check": "prettier --check src tests scripts examples docs *.json *.md .github/workflows/*.yml",
+    "format": "prettier --write src tests scripts examples docs *.json *.md",
+    "format:check": "prettier --check src tests scripts examples docs *.json *.md",
     "test:browser": "node scripts/test-browser.mjs"
   },
   "peerDependencies": {

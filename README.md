@@ -17,6 +17,9 @@ npm run test:consumer
 npm pack
 ```
 
+Validation is local-only: run the complete checks above before pushing the exact
+reviewed snapshot. This repository intentionally has no GitHub CI workflows.
+
 Install the resulting tarball into another app; it contains compiled ESM and TypeScript
 declarations, not workspace aliases. Install matching React, React DOM and
 `react-aria-components` peers in the consumer. Ark is optional unless importing
