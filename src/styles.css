@@ -1,0 +1,260 @@
+@import "./components.css";
+@import "./react/editor.css";
+/* Optional shared baseline. The consuming application overrides semantic tokens. */
+.fast-ux-outliner {
+  --outline-indent: 1.25rem;
+  --outline-target: 44px;
+  --outline-gap: 0.25rem;
+  font: inherit;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.fast-ux-outliner__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.fast-ux-outliner__item > .fast-ux-outliner__list {
+  margin-inline-start: var(--outline-indent);
+}
+.fast-ux-outliner__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--outline-gap);
+}
+.fast-ux-outliner__toggle,
+.fast-ux-outliner__marker {
+  flex: 0 0 var(--outline-target);
+  min-width: var(--outline-target);
+  min-height: var(--outline-target);
+  display: inline-grid;
+  place-items: center;
+}
+.fast-ux-outliner__toggle {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  border-radius: 0.25rem;
+}
+.fast-ux-outliner__toggle:focus-visible,
+.fast-ux-outliner__toggle[data-focus-visible] {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.fast-ux-outliner__content {
+  flex: 1;
+  min-width: 0;
+  padding-block: 0.625rem;
+  line-height: 1.5;
+}
+.fast-ux-outliner__content > :first-child {
+  margin-block-start: 0;
+}
+.fast-ux-outliner__content > :last-child {
+  margin-block-end: 0;
+}
+.fast-ux-outliner__content img,
+.fast-ux-outliner__content video {
+  max-width: 100%;
+  height: auto;
+}
+.fast-ux-outliner__content pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+@media (max-width: 480px) {
+  .fast-ux-outliner {
+    --outline-indent: 0.75rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fast-ux-outliner * {
+    scroll-behavior: auto;
+  }
+}
+/* All outline geometry can use the same token contract as the component layer. */
+.fast-ux-outliner {
+  --outline-target: max(44px, var(--fux-target, 44px));
+  --outline-gap: var(--fux-space-xs, 0.25rem);
+  font-size: var(--fux-font-size, 1rem);
+}
+.fast-ux-outliner__list[hidden] {
+  display: none !important;
+}
+.fast-ux-outliner[data-disclosure-position="end"] .fast-ux-outliner__toggle {
+  order: 2;
+  margin-inline-start: auto;
+}
+.fast-ux-outliner[data-disclosure-position="end"] .fast-ux-outliner__marker {
+  flex-basis: 1rem;
+  min-width: 1rem;
+}
+.fast-ux-outliner__toggle > span {
+  transition: transform 140ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fast-ux-outliner__toggle > span {
+    transition: none;
+  }
+}
+.fast-ux-rich {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: var(--fux-line-height, 1.5);
+}
+.fast-ux-rich__block {
+  margin-block: var(--fux-space-sm, 0.5rem);
+}
+.fast-ux-rich__fallback {
+  display: block;
+  color: var(--fux-muted, currentColor);
+  font-size: 0.9em;
+}
+.fast-ux-rich__scroll {
+  max-width: 100%;
+  overflow: auto;
+}
+.fast-ux-rich table {
+  border-collapse: collapse;
+}
+.fast-ux-rich th,
+.fast-ux-rich td {
+  border: 1px solid var(--fux-border, currentColor);
+  padding: var(--fux-space-sm, 0.5rem);
+  text-align: start;
+}
+.fast-ux-rich figure {
+  margin: 0;
+}
+.fast-ux-rich img,
+.fast-ux-rich video,
+.fast-ux-rich audio {
+  max-width: 100%;
+}
+.fast-ux-rich img,
+.fast-ux-rich video {
+  height: auto;
+}
+.fast-ux-rich pre {
+  padding: var(--fux-space-sm, 0.5rem);
+}
+.fast-ux-rich__external-label {
+  font-size: 0.8em;
+}
+.fast-ux-rich aside {
+  border-inline-start: 2px solid var(--fux-border, currentColor);
+  padding-inline-start: var(--fux-space-md, 0.75rem);
+}
+.fast-ux-rich a {
+  color: var(--fux-accent, LinkText);
+}
+.fast-ux-rich__scroll:focus-visible {
+  outline: 2px solid var(--fux-focus, Highlight);
+  outline-offset: 2px;
+}
+.fast-ux-outliner__hoist,
+.fast-ux-outliner__breadcrumbs button {
+  min-inline-size: var(--outline-target);
+  min-block-size: var(--outline-target);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: var(--fux-space-xs, 0.25rem);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.fast-ux-outliner__hoist:focus-visible,
+.fast-ux-outliner__hoist[data-focus-visible],
+.fast-ux-outliner__breadcrumbs button:focus-visible,
+.fast-ux-outliner__breadcrumbs button[data-focus-visible] {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+}
+.fast-ux-outliner__breadcrumbs ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fux-space-xs, 0.25rem);
+  padding: 0;
+  margin: 0 0 var(--fux-space-md, 0.75rem);
+}
+.fast-ux-outliner__breadcrumbs li:not(:first-child)::before {
+  content: "/";
+  padding-inline-end: var(--fux-space-xs, 0.25rem);
+}
+.fast-ux-outliner__toggle > span {
+  transition: transform var(--fux-motion-duration, 140ms) ease;
+}
+.fast-ux-outliner__toggle[aria-expanded="true"] > span {
+  transform: rotate(90deg);
+}
+:dir(rtl) .fast-ux-outliner__toggle[aria-expanded="false"] > span {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fast-ux-outliner__toggle > span {
+    transition: none;
+  }
+}
+.fux-highlight-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fux-highlight {
+  color: inherit;
+  background: var(--fux-highlight);
+  border: 0;
+  border-radius: 0.15em;
+  font: inherit;
+}
+button.fux-highlight {
+  padding: 0;
+  cursor: pointer;
+  min-block-size: max(44px, var(--fux-target));
+  min-inline-size: max(44px, var(--fux-target));
+  touch-action: manipulation;
+}
+.fux-highlight[data-selected] {
+  background: var(--fux-selected);
+  outline: 1px solid var(--fux-accent);
+}
+button.fux-highlight:focus-visible,
+button.fux-highlight[data-focus-visible] {
+  outline: 2px solid var(--fux-focus);
+  outline-offset: 2px;
+}
+.fux-highlight__extra-actions {
+  display: inline;
+}
+.fux-highlight--extra {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-block-size: 1px !important;
+  min-inline-size: 1px !important;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.fux-highlight--extra:focus-visible,
+.fux-highlight--extra[data-focus-visible] {
+  position: static;
+  width: auto;
+  height: auto;
+  min-block-size: max(44px, var(--fux-target)) !important;
+  min-inline-size: max(44px, var(--fux-target)) !important;
+  clip-path: none;
+  padding-inline: var(--fux-space-sm);
+}
+.fux-highlight--extra:focus-visible::after,
+.fux-highlight--extra[data-focus-visible]::after {
+  content: attr(aria-label);
+}

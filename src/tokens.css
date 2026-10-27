@@ -1,0 +1,30 @@
+/* Shared neutral baseline. Override semantic colors at the app/theme root,
+   including the portal root; do not fork component geometry per product. */
+:root {
+  --fux-space-xs: 0.25rem;
+  --fux-space-sm: 0.5rem;
+  --fux-space-md: 0.75rem;
+  --fux-space-lg: 1rem;
+  --fux-space-xl: 1.5rem;
+  --fux-target: 44px;
+  --fux-radius: 0.5rem;
+  --fux-font-size: 1rem;
+  --fux-line-height: 1.5;
+  --fux-surface: #fff;
+  --fux-text: #202124;
+  --fux-muted: #52565c;
+  --fux-border: #737980;
+  --fux-accent: #213d6b;
+  --fux-on-accent: #fff;
+  --fux-danger: #a31528;
+  --fux-on-danger: #fff;
+  --fux-focus: #245db0;
+}
+:root {
+  --fux-motion-duration: 140ms;
+  --fux-backdrop: rgb(0 0 0 / 0.45);
+  --fux-highlight: color-mix(in srgb, var(--fux-accent) 15%, transparent);
+  --fux-selected: color-mix(in srgb, var(--fux-accent) 12%, transparent);
+  --fux-z-popover: 20;
+  --fux-shadow-overlay: 0 6px 24px rgb(0 0 0 / 0.15);
+}

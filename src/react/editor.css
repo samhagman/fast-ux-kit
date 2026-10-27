@@ -1,0 +1,239 @@
+/* Optional editor skin. Every control shares the library's semantic design tokens. */
+.fast-ux-editor {
+  --outline-indent: 1.25rem;
+  --outline-target: max(44px, var(--fux-target, 44px));
+  position: relative;
+}
+.fast-ux-editor__toolbar,
+.fast-ux-editor__breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fux-space-sm, 0.5rem);
+  margin-block-end: var(--fux-space-md, 0.75rem);
+}
+.fast-ux-editor__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fast-ux-editor__item {
+  position: relative;
+  padding-inline-start: calc(var(--outline-depth, 0) * var(--outline-indent));
+  border-radius: var(--fux-radius, 0.25rem);
+}
+.fast-ux-editor__item[data-selected] {
+  background: var(--fux-selected, color-mix(in srgb, currentColor 10%, transparent));
+}
+.fast-ux-editor__item:focus-visible {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+}
+.fast-ux-editor__item[data-drop-before="allowed"]::before,
+.fast-ux-editor__item[data-drop-before="blocked"]::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  border-block-start: 3px solid var(--fux-accent, currentColor);
+  z-index: 2;
+}
+.fast-ux-editor__item[data-drop-before="blocked"]::before {
+  border-block-start-style: dashed;
+  border-color: var(--fux-danger, #b42318);
+}
+.fast-ux-editor__row {
+  align-items: start;
+  gap: 0.125rem;
+}
+.fast-ux-editor__bullet,
+.fast-ux-editor__select,
+.fast-ux-editor__drag {
+  flex: 0 0 auto;
+  min-inline-size: var(--outline-target);
+  min-block-size: var(--outline-target);
+  padding-inline: 0.25rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  touch-action: manipulation;
+}
+.fast-ux-editor__bullet {
+  font-size: 1.4em;
+}
+.fast-ux-editor__drag {
+  cursor: grab;
+}
+.fast-ux-editor__drag:active {
+  cursor: grabbing;
+}
+.fast-ux-editor__select {
+  font-size: 0.7em;
+}
+.fast-ux-editor__text-container {
+  flex: 1;
+  min-inline-size: 0;
+  position: relative;
+  padding-block: 0.625rem;
+}
+.fast-ux-editor__input,
+.fast-ux-editor__decoration {
+  box-sizing: border-box;
+  font: inherit;
+  line-height: 1.5;
+  letter-spacing: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  tab-size: 4;
+}
+.fast-ux-editor__input {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 1.5em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  resize: none;
+  overflow: hidden;
+  border-radius: 0;
+  outline: none;
+}
+.fast-ux-editor__input:focus-visible {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: 3px;
+  border-radius: var(--fux-radius, 0.25rem);
+}
+.fast-ux-editor__input[readonly] {
+  cursor: text;
+  opacity: 0.85;
+}
+.fast-ux-editor__decoration {
+  position: absolute;
+  inset-block-start: 0.625rem;
+  inset-inline: 0;
+  pointer-events: none;
+  color: transparent;
+}
+.fast-ux-editor__decoration [data-kinds]:not([data-kinds=""]) {
+  background: var(--fux-highlight, color-mix(in srgb, currentColor 12%, transparent));
+  border-radius: 0.15rem;
+}
+.fast-ux-editor__task {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--outline-target);
+  min-block-size: var(--outline-target);
+  cursor: pointer;
+}
+.fast-ux-editor__task > input {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin: 0;
+  accent-color: var(--fux-accent, currentColor);
+}
+.fast-ux-editor__body,
+.fast-ux-editor__summary {
+  margin-inline-start: var(--outline-target);
+  padding-block: 0.5rem;
+}
+.fast-ux-editor__summary {
+  border-inline-start: 2px solid var(--fux-border, currentColor);
+  padding-inline-start: 0.75rem;
+}
+.fast-ux-editor__diagnostics {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  font-size: 0.875em;
+}
+.fast-ux-editor__diagnostics [data-severity="error"] {
+  color: var(--fux-danger, #b42318);
+}
+.fast-ux-editor__completions {
+  position: relative;
+  max-inline-size: min(30rem, calc(100vw - 2rem));
+  min-inline-size: min(16rem, 100%);
+  max-block-size: 18rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  color: var(--fux-text, CanvasText);
+  background: var(--fux-surface, Canvas);
+  border: 1px solid var(--fux-border, currentColor);
+  border-radius: var(--fux-radius, 0.5rem);
+  box-shadow: var(--fux-shadow-overlay, 0 6px 24px #0002);
+}
+.fast-ux-editor__completions [role="option"] {
+  min-block-size: 44px;
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.fast-ux-editor__completions [aria-selected="true"] {
+  background: var(--fux-selected, color-mix(in srgb, currentColor 12%, transparent));
+}
+.fast-ux-editor__completions small {
+  display: block;
+  opacity: 0.7;
+}
+.fast-ux-editor__placeholder,
+.fast-ux-editor__add {
+  margin-block-start: 0.5rem;
+}
+.fast-ux-sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .fast-ux-editor {
+    --outline-indent: 0.75rem;
+  }
+  .fast-ux-editor__select {
+    position: absolute;
+    inline-size: 1px;
+    min-inline-size: 1px;
+    block-size: 1px;
+    min-block-size: 1px;
+    clip-path: inset(50%);
+    overflow: hidden;
+  }
+  .fast-ux-editor__select:focus-visible {
+    position: static;
+    inline-size: auto;
+    min-inline-size: 44px;
+    block-size: auto;
+    min-block-size: 44px;
+    clip-path: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fast-ux-editor *,
+  .fast-ux-editor *::before {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+.fast-ux-editor__information {
+  overflow: auto;
+  max-block-size: inherit;
+  padding: var(--fux-space-md, 0.75rem);
+  background: var(--fux-surface, Canvas);
+  color: var(--fux-text, CanvasText);
+  border: 1px solid var(--fux-border, currentColor);
+  border-radius: var(--fux-radius, 0.5rem);
+  box-shadow: var(--fux-shadow-overlay, 0 6px 24px #0002);
+}
+.fast-ux-editor__information > button {
+  display: block;
+  margin-block-start: var(--fux-space-sm, 0.5rem);
+}

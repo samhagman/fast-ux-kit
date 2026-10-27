@@ -1,0 +1,41 @@
+"use client";
+
+// One behavior owner per control: React Aria handles input, focus and overlays.
+// Keep upstream prop types instead of inventing a universal adapter.
+export {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogTrigger,
+  FieldError,
+  Heading,
+  Input,
+  Label,
+  Link,
+  ListBox,
+  ListBoxItem,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Modal,
+  ModalOverlay,
+  Popover,
+  Select,
+  SelectValue,
+  Slider,
+  SliderOutput,
+  SliderThumb,
+  SliderTrack,
+  Switch,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
+  Text,
+  TextArea,
+  TextField,
+  Tooltip,
+  TooltipTrigger,
+  I18nProvider,
+} from "react-aria-components";
+export type { ButtonProps, TextFieldProps, DialogProps } from "react-aria-components";

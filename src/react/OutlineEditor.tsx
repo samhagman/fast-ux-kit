@@ -1,0 +1,1344 @@
+"use client";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
+import { Button } from "react-aria-components";
+import {
+  createOutlineEditorState,
+  createOutlineId,
+  currentTextAnalysis,
+  editorVisibleRows,
+  exportOutlineJSON,
+  findOutlineNode,
+  getOutlinePath,
+  importOutlineJSON,
+  outlineIds,
+  planOutlineDrop,
+  reconcileOutlineEditorState,
+  reduceOutlineEditor,
+  resolveOutlineKey,
+  segmentText,
+  selectionRoots,
+  serializeOutlineText,
+  type OutlineAction,
+  type OutlineEditorOptions,
+  type OutlineEditorState,
+  type OutlineNode,
+  type TextAnalysis,
+  type TextCompletionProvider,
+  type TextRequestContext,
+  type OutlineDropTarget,
+  type TextHoverProvider,
+} from "../core/index.js";
+import { RichContent } from "./RichContent.js";
+import { Outliner, type OutlinerProps, type OutlineRenderContext } from "./Outliner.js";
+import { useTextCompletion } from "./useTextCompletion.js";
+import { useTextHover } from "./useTextHover.js";
+import { TextPopup } from "./TextPopup.js";
+import { textareaAtVisualBoundary, textareaOffsetAtPoint } from "./text-geometry.js";
+
+export interface OutlinePlugin<T = unknown> {
+  readonly id: string;
+  /** Return null to consume an action, or a replacement action; never mutate the state. */
+  readonly beforeAction?: (
+    action: OutlineAction<T>,
+    state: OutlineEditorState<T>,
+  ) => OutlineAction<T> | null;
+  readonly afterAction?: (
+    action: OutlineAction<T>,
+    previous: OutlineEditorState<T>,
+    next: OutlineEditorState<T>,
+  ) => void;
+  readonly completions?: readonly TextCompletionProvider[];
+}
+export interface OutlinePlaceholder {
+  readonly id: string;
+  readonly label: string;
+  readonly text?: string;
+  readonly index?: number;
+  readonly caret?: number;
+}
+export interface OutlineEditorHandle<T = unknown> {
+  readonly getState: () => OutlineEditorState<T>;
+  readonly dispatch: (action: OutlineAction<T>) => void;
+  readonly reveal: (id: string, caret?: number) => void;
+  readonly exportJSON: () => string;
+  readonly exportText: () => string;
+}
+export interface OutlineEditorProps<T = unknown> extends OutlineEditorOptions<T> {
+  readonly nodes?: readonly OutlineNode<T>[];
+  readonly defaultNodes?: readonly OutlineNode<T>[];
+  readonly onNodesChange?: (nodes: readonly OutlineNode<T>[], action: OutlineAction<T>) => void;
+  readonly onStateChange?: (state: OutlineEditorState<T>, action: OutlineAction<T>) => void;
+  readonly ref?: Ref<OutlineEditorHandle<T>>;
+  readonly id?: string;
+  readonly className?: string;
+  readonly "aria-label"?: string;
+  readonly createId?: () => string;
+  readonly defaultExpandedIds?: ReadonlySet<string>;
+  readonly defaultHoistedId?: string | null;
+  readonly plugins?: readonly OutlinePlugin<T>[];
+  readonly hoverProviders?: readonly TextHoverProvider<ReactNode>[];
+  readonly hoverDelay?: number;
+  /** Defaults to the nearest dialog scope, otherwise document.body. */
+  readonly popupContainer?: Element | null;
+  /** Change to reject pending optimistic edits or reset from the same nodes identity. */
+  readonly resetKey?: string | number;
+  readonly completionProviders?: readonly TextCompletionProvider[];
+  readonly getTextAnalysis?: (node: OutlineNode<T>) => TextAnalysis | undefined;
+  readonly getRichContent?: OutlinerProps<T>["getRichContent"];
+  readonly richRegistry?: OutlinerProps<T>["richRegistry"];
+  readonly allowMedia?: OutlinerProps<T>["allowMedia"];
+  readonly renderContent?: (node: OutlineNode<T>, context: OutlineRenderContext) => ReactNode;
+  readonly renderBody?: (node: OutlineNode<T>) => ReactNode;
+  readonly renderAccessory?: (node: OutlineNode<T>) => ReactNode;
+  readonly renderSuffix?: (node: OutlineNode<T>) => ReactNode;
+  readonly renderStatus?: (node: OutlineNode<T>) => ReactNode;
+  readonly renderCollapsed?: (node: OutlineNode<T>) => ReactNode;
+  readonly getRowTone?: (node: OutlineNode<T>) => string | undefined;
+  readonly getPlaceholders?: (parent: OutlineNode<T> | null) => readonly OutlinePlaceholder[];
+  readonly getRefusalMessage?: (reason: string) => string;
+  readonly spellCheck?: boolean;
+  readonly showToolbar?: boolean;
+  readonly showBreadcrumbs?: boolean;
+  readonly showTasks?: boolean;
+  readonly enableDrag?: boolean;
+}
+
+const EMPTY: readonly never[] = [];
+const OUTLINE_CLIPBOARD_MIME = "application/x-fast-ux-outline+json";
+interface DragSession {
+  readonly pointerId: number;
+  readonly ids: readonly string[];
+  readonly startX: number;
+  readonly startY: number;
+  readonly initialDepth: number;
+  readonly active: boolean;
+  readonly target: OutlineDropTarget | null;
+  readonly gapId: string | null;
+  readonly allowed: boolean;
+}
+
+/**
+ * Direct React editor; no framework bridge or hidden editor runtime. Editing must be
+ * explicitly enabled with readOnly={false}. Rich bodies never become textareas.
+ */
+export function OutlineEditor<T = unknown>({
+  nodes,
+  defaultNodes = EMPTY,
+  onNodesChange,
+  onStateChange,
+  ref,
+  id,
+  className,
+  "aria-label": label = "Outline editor",
+  createId = createOutlineId,
+  defaultExpandedIds,
+  defaultHoistedId,
+  plugins = EMPTY,
+  completionProviders = EMPTY,
+  hoverProviders = EMPTY,
+  hoverDelay = 350,
+  popupContainer,
+  resetKey,
+  getTextAnalysis,
+  getRichContent,
+  richRegistry,
+  allowMedia,
+  renderContent,
+  renderBody,
+  renderAccessory,
+  renderSuffix,
+  renderStatus,
+  renderCollapsed,
+  getRowTone,
+  getPlaceholders,
+  getRefusalMessage,
+  spellCheck = true,
+  showToolbar = true,
+  showBreadcrumbs = true,
+  showTasks = true,
+  enableDrag = true,
+  readOnly = true,
+  isLocked,
+  canChange,
+  mergeData,
+  historyLimit,
+  typingGroupMs,
+}: OutlineEditorProps<T>) {
+  const instance = useId(),
+    rootId = id ?? `outline-editor-${instance}`;
+  const [state, setState] = useState(() =>
+    createOutlineEditorState(nodes ?? defaultNodes, {
+      expandedIds: defaultExpandedIds,
+      hoistedId: defaultHoistedId,
+    }),
+  );
+  const model = useRef(state),
+    external = useRef(nodes),
+    proposed = useRef(new WeakSet<readonly OutlineNode<T>[]>());
+  const externalReset = useRef(resetKey);
+  const [rowMode, setRowMode] = useState(false),
+    rowModeRef = useRef(false);
+  const root = useRef<HTMLElement>(null),
+    textareas = useRef(new Map<string, HTMLTextAreaElement>()),
+    rowElements = useRef(new Map<string, HTMLLIElement>());
+  const pendingFocus = useRef(false);
+  const composing = useRef(false),
+    focused = useRef<string | null>(null),
+    selectedCaret = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const callbacks = useRef({
+    onNodesChange,
+    onStateChange,
+    plugins,
+    readOnly,
+    isLocked,
+    canChange,
+    mergeData,
+    historyLimit,
+    typingGroupMs,
+  });
+  callbacks.current = {
+    onNodesChange,
+    onStateChange,
+    plugins,
+    readOnly,
+    isLocked,
+    canChange,
+    mergeData,
+    historyLimit,
+    typingGroupMs,
+  };
+  const [clipboardError, setClipboardError] = useState<string | null>(null);
+  const [drag, setDrag] = useState<DragSession | null>(null),
+    dragRef = useRef<DragSession | null>(null);
+  const updateMode = (value: boolean) => {
+    rowModeRef.current = value;
+    setRowMode(value);
+  };
+  const dispatch = useCallback((input: OutlineAction<T>) => {
+    const previous = model.current,
+      config = callbacks.current;
+    let action: OutlineAction<T> | null = input;
+    for (const plugin of config.plugins) {
+      if (!action) break;
+      action = plugin.beforeAction ? plugin.beforeAction(action, previous) : action;
+    }
+    if (!action) return;
+    const next = reduceOutlineEditor(previous, action, config);
+    // Advance synchronously before React commits: fast keys never use an old row/tree.
+    if (next.focusVersion !== previous.focusVersion) pendingFocus.current = true;
+    model.current = next;
+    setState(next);
+    if (next.nodes !== previous.nodes) {
+      if (external.current !== undefined) proposed.current.add(next.nodes);
+      config.onNodesChange?.(next.nodes, action);
+    }
+    config.onStateChange?.(next, action);
+    for (const plugin of config.plugins) plugin.afterAction?.(action, previous, next);
+  }, []);
+  const getContext = useCallback((): TextRequestContext | null => {
+    const rowId = focused.current,
+      node = rowId && findOutlineNode(model.current.nodes, rowId)?.node;
+    if (!rowId || !node || composing.current || rowModeRef.current) return null;
+    return {
+      surfaceId: rootId,
+      rowId,
+      text: node.text,
+      revision: model.current.revision,
+      selection: selectedCaret.current,
+    };
+  }, [rootId]);
+  const providers = useMemo(
+    () => [...completionProviders, ...plugins.flatMap((plugin) => plugin.completions ?? [])],
+    [completionProviders, plugins],
+  );
+  const completion = useTextCompletion({
+    providers,
+    getContext,
+    disabled: readOnly,
+    onAccept: (context, result) => {
+      dispatch({
+        type: "text",
+        id: context.rowId,
+        text: result.text,
+        caret: result.caret,
+        time: Number.NEGATIVE_INFINITY,
+      });
+      selectedCaret.current = { start: result.caret, end: result.caret };
+    },
+  });
+  const completionRef = useRef(completion);
+  completionRef.current = completion;
+
+  const hoverContext = useRef<TextRequestContext | null>(null);
+  const hoverFocus = useRef<{ rowId: string | null; start: number; end: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const getHoverContext = useCallback(() => {
+    const requested = hoverContext.current;
+    if (!requested || composing.current) return null;
+    const originFocus = hoverFocus.current;
+    if (
+      originFocus &&
+      (originFocus.rowId !== focused.current ||
+        originFocus.start !== selectedCaret.current.start ||
+        originFocus.end !== selectedCaret.current.end)
+    )
+      return null;
+    const node = findOutlineNode(model.current.nodes, requested.rowId)?.node;
+    return node ? { ...requested, text: node.text, revision: model.current.revision } : null;
+  }, []);
+  const hover = useTextHover({
+    providers: hoverProviders,
+    getContext: getHoverContext,
+    disabled: false,
+  });
+  const hoverRef = useRef(hover);
+  hoverRef.current = hover;
+  const clearHoverTimer = () => {
+    if (hoverTimer.current !== null) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+  };
+  const dismissHover = () => {
+    clearHoverTimer();
+    hoverContext.current = null;
+    hoverFocus.current = null;
+    hover.dismiss();
+  };
+  const requestHover = (rowId: string, offset: number, origin: "pointer" | "keyboard") => {
+    const node = findOutlineNode(model.current.nodes, rowId)?.node;
+    if (!node || composing.current) return;
+    completion.dismiss();
+    clearHoverTimer();
+    const context: TextRequestContext = {
+      surfaceId: rootId,
+      rowId,
+      text: node.text,
+      revision: model.current.revision,
+      selection:
+        origin === "keyboard" && focused.current === rowId
+          ? { ...selectedCaret.current }
+          : { start: offset, end: offset },
+    };
+    hoverContext.current = context;
+    hoverFocus.current =
+      origin === "keyboard" ? { rowId: focused.current, ...selectedCaret.current } : null;
+    hover.request(context, offset, origin);
+  };
+  useEffect(
+    () => () => {
+      if (hoverTimer.current !== null) clearTimeout(hoverTimer.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    hoverContext.current = null;
+    hoverRef.current.dismiss();
+  }, [state.hoistedId, readOnly]);
+
+  useLayoutEffect(() => {
+    const forced = resetKey !== externalReset.current;
+    if (nodes === external.current && !forced) return;
+    external.current = nodes;
+    externalReset.current = resetKey;
+    if (nodes === undefined) return;
+    if (!forced && proposed.current.has(nodes)) return;
+    // An unrelated host replacement wins and clears stale user history/completion.
+    proposed.current = new WeakSet();
+    completionRef.current.dismiss();
+    const reconciled = reconcileOutlineEditorState(model.current, nodes);
+    const next = forced
+      ? { ...reconciled, history: { past: [], future: [], group: null } }
+      : reconciled;
+    model.current = next;
+    setState(next);
+  }, [nodes, resetKey]);
+  useLayoutEffect(() => {
+    const caret = state.caret;
+    if (!caret || readOnly || composing.current) {
+      pendingFocus.current = false;
+      return;
+    }
+    if (rowModeRef.current) {
+      rowElements.current.get(caret.id)?.focus({ preventScroll: true });
+      pendingFocus.current = false;
+      return;
+    }
+    const textarea = textareas.current.get(caret.id);
+    if (!textarea) return;
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(caret.start, caret.end);
+    focused.current = caret.id;
+    selectedCaret.current = { start: caret.start, end: caret.end };
+    pendingFocus.current = false;
+    textarea.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [state.focusVersion, readOnly]);
+  useLayoutEffect(() => {
+    for (const textarea of textareas.current.values()) {
+      textarea.style.height = "0px";
+      textarea.style.height = `${Math.max(24, textarea.scrollHeight)}px`;
+    }
+  }, [state.nodes, state.expandedIds, state.hoistedId]);
+  useEffect(() => {
+    completionRef.current.dismiss();
+  }, [readOnly, state.hoistedId]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      getState: () => model.current,
+      dispatch,
+      reveal: (target, caret = 0) => {
+        const current = model.current;
+        if (
+          current.hoistedId &&
+          !getOutlinePath(current.nodes, target).some((node) => node.id === current.hoistedId)
+        )
+          dispatch({ type: "hoist", id: null });
+        updateMode(false);
+        dispatch({ type: "focus", id: target, start: caret });
+      },
+      exportJSON: () => exportOutlineJSON(model.current.nodes),
+      exportText: () => serializeOutlineText(model.current.nodes),
+    }),
+    [dispatch],
+  );
+
+  const visible = useMemo(
+    () => editorVisibleRows(state),
+    [state.nodes, state.expandedIds, state.hoistedId],
+  );
+  const focusedRow = state.caret?.id;
+  const selectRow = (rowId: string, extend = false, toggle = false) => {
+    completion.dismiss();
+    updateMode(true);
+    focused.current = rowId;
+    dispatch({ type: "select", id: rowId, extend, toggle });
+    rowElements.current.get(rowId)?.focus({ preventScroll: true });
+  };
+  const syncInput = (textarea: HTMLTextAreaElement, rowId: string) => {
+    focused.current = rowId;
+    selectedCaret.current = { start: textarea.selectionStart, end: textarea.selectionEnd };
+    dispatch({
+      type: "caret",
+      id: rowId,
+      start: textarea.selectionStart,
+      end: textarea.selectionEnd,
+    });
+    const current = findOutlineNode(model.current.nodes, rowId)?.node;
+    if (current && current.text !== textarea.value)
+      dispatch({
+        type: "text",
+        id: rowId,
+        text: textarea.value,
+        caret: textarea.selectionStart,
+        time: Date.now(),
+      });
+  };
+  const moveFocus = (
+    rowId: string,
+    direction: "up" | "down",
+    extend: boolean,
+    textarea?: HTMLTextAreaElement,
+  ) => {
+    const rows = editorVisibleRows(model.current),
+      index = rows.findIndex((row) => row.id === rowId),
+      next = rows[index + (direction === "up" ? -1 : 1)];
+    if (!next) return;
+    if (rowModeRef.current || extend) {
+      updateMode(true);
+      dispatch({ type: "select", id: next.id, extend });
+      focused.current = next.id;
+      rowElements.current.get(next.id)?.focus({ preventScroll: true });
+    } else {
+      const before = textarea?.value.slice(0, textarea.selectionStart) ?? "";
+      const column = before.length - before.lastIndexOf("\n") - 1;
+      const lineStart = direction === "up" ? next.node.text.lastIndexOf("\n") + 1 : 0;
+      const lineLength =
+        direction === "up"
+          ? next.node.text.length - lineStart
+          : next.node.text.indexOf("\n") < 0
+            ? next.node.text.length
+            : next.node.text.indexOf("\n");
+      dispatch({ type: "focus", id: next.id, start: lineStart + Math.min(column, lineLength) });
+    }
+  };
+  const keyDown = (event: KeyboardEvent<HTMLElement>, rowId: string, mode: "text" | "row") => {
+    if (composing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    const textarea = mode === "text" ? (event.currentTarget as HTMLTextAreaElement) : undefined;
+    if (textarea) syncInput(textarea, rowId);
+    if (completionRef.current.session && mode === "text") {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        event.stopPropagation();
+        completionRef.current.move(event.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        event.stopPropagation();
+        completionRef.current.choose();
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        completionRef.current.dismiss();
+        return;
+      }
+    }
+    if (event.key === "Escape" && hoverRef.current.session) {
+      event.preventDefault();
+      event.stopPropagation();
+      dismissHover();
+      return;
+    }
+    const intent = resolveOutlineKey(event, mode);
+    if (!intent || intent === "line-break") return;
+    if (
+      intent === "merge-backward" &&
+      (!textarea || textarea.selectionStart !== 0 || textarea.selectionEnd !== 0)
+    )
+      return;
+    if (
+      intent === "merge-forward" &&
+      (!textarea ||
+        textarea.selectionStart !== textarea.value.length ||
+        textarea.selectionEnd !== textarea.value.length)
+    )
+      return;
+    if (
+      (intent === "up" || intent === "down") &&
+      textarea &&
+      !textareaAtVisualBoundary(textarea, intent)
+    )
+      return;
+    if (intent === "hover") {
+      event.preventDefault();
+      requestHover(rowId, textarea?.selectionStart ?? 0, "keyboard");
+      return;
+    }
+    event.preventDefault();
+    completion.dismiss();
+    dismissHover();
+    if (intent === "split")
+      dispatch({
+        type: "split",
+        id: rowId,
+        start: textarea!.selectionStart,
+        end: textarea!.selectionEnd,
+        newId: createId(),
+      });
+    else if (intent === "merge-backward" || intent === "merge-forward")
+      dispatch({
+        type: "merge",
+        id: rowId,
+        direction: intent === "merge-backward" ? "backward" : "forward",
+      });
+    else if (intent === "indent" || intent === "outdent")
+      dispatch({ type: intent, ids: model.current.selection.size ? undefined : [rowId] });
+    else if (intent === "move-up" || intent === "move-down")
+      dispatch({
+        type: "move",
+        direction: intent === "move-up" ? "up" : "down",
+        ids: model.current.selection.size ? undefined : [rowId],
+      });
+    else if (intent === "undo" || intent === "redo") dispatch({ type: intent });
+    else if (intent === "task")
+      dispatch({
+        type: "tasks",
+        ids: model.current.selection.size ? [...model.current.selection] : [rowId],
+      });
+    else if (intent === "select-all") dispatch({ type: "select-all" });
+    else if (intent === "delete-selection") dispatch({ type: "delete" });
+    else if (intent === "row-mode") selectRow(rowId);
+    else if (intent === "edit-mode") {
+      updateMode(false);
+      dispatch({
+        type: "focus",
+        id: rowId,
+        start: findOutlineNode(model.current.nodes, rowId)?.node.text.length ?? 0,
+      });
+    } else if (intent === "exit") {
+      dispatch({ type: "clear-selection" });
+      root.current?.focus();
+    } else if (intent === "completion") {
+      const context = getContext();
+      if (context) completion.request(context);
+    } else if (intent === "up" || intent === "down")
+      moveFocus(rowId, intent, event.shiftKey, textarea);
+    else if (intent === "left" || intent === "right") {
+      const location = findOutlineNode(model.current.nodes, rowId)!;
+      if (intent === "left") {
+        if (location.node.children?.length && model.current.expandedIds.has(rowId))
+          dispatch({ type: "expand", ids: [rowId], expanded: false });
+        else if (location.parentId && rowId !== model.current.hoistedId)
+          selectRow(location.parentId);
+      } else if (location.node.children?.length) {
+        if (!model.current.expandedIds.has(rowId)) {
+          const summary = rowElements.current
+            .get(rowId)
+            ?.querySelector<HTMLElement>(".fast-ux-editor__summary");
+          if (summary) summary.focus();
+          else dispatch({ type: "expand", ids: [rowId], expanded: true });
+        } else selectRow(location.node.children[0]!.id);
+      }
+    }
+  };
+
+  const selectedNodes = () =>
+    selectionRoots(model.current.nodes, model.current.selection).map(
+      (nodeId) => findOutlineNode(model.current.nodes, nodeId)!.node,
+    );
+  const copySelection = (clipboard: DataTransfer): boolean => {
+    try {
+      const selected = selectedNodes();
+      clipboard.setData("text/plain", serializeOutlineText(selected));
+      const canonical = exportOutlineJSON(selected);
+      clipboard.setData(OUTLINE_CLIPBOARD_MIME, canonical);
+      if (clipboard.getData(OUTLINE_CLIPBOARD_MIME) !== canonical)
+        throw new Error("Clipboard did not retain structured content.");
+      setClipboardError(null);
+      return true;
+    } catch {
+      setClipboardError(
+        "Cannot copy this content without losing data. The outline was not changed.",
+      );
+      return false;
+    }
+  };
+  const pasteStructured = (clipboard: DataTransfer, rowId: string): boolean => {
+    const json = clipboard.getData(OUTLINE_CLIPBOARD_MIME);
+    if (!json) return false;
+    try {
+      const document = importOutlineJSON<T>(json);
+      dispatch({ type: "paste-nodes", afterId: rowId, nodes: document.nodes, createId });
+      setClipboardError(null);
+    } catch {
+      setClipboardError("The copied outline is invalid. Nothing was inserted.");
+    }
+    return true;
+  };
+  const cancelDrag = useCallback(() => {
+    dragRef.current = null;
+    setDrag(null);
+  }, []);
+  useEffect(() => {
+    if (!drag) return;
+    const owner = root.current?.ownerDocument;
+    if (!owner) return;
+    let animationFrame: number | null = null;
+    let latestPointer: PointerEvent | null = null;
+    const move = (event: PointerEvent) => {
+      latestPointer = event;
+      const current = dragRef.current;
+      if (!current || current.pointerId !== event.pointerId) return;
+      if (
+        !current.active &&
+        Math.hypot(event.clientX - current.startX, event.clientY - current.startY) < 8
+      )
+        return;
+      event.preventDefault();
+      if (current.ids.some((nodeId) => !findOutlineNode(model.current.nodes, nodeId))) {
+        cancelDrag();
+        return;
+      }
+      const movingIds = new Set(
+        current.ids.flatMap((nodeId) =>
+          outlineIds([findOutlineNode(model.current.nodes, nodeId)!.node]),
+        ),
+      );
+      const rows = editorVisibleRows(model.current).filter((row) => !movingIds.has(row.id));
+      let gap = rows.length;
+      for (let index = 0; index < rows.length; index++) {
+        const bounds = rowElements.current.get(rows[index]!.id)?.getBoundingClientRect();
+        if (bounds && event.clientY < bounds.top + bounds.height / 2) {
+          gap = index;
+          break;
+        }
+      }
+      const rtl = root.current && getComputedStyle(root.current).direction === "rtl";
+      const scopeDepth = model.current.hoistedId
+        ? getOutlinePath(model.current.nodes, model.current.hoistedId).length - 1
+        : 0;
+      const desired =
+        scopeDepth +
+        current.initialDepth +
+        Math.round(((event.clientX - current.startX) * (rtl ? -1 : 1)) / 24);
+      const target = planOutlineDrop(
+        model.current.nodes,
+        editorVisibleRows(model.current).map((row) => row.id),
+        current.ids,
+        gap,
+        desired,
+      );
+      const preview = target
+        ? reduceOutlineEditor(
+            model.current,
+            { type: "drop", ids: current.ids, parentId: target.parentId, index: target.index },
+            callbacks.current,
+          )
+        : null;
+      const next = {
+        ...current,
+        active: true,
+        target,
+        gapId: rows[gap]?.id ?? null,
+        allowed: preview?.refusal === null,
+      };
+      dragRef.current = next;
+      setDrag(next);
+      let scrollable: HTMLElement | null = root.current;
+      while (
+        scrollable &&
+        !(
+          scrollable.scrollHeight > scrollable.clientHeight &&
+          /auto|scroll/.test(getComputedStyle(scrollable).overflowY)
+        )
+      )
+        scrollable = scrollable.parentElement;
+      const viewport = !scrollable;
+      const scroller = scrollable ?? owner.scrollingElement;
+      const bounds = scrollable?.getBoundingClientRect();
+      const top = viewport ? 0 : bounds!.top,
+        bottom = viewport ? (owner.defaultView?.innerHeight ?? 0) : bounds!.bottom;
+      const distance = event.clientY < top + 48 ? -12 : event.clientY > bottom - 48 ? 12 : 0;
+      if (scroller && distance) scroller.scrollTop += distance;
+      if (animationFrame === null && owner.defaultView)
+        animationFrame = owner.defaultView.requestAnimationFrame(() => {
+          animationFrame = null;
+          if (dragRef.current?.active && latestPointer) move(latestPointer);
+        });
+    };
+    const up = (event: PointerEvent) => {
+      const current = dragRef.current;
+      if (!current || current.pointerId !== event.pointerId) return;
+      if (current.active && current.allowed && current.target)
+        dispatch({
+          type: "drop",
+          ids: current.ids,
+          parentId: current.target.parentId,
+          index: current.target.index,
+        });
+      cancelDrag();
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelDrag();
+      }
+    };
+    owner.addEventListener("pointermove", move, { passive: false });
+    owner.addEventListener("pointerup", up);
+    owner.addEventListener("pointercancel", cancelDrag);
+    owner.addEventListener("keydown", escape);
+    return () => {
+      if (animationFrame !== null) owner.defaultView?.cancelAnimationFrame(animationFrame);
+      owner.removeEventListener("pointermove", move);
+      owner.removeEventListener("pointerup", up);
+      owner.removeEventListener("pointercancel", cancelDrag);
+      owner.removeEventListener("keydown", escape);
+    };
+  }, [!!drag, cancelDrag, dispatch]);
+  useEffect(() => {
+    cancelDrag();
+  }, [state.nodes, state.hoistedId, readOnly, cancelDrag]);
+
+  if (readOnly)
+    return (
+      <Outliner
+        nodes={state.nodes}
+        className={className}
+        aria-label={label}
+        expandedIds={state.expandedIds}
+        onExpandedChange={(next, change) =>
+          dispatch({ type: "expand", ids: [change.id], expanded: change.isExpanded })
+        }
+        getRichContent={getRichContent}
+        richRegistry={richRegistry}
+        allowMedia={allowMedia}
+        renderContent={renderContent}
+        renderBody={renderBody}
+        renderAccessory={renderAccessory}
+        renderStatus={renderStatus}
+        renderSuffix={renderSuffix}
+        enableHoist={showBreadcrumbs}
+        hoistedId={state.hoistedId}
+        onHoistChange={(id) => dispatch({ type: "hoist", id })}
+      />
+    );
+
+  const breadcrumbs = state.hoistedId ? getOutlinePath(state.nodes, state.hoistedId) : [];
+  return (
+    <section
+      ref={root}
+      id={rootId}
+      className={["fast-ux-outliner", "fast-ux-editor", className].filter(Boolean).join(" ")}
+      aria-label={label}
+      tabIndex={-1}
+      data-read-only="false"
+      onCopy={(event) => {
+        if (!model.current.selection.size) return;
+        event.preventDefault();
+        copySelection(event.clipboardData);
+      }}
+      onCut={(event) => {
+        if (!model.current.selection.size) return;
+        event.preventDefault();
+        if (copySelection(event.clipboardData)) dispatch({ type: "delete" });
+      }}
+    >
+      {showToolbar && (
+        <div role="toolbar" aria-label="Outline actions" className="fast-ux-editor__toolbar">
+          <Button
+            className="fux-control"
+            isDisabled={!state.history.past.length}
+            onPress={() => {
+              completion.dismiss();
+              dispatch({ type: "undo" });
+            }}
+          >
+            Undo
+          </Button>
+          <Button
+            className="fux-control"
+            isDisabled={!state.history.future.length}
+            onPress={() => {
+              completion.dismiss();
+              dispatch({ type: "redo" });
+            }}
+          >
+            Redo
+          </Button>
+          <Button
+            className="fux-control"
+            onPress={() => dispatch({ type: "expand-all", expanded: true })}
+          >
+            Expand all
+          </Button>
+          <Button
+            className="fux-control"
+            onPress={() => dispatch({ type: "expand-all", expanded: false })}
+          >
+            Collapse all
+          </Button>
+        </div>
+      )}
+      {showBreadcrumbs && breadcrumbs.length > 0 && (
+        <nav aria-label="Outline path" className="fast-ux-editor__breadcrumbs">
+          <Button className="fux-control" onPress={() => dispatch({ type: "hoist", id: null })}>
+            All items
+          </Button>
+          {breadcrumbs.map((node, index) => (
+            <Button
+              key={node.id}
+              className="fux-control"
+              aria-current={index === breadcrumbs.length - 1 ? "location" : undefined}
+              onPress={() => dispatch({ type: "hoist", id: node.id })}
+            >
+              {node.text || "Untitled item"}
+            </Button>
+          ))}
+        </nav>
+      )}
+      <ul
+        role="list"
+        className="fast-ux-outliner__list fast-ux-editor__rows"
+        aria-label="Outline items"
+      >
+        {visible.map((row, index) => {
+          const node = row.node,
+            expanded = state.expandedIds.has(node.id),
+            selected = state.selection.has(node.id),
+            locked =
+              isLocked?.(node) ||
+              getOutlinePath(state.nodes, node.id)
+                .slice(0, -1)
+                .some((ancestor) => isLocked?.(ancestor));
+          const inputId = `${rootId}-text-${index}`,
+            diagnosticsId = `${rootId}-diagnostics-${index}`;
+          const analysis = currentTextAnalysis(getTextAnalysis?.(node), node.text);
+          const richDocument = getRichContent?.(node);
+          const activeCompletion =
+            completion.session?.context.rowId === node.id ? completion.session : null;
+          const popupId = `${rootId}-completions`,
+            activeOption = activeCompletion ? `${popupId}-${activeCompletion.active}` : undefined;
+          const hiddenSummary = row.hasChildren && !expanded ? renderCollapsed?.(node) : null;
+          return (
+            <li
+              key={node.id}
+              ref={(element) => {
+                if (element) rowElements.current.set(node.id, element);
+                else rowElements.current.delete(node.id);
+              }}
+              className="fast-ux-editor__item"
+              data-node-id={node.id}
+              data-depth={row.depth}
+              data-selected={selected || undefined}
+              data-tone={getRowTone?.(node)}
+              data-drop-before={
+                drag?.active && drag.gapId === node.id
+                  ? drag.allowed
+                    ? "allowed"
+                    : "blocked"
+                  : undefined
+              }
+              tabIndex={rowMode && focusedRow === node.id ? 0 : -1}
+              aria-label={`${node.text || "Empty item"}, level ${row.depth + 1}${selected ? ", selected" : ""}`}
+              style={{ "--outline-depth": Math.min(row.depth, 12) } as CSSProperties}
+              onKeyDown={(event) => {
+                if (event.target === event.currentTarget) keyDown(event, node.id, "row");
+              }}
+              onPaste={(event) => {
+                if (event.target !== event.currentTarget) return;
+                event.preventDefault();
+                updateMode(false);
+                if (pasteStructured(event.clipboardData, node.id)) return;
+                dispatch({
+                  type: "paste",
+                  id: node.id,
+                  start: node.text.length,
+                  text: event.clipboardData.getData("text/plain"),
+                  createId,
+                });
+              }}
+            >
+              <div className="fast-ux-outliner__row fast-ux-editor__row">
+                <Button
+                  className="fast-ux-editor__bullet fux-control"
+                  aria-label={`Focus on ${node.text || "empty item"}`}
+                  onPress={() => {
+                    completion.dismiss();
+                    dispatch({ type: "hoist", id: node.id });
+                  }}
+                >
+                  •
+                </Button>
+                <Button
+                  className="fast-ux-editor__select fux-control"
+                  aria-label={`Select ${node.text || "empty item"}`}
+                  aria-pressed={selected}
+                  onPress={(event) =>
+                    selectRow(node.id, event.shiftKey, event.metaKey || event.ctrlKey)
+                  }
+                >
+                  Select
+                </Button>
+                {showTasks && node.checked !== undefined && (
+                  <label className="fast-ux-editor__task">
+                    <input
+                      type="checkbox"
+                      checked={node.checked}
+                      disabled={locked}
+                      aria-label={`Complete ${node.text || "item"}`}
+                      onChange={(event) =>
+                        dispatch({
+                          type: "task",
+                          id: node.id,
+                          checked: event.currentTarget.checked,
+                        })
+                      }
+                    />
+                  </label>
+                )}
+                {renderStatus?.(node)}
+                <div className="fast-ux-editor__text-container">
+                  {analysis?.classifications?.length ? (
+                    <div className="fast-ux-editor__decoration" aria-hidden="true">
+                      {segmentText(node.text, analysis.classifications).map((segment) => (
+                        <span
+                          key={segment.start}
+                          data-kinds={segment.layers.map((layer) => layer.kind).join(" ")}
+                        >
+                          {segment.text}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <textarea
+                    ref={(element) => {
+                      if (element) textareas.current.set(node.id, element);
+                      else textareas.current.delete(node.id);
+                    }}
+                    id={inputId}
+                    value={node.text}
+                    readOnly={locked}
+                    spellCheck={spellCheck}
+                    rows={1}
+                    aria-label={`Edit ${node.text || "empty item"}`}
+                    aria-describedby={
+                      [
+                        analysis?.diagnostics?.length ? diagnosticsId : "",
+                        hover.session?.context.rowId === node.id &&
+                        hover.session.origin === "keyboard"
+                          ? `${rootId}-information`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ") || undefined
+                    }
+                    aria-autocomplete={providers.length ? "list" : undefined}
+                    aria-controls={activeCompletion ? popupId : undefined}
+                    aria-activedescendant={activeOption}
+                    className="fast-ux-editor__input"
+                    data-decorated={!!analysis?.classifications?.length || undefined}
+                    onPointerMove={(event) => {
+                      if (!hoverProviders.length || event.pointerType === "touch") return;
+                      const input = event.currentTarget,
+                        x = event.clientX,
+                        y = event.clientY;
+                      clearHoverTimer();
+                      hoverTimer.current = setTimeout(() => {
+                        const offset = textareaOffsetAtPoint(input, x, y);
+                        const current = hoverRef.current.session;
+                        if (
+                          current?.context.rowId === node.id &&
+                          current.offer.range.start <= offset &&
+                          offset <= current.offer.range.end
+                        )
+                          return;
+                        requestHover(node.id, offset, "pointer");
+                      }, hoverDelay);
+                    }}
+                    onPointerLeave={() => {
+                      clearHoverTimer();
+                      hoverTimer.current = setTimeout(dismissHover, 180);
+                    }}
+                    onFocus={(event) => {
+                      updateMode(false);
+                      focused.current = node.id;
+                      selectedCaret.current = {
+                        start: event.currentTarget.selectionStart,
+                        end: event.currentTarget.selectionEnd,
+                      };
+                      if (!pendingFocus.current)
+                        dispatch({ type: "caret", id: node.id, ...selectedCaret.current });
+                    }}
+                    onSelect={(event) => {
+                      if (
+                        hoverRef.current.session?.origin === "keyboard" &&
+                        (event.currentTarget.selectionStart !==
+                          hoverRef.current.session.context.selection.start ||
+                          event.currentTarget.selectionEnd !==
+                            hoverRef.current.session.context.selection.end)
+                      )
+                        dismissHover();
+                      if (
+                        pendingFocus.current ||
+                        event.currentTarget.ownerDocument.activeElement !== event.currentTarget
+                      )
+                        return;
+                      selectedCaret.current = {
+                        start: event.currentTarget.selectionStart,
+                        end: event.currentTarget.selectionEnd,
+                      };
+                      dispatch({ type: "caret", id: node.id, ...selectedCaret.current });
+                      if (
+                        completionRef.current.session &&
+                        (selectedCaret.current.start !==
+                          completionRef.current.session.context.selection.start ||
+                          selectedCaret.current.end !==
+                            completionRef.current.session.context.selection.end)
+                      )
+                        completionRef.current.dismiss();
+                    }}
+                    onBlur={(event) => {
+                      if (!event.relatedTarget || !root.current?.contains(event.relatedTarget))
+                        completionRef.current.dismiss();
+                    }}
+                    onChange={(event) => {
+                      syncInput(event.currentTarget, node.id);
+                      if (!composing.current) {
+                        const context = getContext();
+                        if (context) completion.request(context, "input");
+                      }
+                    }}
+                    onCompositionStart={() => {
+                      composing.current = true;
+                      completion.dismiss();
+                      dismissHover();
+                    }}
+                    onCompositionEnd={(event) => {
+                      composing.current = false;
+                      syncInput(event.currentTarget, node.id);
+                      const context = getContext();
+                      if (context) completion.request(context, "input");
+                    }}
+                    onKeyDown={(event) => keyDown(event, node.id, "text")}
+                    onPaste={(event) => {
+                      if (composing.current) return;
+                      event.preventDefault();
+                      completion.dismiss();
+                      syncInput(event.currentTarget, node.id);
+                      if (pasteStructured(event.clipboardData, node.id)) return;
+                      dispatch({
+                        type: "paste",
+                        id: node.id,
+                        start: event.currentTarget.selectionStart,
+                        end: event.currentTarget.selectionEnd,
+                        text: event.clipboardData.getData("text/plain"),
+                        createId,
+                      });
+                    }}
+                  />
+                  {renderSuffix?.(node)}
+                  {analysis?.diagnostics?.length ? (
+                    <ul id={diagnosticsId} className="fast-ux-editor__diagnostics">
+                      {analysis.diagnostics.map((diagnostic, diagnosticIndex) => (
+                        <li key={diagnosticIndex} data-severity={diagnostic.severity}>
+                          {diagnostic.severity}: {diagnostic.message}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {activeCompletion && (
+                    <TextPopup
+                      container={popupContainer}
+                      anchor={textareas.current.get(node.id) ?? null}
+                      offset={activeCompletion.context.selection.start}
+                    >
+                      <ul
+                        id={popupId}
+                        role="listbox"
+                        aria-label="Suggestions"
+                        className="fast-ux-editor__completions"
+                      >
+                        {activeCompletion.items.map((item, optionIndex) => (
+                          <li
+                            id={`${popupId}-${optionIndex}`}
+                            key={item.id}
+                            role="option"
+                            aria-selected={optionIndex === activeCompletion.active}
+                            onPointerDown={(event) => event.preventDefault()}
+                            onClick={() => completion.choose(optionIndex)}
+                          >
+                            {item.label}
+                            {item.detail && <small>{item.detail}</small>}
+                          </li>
+                        ))}
+                      </ul>
+                    </TextPopup>
+                  )}
+                </div>
+                {hoverProviders.length > 0 && (
+                  <Button
+                    className="fast-ux-editor__info fux-control"
+                    aria-label={`Information about ${node.text || "item"}`}
+                    onPress={() =>
+                      requestHover(
+                        node.id,
+                        focused.current === node.id ? selectedCaret.current.start : 0,
+                        "keyboard",
+                      )
+                    }
+                  >
+                    Info
+                  </Button>
+                )}
+                {renderAccessory?.(node)}
+                {enableDrag && (
+                  <Button
+                    className="fast-ux-editor__drag fux-control"
+                    aria-label={`Reorder ${node.text || "empty item"}`}
+                    isDisabled={locked}
+                    style={{ touchAction: "none" }}
+                    onKeyDown={(event) => {
+                      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                        event.preventDefault();
+                        dispatch({
+                          type: "move",
+                          direction: event.key === "ArrowUp" ? "up" : "down",
+                          ids: [node.id],
+                        });
+                      }
+                    }}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0 || locked) return;
+                      completion.dismiss();
+                      const ids = state.selection.has(node.id)
+                        ? selectionRoots(state.nodes, state.selection)
+                        : [node.id];
+                      const next = {
+                        pointerId: event.pointerId,
+                        ids,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        initialDepth: row.depth,
+                        active: false,
+                        target: null,
+                        gapId: null,
+                        allowed: false,
+                      };
+                      dragRef.current = next;
+                      setDrag(next);
+                      event.currentTarget.setPointerCapture?.(event.pointerId);
+                    }}
+                  >
+                    ⠿
+                  </Button>
+                )}
+                {row.hasChildren && (
+                  <Button
+                    className="fast-ux-outliner__toggle"
+                    aria-label={`${expanded ? "Collapse" : "Expand"} ${node.text || "item"}`}
+                    aria-expanded={expanded}
+                    onPress={(event) =>
+                      dispatch(
+                        event.altKey
+                          ? { type: "expand", ids: outlineIds([node]), expanded: !expanded }
+                          : { type: "toggle", id: node.id },
+                      )
+                    }
+                  >
+                    <span aria-hidden="true">▸</span>
+                  </Button>
+                )}
+              </div>
+              {(renderBody || richDocument) && (
+                <div className="fast-ux-editor__body">
+                  {renderBody ? (
+                    renderBody(node)
+                  ) : (
+                    <RichContent
+                      document={richDocument!}
+                      registry={richRegistry}
+                      allowMedia={allowMedia}
+                    />
+                  )}
+                </div>
+              )}
+              {hiddenSummary && (
+                <div
+                  className="fast-ux-editor__summary"
+                  tabIndex={0}
+                  aria-label={`Collapsed content for ${node.text || "item"}`}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.stopPropagation();
+                      selectRow(node.id);
+                    }
+                  }}
+                >
+                  {hiddenSummary}
+                </div>
+              )}
+              {expanded &&
+                getPlaceholders?.(node).map((placeholder) => (
+                  <Button
+                    key={placeholder.id}
+                    className="fast-ux-editor__placeholder fux-control"
+                    onPress={() => {
+                      updateMode(false);
+                      dispatch({
+                        type: "insert",
+                        id: createId(),
+                        parentId: node.id,
+                        text: placeholder.text ?? "",
+                        index: placeholder.index,
+                        caret: placeholder.caret,
+                      });
+                    }}
+                  >
+                    {placeholder.label}
+                  </Button>
+                ))}
+            </li>
+          );
+        })}
+      </ul>
+      <Button
+        className="fast-ux-editor__add fux-control"
+        onPress={() => {
+          updateMode(false);
+          dispatch({ type: "insert", id: createId() });
+        }}
+      >
+        Add item
+      </Button>
+      {getPlaceholders?.(null).map((placeholder) => (
+        <Button
+          key={placeholder.id}
+          className="fast-ux-editor__placeholder fux-control"
+          onPress={() => {
+            updateMode(false);
+            dispatch({
+              type: "insert",
+              id: createId(),
+              text: placeholder.text ?? "",
+              parentId: null,
+              index: placeholder.index,
+              caret: placeholder.caret,
+            });
+          }}
+        >
+          {placeholder.label}
+        </Button>
+      ))}
+      {hover.session && (
+        <TextPopup
+          container={popupContainer}
+          anchor={textareas.current.get(hover.session.context.rowId) ?? null}
+          offset={hover.session.offset}
+          onPointerEnter={clearHoverTimer}
+          onPointerLeave={() => {
+            hoverTimer.current = setTimeout(dismissHover, 180);
+          }}
+        >
+          <aside
+            id={`${rootId}-information`}
+            role="dialog"
+            aria-label="Text information"
+            className="fast-ux-editor__information"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                const target = hover.session!.context.rowId;
+                dismissHover();
+                textareas.current.get(target)?.focus();
+              }
+            }}
+          >
+            {hover.session.offer.content}
+            <Button
+              className="fux-control"
+              onPress={() => {
+                const target = hover.session!.context.rowId;
+                dismissHover();
+                textareas.current.get(target)?.focus();
+              }}
+            >
+              Close information
+            </Button>
+          </aside>
+        </TextPopup>
+      )}
+      <div role="status" className="fast-ux-sr-only" aria-live="polite">
+        {clipboardError ??
+          (state.refusal
+            ? (getRefusalMessage?.(state.refusal) ?? `Cannot change outline: ${state.refusal}.`)
+            : drag?.active
+              ? drag.allowed
+                ? `Move to level ${(drag.target?.depth ?? 0) + 1}`
+                : "This move is not allowed"
+              : completion.status === "ready"
+                ? `${completion.session?.items.length ?? 0} suggestions`
+                : completion.status === "loading"
+                  ? "Loading suggestions"
+                  : completion.status === "error"
+                    ? "Suggestions unavailable"
+                    : "")}
+      </div>
+    </section>
+  );
+}

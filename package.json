@@ -1,0 +1,96 @@
+{
+  "name": "@samhagman/fast-ux-kit",
+  "version": "0.0.0-alpha.1",
+  "private": true,
+  "description": "Reusable React UX layer, rich outliner and extensible text intelligence",
+  "type": "module",
+  "license": "UNLICENSED",
+  "files": [
+    "dist",
+    "README.md",
+    "NOTICE.md",
+    "docs"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./aria": {
+      "types": "./dist/aria/index.d.ts",
+      "import": "./dist/aria/index.js"
+    },
+    "./ark": {
+      "types": "./dist/ark/index.d.ts",
+      "import": "./dist/ark/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    },
+    "./components.css": "./dist/components.css",
+    "./tokens.css": "./dist/tokens.css",
+    "./rich": {
+      "types": "./dist/rich/index.d.ts",
+      "import": "./dist/rich/index.js"
+    }
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-styles.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts tests/*.test.tsx",
+    "check": "npm run typecheck && npm run format:check && npm test && npm run build",
+    "test:consumer": "node scripts/test-consumer.mjs",
+    "demo:build": "node scripts/build-demo.mjs",
+    "prebuild": "node scripts/clean-dist.mjs",
+    "format": "prettier --write src tests scripts examples docs *.json *.md .github/workflows/*.yml",
+    "format:check": "prettier --check src tests scripts examples docs *.json *.md .github/workflows/*.yml",
+    "test:browser": "node scripts/test-browser.mjs"
+  },
+  "peerDependencies": {
+    "@ark-ui/react": "^5.39.3",
+    "react": "^19.2.0",
+    "react-aria-components": "^1.22.1",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@ark-ui/react": "5.39.3",
+    "@testing-library/react": "16.3.0",
+    "@types/jsdom": "21.1.7",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "esbuild": "0.25.12",
+    "jsdom": "26.1.0",
+    "prettier": "3.9.10",
+    "react": "19.2.6",
+    "react-aria-components": "1.22.1",
+    "react-dom": "19.2.6",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  },
+  "peerDependenciesMeta": {
+    "@ark-ui/react": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  }
+}
