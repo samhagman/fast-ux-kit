@@ -199,8 +199,9 @@ export function ExtensionsDemo() {
         <p>
           Enable editing, focus a row and press F2. Swap plugin order and press F2 again. Undo
           restores both the review marker and the log together. Turn on log protection to see the
-          same policy apply to keyboard and toolbar actions. The follow-up prompt inserts a real row
-          with ordinary undo history.
+          same policy apply to keyboard and toolbar actions. Type directly into the follow-up prompt
+          to create a real row with your own text, or use its button for the suggested prefix. Both
+          use ordinary undo history; a refused draft stays available to retry.
         </p>
       </details>
       <div>

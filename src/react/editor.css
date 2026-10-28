@@ -207,9 +207,42 @@
   display: block;
   opacity: 0.7;
 }
-.fast-ux-editor__placeholder,
 .fast-ux-editor__add {
   margin-block-start: 0.5rem;
+}
+.fast-ux-editor__placeholder-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fux-space-sm, 0.5rem);
+  margin-block-start: 0.5rem;
+  padding-block: 0.25rem;
+}
+.fast-ux-editor__placeholder-input {
+  box-sizing: border-box;
+  flex: 1 1 14rem;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px dashed var(--fux-border, #999);
+  border-radius: var(--fux-radius, 0.25rem);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+.fast-ux-editor__placeholder-input::placeholder {
+  color: var(--fux-muted, #666);
+  opacity: 1;
+}
+.fast-ux-editor__placeholder-input:focus-visible {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: 3px;
+  border-style: solid;
+}
+.fast-ux-editor__placeholder {
+  max-inline-size: 100%;
 }
 .fast-ux-sr-only {
   position: absolute;

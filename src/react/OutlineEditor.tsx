@@ -51,6 +51,10 @@ import { Outliner, type OutlinerProps, type OutlineRenderContext } from "./Outli
 import { useTextCompletion } from "./useTextCompletion.js";
 import { useTextHover } from "./useTextHover.js";
 import { TextPopup } from "./TextPopup.js";
+import {
+  OutlinePlaceholderInput,
+  type OutlinePlaceholderDraft,
+} from "./OutlinePlaceholderInput.js";
 import { textareaAtVisualBoundary, textareaOffsetAtPoint } from "./text-geometry.js";
 
 export interface OutlineKeyContext<T = unknown> {
@@ -146,6 +150,42 @@ interface DragSession {
   readonly target: OutlineDropTarget | null;
   readonly gapId: string | null;
   readonly allowed: boolean;
+}
+
+/** Explicit keyboard entry into host content, not a modal focus trap. */
+function informationTabStops(container: HTMLElement): HTMLElement[] {
+  return [
+    ...container.querySelectorAll<HTMLElement>(
+      'a[href], button, input, select, textarea, summary, audio[controls], video[controls], [tabindex], [contenteditable]:not([contenteditable="false"])',
+    ),
+  ]
+    .filter((element) => {
+      if (
+        (element.tabIndex < 0 &&
+          !(
+            element.isContentEditable &&
+            !element.parentElement?.isContentEditable &&
+            !element.hasAttribute("tabindex")
+          )) ||
+        element.matches(":disabled") ||
+        element.closest('[hidden], [inert], [aria-hidden="true"]')
+      )
+        return false;
+      for (let current: HTMLElement | null = element; current; current = current.parentElement) {
+        const style = current.ownerDocument.defaultView?.getComputedStyle(current);
+        if (
+          style?.display === "none" ||
+          style?.visibility === "hidden" ||
+          style?.visibility === "collapse"
+        )
+          return false;
+        if (current === container) break;
+      }
+      return true;
+    })
+    .sort(
+      (a, b) => (a.tabIndex > 0 ? a.tabIndex : Infinity) - (b.tabIndex > 0 ? b.tabIndex : Infinity),
+    );
 }
 
 /**
@@ -301,6 +341,8 @@ export function OutlineEditor<T = unknown>({
   completionRef.current = completion;
 
   const hoverContext = useRef<TextRequestContext | null>(null);
+  const information = useRef<HTMLElement>(null);
+  const informationEntry = useRef<HTMLElement | null>(null);
   const hoverFocus = useRef<{ rowId: string | null; start: number; end: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const getHoverContext = useCallback(() => {
@@ -330,9 +372,31 @@ export function OutlineEditor<T = unknown>({
   };
   const dismissHover = () => {
     clearHoverTimer();
+    informationEntry.current = null;
     hoverContext.current = null;
     hoverFocus.current = null;
     hover.dismiss();
+  };
+  const scheduleHoverDismiss = () => {
+    clearHoverTimer();
+    hoverTimer.current = setTimeout(() => {
+      const popup = information.current;
+      if (!popup?.contains(popup.ownerDocument.activeElement)) dismissHover();
+    }, 180);
+  };
+  const enterInformation = () => {
+    const popup = information.current;
+    if (!popup) return;
+    clearHoverTimer();
+    for (const target of informationTabStops(popup)) {
+      target.focus();
+      if (popup.ownerDocument.activeElement === target) {
+        informationEntry.current = target;
+        return;
+      }
+    }
+    informationEntry.current = popup;
+    popup.focus();
   };
   const requestHover = (rowId: string, offset: number, origin: "pointer" | "keyboard") => {
     const node = findOutlineNode(model.current.nodes, rowId)?.node;
@@ -402,12 +466,18 @@ export function OutlineEditor<T = unknown>({
     pendingFocus.current = false;
     textarea.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [state.focusVersion, readOnly]);
-  const resizeTextareas = useCallback(() => {
-    for (const textarea of textareas.current.values()) {
-      textarea.style.height = "0px";
-      textarea.style.height = `${Math.max(24, textarea.scrollHeight)}px`;
-    }
+  const resizeTextareas = useCallback((targets?: Iterable<HTMLTextAreaElement>) => {
+    // Batch the writes and reads: one width notification must not force a fresh
+    // layout for every row. Height-only notifications are filtered below.
+    const inputs = [...(targets ?? textareas.current.values())];
+    for (const textarea of inputs) textarea.style.height = "0px";
+    const heights = inputs.map((textarea) => Math.max(24, textarea.scrollHeight));
+    inputs.forEach((textarea, index) => {
+      textarea.style.height = `${heights[index]}px`;
+    });
   }, []);
+  const textareaSizeObserver = useRef<ResizeObserver | null>(null);
+  const observedWidths = useRef(new Map<Element, number | undefined>());
   useLayoutEffect(() => {
     resizeTextareas();
   }, [
@@ -416,30 +486,71 @@ export function OutlineEditor<T = unknown>({
     state.hoistedId,
     readOnly,
     showTasks,
+    enableDrag,
+    hoverProviders.length,
+    renderAccessory,
     renderSuffix,
     renderStatus,
+    className,
     resizeTextareas,
   ]);
   useLayoutEffect(() => {
     if (readOnly || !root.current) return;
     const element = root.current;
-    let width = element.getBoundingClientRect().width;
+    const widths = observedWidths.current;
     const observer =
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver((entries) => {
-            const nextWidth = entries.find((entry) => entry.target === element)?.contentRect.width;
-            if (nextWidth === undefined || nextWidth === width) return;
-            width = nextWidth;
-            resizeTextareas();
+            // Ignore deliveries queued by an observer from an earlier edit session.
+            if (textareaSizeObserver.current !== observer) return;
+            const changedInputs: HTMLTextAreaElement[] = [];
+            let rootChanged = false;
+            for (const entry of entries) {
+              if (!widths.has(entry.target)) continue;
+              const nextWidth = entry.contentRect.width;
+              if (widths.get(entry.target) === nextWidth) continue;
+              widths.set(entry.target, nextWidth);
+              if (entry.target === element) rootChanged = true;
+              else changedInputs.push(entry.target as HTMLTextAreaElement);
+            }
+            if (rootChanged) resizeTextareas();
+            else if (changedInputs.length) resizeTextareas(changedInputs);
           });
-    observer?.observe(element);
-    window.addEventListener("resize", resizeTextareas);
+    textareaSizeObserver.current = observer;
+    if (observer) {
+      widths.set(element, undefined);
+      observer.observe(element);
+    }
+    const resizeAll = () => resizeTextareas();
+    window.addEventListener("resize", resizeAll);
     return () => {
       observer?.disconnect();
-      window.removeEventListener("resize", resizeTextareas);
+      textareaSizeObserver.current = null;
+      widths.clear();
+      window.removeEventListener("resize", resizeAll);
     };
   }, [readOnly, resizeTextareas]);
+  useLayoutEffect(() => {
+    const observer = textareaSizeObserver.current;
+    if (!observer) return;
+    // DOM nodes survive ordinary text edits. Reconcile after commit rather than
+    // observing in inline refs, which React detaches/reattaches on every render.
+    const inputs = new Set(textareas.current.values());
+    const widths = observedWidths.current;
+    for (const element of widths.keys()) {
+      if (element !== root.current && !inputs.has(element as HTMLTextAreaElement)) {
+        observer.unobserve(element);
+        widths.delete(element);
+      }
+    }
+    for (const input of inputs) {
+      if (!widths.has(input)) {
+        widths.set(input, undefined);
+        observer.observe(input);
+      }
+    }
+  });
   useEffect(() => {
     completionRef.current.dismiss();
   }, [readOnly, state.hoistedId]);
@@ -538,6 +649,12 @@ export function OutlineEditor<T = unknown>({
     if (composing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
     const textarea = mode === "text" ? (event.currentTarget as HTMLTextAreaElement) : undefined;
     if (textarea) syncInput(textarea, rowId);
+    if (event.key === "Escape" && mode === "text" && completionRef.current.status === "loading") {
+      event.preventDefault();
+      event.stopPropagation();
+      completionRef.current.dismiss();
+      return;
+    }
     if (completionRef.current.session && mode === "text") {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
@@ -558,10 +675,29 @@ export function OutlineEditor<T = unknown>({
         return;
       }
     }
-    if (event.key === "Escape" && hoverRef.current.session) {
+    if (
+      event.key === "Escape" &&
+      (hoverRef.current.session || hoverRef.current.status === "loading")
+    ) {
       event.preventDefault();
       event.stopPropagation();
       dismissHover();
+      return;
+    }
+    if (
+      mode === "text" &&
+      event.key === "Tab" &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      hoverRef.current.session?.origin === "keyboard" &&
+      hoverRef.current.session.context.rowId === rowId &&
+      information.current
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      enterInformation();
       return;
     }
     for (const plugin of callbacks.current.plugins) {
@@ -862,6 +998,39 @@ export function OutlineEditor<T = unknown>({
     );
 
   const breadcrumbs = state.hoistedId ? getOutlinePath(state.nodes, state.hoistedId) : [];
+  const renderPlaceholder = (placeholder: OutlinePlaceholder, parentId: string | null) => {
+    const insert = (draft?: OutlinePlaceholderDraft) => {
+      const id = createId();
+      const existed = !!findOutlineNode(model.current.nodes, id);
+      const text = draft?.text ?? placeholder.text ?? "";
+      updateMode(false);
+      dispatch({
+        type: "insert",
+        id,
+        parentId,
+        text,
+        index: placeholder.index,
+        caret: draft?.caret ?? placeholder.caret,
+      });
+      const inserted = findOutlineNode(model.current.nodes, id);
+      // Plugins may consume or replace an action, and policy may refuse it.
+      // A retained local draft is safer than acknowledging an unrelated result.
+      return !existed && inserted?.node.text === text && inserted.parentId === parentId;
+    };
+    return (
+      <div key={placeholder.id} className="fast-ux-editor__placeholder-row">
+        <OutlinePlaceholderInput
+          label={`${placeholder.label}: type here`}
+          spellCheck={spellCheck}
+          onMaterialize={insert}
+          onActivate={() => insert()}
+        />
+        <Button className="fast-ux-editor__placeholder fux-control" onPress={() => insert()}>
+          {placeholder.label}
+        </Button>
+      </div>
+    );
+  };
   return (
     <section
       ref={root}
@@ -1143,10 +1312,7 @@ export function OutlineEditor<T = unknown>({
                         requestHover(node.id, offset, "pointer");
                       }, hoverDelay);
                     }}
-                    onPointerLeave={() => {
-                      clearHoverTimer();
-                      hoverTimer.current = setTimeout(dismissHover, 180);
-                    }}
+                    onPointerLeave={scheduleHoverDismiss}
                     onFocus={(event) => {
                       updateMode(false);
                       focused.current = node.id;
@@ -1159,11 +1325,9 @@ export function OutlineEditor<T = unknown>({
                     }}
                     onSelect={(event) => {
                       if (
-                        hoverRef.current.session?.origin === "keyboard" &&
-                        (event.currentTarget.selectionStart !==
-                          hoverRef.current.session.context.selection.start ||
-                          event.currentTarget.selectionEnd !==
-                            hoverRef.current.session.context.selection.end)
+                        hoverFocus.current &&
+                        (event.currentTarget.selectionStart !== hoverFocus.current.start ||
+                          event.currentTarget.selectionEnd !== hoverFocus.current.end)
                       )
                         dismissHover();
                       if (
@@ -1188,6 +1352,8 @@ export function OutlineEditor<T = unknown>({
                     onBlur={(event) => {
                       if (!event.relatedTarget || !root.current?.contains(event.relatedTarget))
                         completionRef.current.dismiss();
+                      if (hoverFocus.current && !information.current?.contains(event.relatedTarget))
+                        dismissHover();
                     }}
                     onChange={(event) => {
                       syncInput(event.currentTarget, node.id);
@@ -1267,6 +1433,41 @@ export function OutlineEditor<T = unknown>({
                   <Button
                     className="fast-ux-editor__info fux-control"
                     aria-label={`Information about ${node.text || "item"}`}
+                    aria-haspopup="dialog"
+                    aria-expanded={hover.session?.context.rowId === node.id}
+                    aria-controls={
+                      hover.session?.context.rowId === node.id ? `${rootId}-information` : undefined
+                    }
+                    onKeyDown={(event) => {
+                      if (hoverContext.current?.rowId !== node.id) return;
+                      if (
+                        event.key === "Escape" &&
+                        (hoverRef.current.session || hoverRef.current.status === "loading")
+                      ) {
+                        event.preventDefault();
+                        dismissHover();
+                      } else if (
+                        event.key === "Tab" &&
+                        !event.shiftKey &&
+                        !event.altKey &&
+                        !event.ctrlKey &&
+                        !event.metaKey &&
+                        hoverRef.current.session?.origin === "keyboard" &&
+                        information.current
+                      ) {
+                        event.preventDefault();
+                        enterInformation();
+                      }
+                    }}
+                    onBlur={(event) => {
+                      if (
+                        hoverContext.current?.rowId === node.id &&
+                        hoverFocus.current &&
+                        !information.current?.contains(event.relatedTarget) &&
+                        event.relatedTarget !== textareas.current.get(node.id)
+                      )
+                        dismissHover();
+                    }}
                     onPress={() =>
                       requestHover(
                         node.id,
@@ -1368,25 +1569,9 @@ export function OutlineEditor<T = unknown>({
                 </div>
               )}
               {expanded &&
-                getPlaceholders?.(node).map((placeholder) => (
-                  <Button
-                    key={placeholder.id}
-                    className="fast-ux-editor__placeholder fux-control"
-                    onPress={() => {
-                      updateMode(false);
-                      dispatch({
-                        type: "insert",
-                        id: createId(),
-                        parentId: node.id,
-                        text: placeholder.text ?? "",
-                        index: placeholder.index,
-                        caret: placeholder.caret,
-                      });
-                    }}
-                  >
-                    {placeholder.label}
-                  </Button>
-                ))}
+                getPlaceholders?.(node).map((placeholder) =>
+                  renderPlaceholder(placeholder, node.id),
+                )}
             </li>
           );
         })}
@@ -1410,41 +1595,46 @@ export function OutlineEditor<T = unknown>({
         Add item
       </Button>
       {!state.hoistedId &&
-        getPlaceholders?.(null).map((placeholder) => (
-          <Button
-            key={placeholder.id}
-            className="fast-ux-editor__placeholder fux-control"
-            onPress={() => {
-              updateMode(false);
-              dispatch({
-                type: "insert",
-                id: createId(),
-                text: placeholder.text ?? "",
-                parentId: null,
-                index: placeholder.index,
-                caret: placeholder.caret,
-              });
-            }}
-          >
-            {placeholder.label}
-          </Button>
-        ))}
+        getPlaceholders?.(null).map((placeholder) => renderPlaceholder(placeholder, null))}
       {hover.session && (
         <TextPopup
           container={popupContainer}
           anchor={textareas.current.get(hover.session.context.rowId) ?? null}
           offset={hover.session.offset}
           onPointerEnter={clearHoverTimer}
-          onPointerLeave={() => {
-            hoverTimer.current = setTimeout(dismissHover, 180);
-          }}
+          onPointerLeave={scheduleHoverDismiss}
         >
           <aside
+            ref={information}
             id={`${rootId}-information`}
             role="dialog"
+            tabIndex={-1}
             aria-label="Text information"
             className="fast-ux-editor__information"
+            onFocus={clearHoverTimer}
+            onBlur={(event) => {
+              if (
+                !event.currentTarget.contains(event.relatedTarget) &&
+                event.relatedTarget !== textareas.current.get(hover.session!.context.rowId)
+              )
+                dismissHover();
+            }}
             onKeyDown={(event) => {
+              if (
+                event.key === "Tab" &&
+                event.shiftKey &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey &&
+                (event.target === event.currentTarget ||
+                  event.target === informationEntry.current ||
+                  event.target === informationTabStops(event.currentTarget)[0])
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                textareas.current.get(hover.session!.context.rowId)?.focus();
+                return;
+              }
               if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();

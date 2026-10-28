@@ -47,16 +47,58 @@ Test counts can change with the draft. Use the final local `npm run check` and `
 - Remote media is denied by default; raw HTML, MDX, script strings, arbitrary imports and iframes do not execute. Trusted renderer registration is application code, not an untrusted-plugin sandbox.
 - Large/deep reader documents have visible inline-render limits rather than silent truncation. Canonical import/export also has explicit validation budgets.
 
-## Implemented but not yet verified on a real browser/device
+## Verified in local Chrome
 
-The optional cloud headless Chromium smoke fixture is `tests/browser/fixture.tsx`, driven by `node scripts/test-browser.mjs`. It checks native keyboard focus/input, mobile-width layout, disclosure/task target geometry, rendered Markdown and popup placement, and can save screenshots. **It did not run to a page in this environment:** Chromium startup was blocked by the sandbox's local-socket restriction; the supported escalation route was unavailable. No screenshot or browser pass is claimed.
+The actual documentation app has now been exercised through its loopback-only
+`npm run dev` workflow in cloud Chrome, with saved screenshots and DOM geometry
+checks. This is a separate successful browser path from the optional headless
+fixture described below; no deployment was used to substitute for local QA.
 
-Consequently these remain open acceptance gates:
+- All 121 named documentation routes loaded at 1181 × 745 CSS px and at
+  393 × 248 CSS px without a local render-error boundary or horizontal document
+  overflow. The narrow pass used native browser 300% zoom, not device emulation.
+  A later full desktop sweep repeated the route checks after the first geometry
+  repairs. Route mounting is not proof of every interaction on each page.
+- Actual screenshots exposed and drove repairs to date-popup width, slider rail
+  thickness, range-calendar highlighting and missing-glyph controls. Native color
+  keyboard adjustment, preset synchronization, calendar navigation/date selection,
+  date-popup Escape focus restoration and floating-panel movement/teardown passed.
+- Narrow navigation exposed all 121 named links, focused search, filtered a
+  component, closed on selection and focused the destination heading.
+- Native Enter split a row at the expected caret; undo restored both the sentence
+  and caret. Switching from reading to editing at narrow width exposed clipped
+  textareas; the repaired rows resized to their measured 48–72 px content heights,
+  then returned to 24 px at desktop width without changing document text.
+- The extension example exercised ordered F2 claims, atomic two-row transactions,
+  one-step undo, whole-transition lock refusal, prompt activation/undo and invalid
+  custom-envelope import without data loss.
+- Completion acceptance and undo passed with actual keyboard input. Rich footnote
+  focus preserved the documentation route, and the local four-second MP4 played
+  with advancing time and visible moving frames. Light/dark screenshots were
+  inspected.
+- Native asynchronous-popup checks found two keyboard defects that are now repaired:
+  Escape cancels pending suggestions without falling into row selection, and Tab
+  enters keyboard-requested information without indenting the document. The real
+  browser then verified retained caret, Shift+Tab return, popup Escape restoration,
+  late-result suppression, provider-error recovery and completion acceptance/undo.
+- Direct prompt typing materialized one real row and moved the caret into it;
+  subsequent native characters continued in that row without loss. Dedicated
+  component and integrated editor tests cover composition-end insertion, complete
+  paste, root/child placement, repeated activation, reader omission and retained
+  drafts after policy/plugin refusal. These synthetic composition sequences do not
+  certify an Android or other physical IME.
 
-1. Native keyboard and focus behavior in a real browser, including held/repeated keys and interruption after undo/split/completion.
+The optional headless fixture remains `tests/browser/fixture.tsx`, driven by
+`node scripts/test-browser.mjs`. That launcher did not reach a page because of a
+local-socket sandbox restriction. Its failure is not a browser pass, and the
+successful interactive Chrome checks do not imply that this separate script ran.
+
+## Remaining acceptance gates
+
+1. Exhaustive native keyboard/focus interruption and held/repeated-key behavior beyond the specific exercised flows.
 2. Android Chrome/WebView composition, Gboard/autocorrect, native clipboard MIME retention and text selection.
 3. Touch scrolling versus the explicit reorder handle, pointer capture/cancellation, stationary edge auto-scroll and collision geometry.
-4. Wrapped-line/variable-font/bidirectional caret hit testing, long lines, zoom, resize, scroll and dynamically loaded media.
+4. Exhaustive wrapped-line/variable-font/bidirectional caret hit testing, long lines and dynamically loaded rich-layout changes beyond the measured narrow/resize cases.
 5. TalkBack/VoiceOver reading order, row selection announcements, listbox/active-descendant suggestions, hover descriptions and keyboard escape paths.
 6. Measured interaction/render performance for realistic large rich documents. No virtualization or production-size performance claim is made.
 7. Actual downstream application ports, persistence/auth/offline integration and app-specific renderer safety/animation quality.
@@ -68,7 +110,6 @@ DOM emulation tests prove event/state contracts; they cannot establish physical 
 - Collaborative editing, CRDT/OT merging, remote history and cross-device synchronization.
 - A full source-code editor, parser/language server, search engine or AI service. The text-intelligence contracts can connect host services without pretending to supply them.
 - Built-in diagram execution engines, drawing authoring, arbitrary embedded websites or executable document components. Host-registered React/diagram renderers and drawing snapshots have safe fallbacks.
-- Direct free typing into an unmaterialized ghost row; transient prompts activate one real row first.
 - Full variable-height virtualization. Reader limits and hoisting make bounded rendering explicit; editor rows currently render all visible items.
 
 These boundaries and the open verification gates mean this draft must not be described as “100% complete” or “fully equivalent.” Closing those gates requires evidence and, where needed, additional implementation rather than a wording change.

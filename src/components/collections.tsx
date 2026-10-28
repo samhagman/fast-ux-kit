@@ -42,18 +42,28 @@ function Details({ hint, error }: Pick<CollectionDetails, "hint" | "error">) {
     </>
   );
 }
-export interface SelectProps
+export interface SelectProps<M extends "single" | "multiple" = "single">
   extends
-    Omit<A.SelectProps<CollectionOption>, "children" | "className" | "items" | "defaultItems">,
+    Omit<A.SelectProps<CollectionOption, M>, "children" | "className" | "items" | "defaultItems">,
     CollectionDetails {
   ref?: Ref<HTMLDivElement>;
 }
-export function Select({ label, options, hint, error, ...props }: SelectProps) {
+export function Select<M extends "single" | "multiple" = "single">({
+  label,
+  options,
+  hint,
+  error,
+  ...props
+}: SelectProps<M>) {
   return (
     <P.Select {...props} isInvalid={Boolean(error) || props.isInvalid}>
       <P.Label>{label}</P.Label>
       <P.Button className="fux-select__trigger">
-        <P.SelectValue />
+        <P.SelectValue>
+          {({ isPlaceholder, selectedText, defaultChildren }) =>
+            isPlaceholder ? defaultChildren : selectedText
+          }
+        </P.SelectValue>
         <span aria-hidden="true">⌄</span>
       </P.Button>
       <Details hint={hint} error={error} />

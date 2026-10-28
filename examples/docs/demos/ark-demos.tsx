@@ -356,7 +356,7 @@ function StepsDemo() {
               <K.Steps.Indicator>{index + 1}</K.Steps.Indicator>
               {title}
             </K.Steps.Trigger>
-            <K.Steps.Separator />
+            {index < 2 && <K.Steps.Separator />}
           </K.Steps.Item>
         ))}
       </K.Steps.List>

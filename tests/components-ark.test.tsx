@@ -192,6 +192,11 @@ test("tag entry adds on Enter and deletion removes exactly one value", async () 
 
 test("steps advance to completion and can return to the previous stage", async () => {
   const view = render(arkDemos.Steps!.render());
+  assert.equal(
+    view.container.querySelectorAll('[data-scope="steps"][data-part="separator"]').length,
+    2,
+    "three steps have two connectors and no dangling final line",
+  );
   assert.ok(view.getByText("First, add the project details."));
   await act(async () => {
     fireEvent.click(view.getByRole("button", { name: "Next step" }));
