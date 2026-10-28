@@ -60,6 +60,7 @@ export function ExtensionsDemo() {
   const sourceId = useId();
   const [editing, setEditing] = useState(false),
     [protect, setProtect] = useState(false),
+    [pauseInsertion, setPauseInsertion] = useState(false),
     [reverse, setReverse] = useState(false);
   const [claims, setClaims] = useState({ primary: 0, fallback: 0 });
   const [observed, setObserved] = useState({ primary: 0, fallback: 0 });
@@ -120,6 +121,11 @@ export function ExtensionsDemo() {
       <Row wrap>
         <Checkbox label="Enable extension editing" isSelected={editing} onChange={setEditing} />
         <Checkbox label="Protect review log" isSelected={protect} onChange={setProtect} />
+        <Checkbox
+          label="Pause note insertion"
+          isSelected={pauseInsertion}
+          onChange={setPauseInsertion}
+        />
         <Checkbox label="Fallback plugin first" isSelected={reverse} onChange={setReverse} />
       </Row>
       <Row wrap>
@@ -158,6 +164,7 @@ export function ExtensionsDemo() {
           defaultExpandedIds={new Set()}
           aria-label="Extension outline"
           isLocked={(node) => protect && node.id === "review-log"}
+          canChange={(_before, _after, action) => !pauseInsertion || action.type !== "insert"}
           onStateChange={(state, action) => {
             setRevision(state.revision);
             setPast(state.history.past.length);
@@ -201,7 +208,8 @@ export function ExtensionsDemo() {
           restores both the review marker and the log together. Turn on log protection to see the
           same policy apply to keyboard and toolbar actions. Type directly into the follow-up prompt
           to create a real row with your own text, or use its button for the suggested prefix. Both
-          use ordinary undo history; a refused draft stays available to retry.
+          use ordinary undo history. Pause note insertion to try a refusal: your draft stays in the
+          prompt. Unpause and press Enter there to retry without retyping.
         </p>
       </details>
       <div>

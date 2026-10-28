@@ -63,7 +63,7 @@ export function HighlightText({
       className: "fux-highlight",
       "data-tone": highlight.tone,
       "data-highlight-key": highlight.key,
-      "data-selected": highlight.key === selectedKey ? "true" : "false",
+      "data-selected": highlight.key === selectedKey ? "true" : undefined,
     };
     return onActivate ? (
       <Button
@@ -99,7 +99,7 @@ export function HighlightText({
               className="fux-control fux-highlight fux-highlight--extra"
               data-highlight-key={highlight.key}
               data-tone={highlight.tone}
-              data-selected={highlight.key === selectedKey ? "true" : "false"}
+              data-selected={highlight.key === selectedKey ? "true" : undefined}
               aria-label={highlight.label ?? text.slice(highlight.start, highlight.end)}
               aria-pressed={highlight.key === selectedKey}
               onPress={() => onActivate?.(highlight.key, highlight)}

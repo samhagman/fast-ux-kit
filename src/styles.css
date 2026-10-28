@@ -207,7 +207,8 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.fux-highlight {
+.fux-highlight,
+button.fux-control.fux-highlight {
   color: inherit;
   background: var(--fux-highlight);
   border: 0;
@@ -221,12 +222,13 @@ button.fux-highlight {
   min-inline-size: max(44px, var(--fux-target));
   touch-action: manipulation;
 }
-.fux-highlight[data-selected] {
+.fux-highlight[data-selected],
+button.fux-control.fux-highlight[data-selected] {
   background: var(--fux-selected);
   outline: 1px solid var(--fux-accent);
 }
-button.fux-highlight:focus-visible,
-button.fux-highlight[data-focus-visible] {
+button.fux-control.fux-highlight:focus-visible,
+button.fux-control.fux-highlight[data-focus-visible] {
   outline: 2px solid var(--fux-focus);
   outline-offset: 2px;
 }

@@ -55,7 +55,11 @@ import {
   OutlinePlaceholderInput,
   type OutlinePlaceholderDraft,
 } from "./OutlinePlaceholderInput.js";
-import { textareaAtVisualBoundary, textareaOffsetAtPoint } from "./text-geometry.js";
+import {
+  textareaAtVisualBoundary,
+  textareaOffsetAtPoint,
+  textareaVerticalTarget,
+} from "./text-geometry.js";
 
 export interface OutlineKeyContext<T = unknown> {
   readonly rowId: string;
@@ -252,6 +256,9 @@ export function OutlineEditor<T = unknown>({
   const root = useRef<HTMLElement>(null),
     textareas = useRef(new Map<string, HTMLTextAreaElement>()),
     rowElements = useRef(new Map<string, HTMLLIElement>());
+  const exitStart = useRef<HTMLSpanElement>(null),
+    exitEnd = useRef<HTMLSpanElement>(null);
+  const exitTabTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFocus = useRef(false);
   const composing = useRef(false),
     focused = useRef<string | null>(null),
@@ -428,6 +435,15 @@ export function OutlineEditor<T = unknown>({
     hoverContext.current = null;
     hoverRef.current.dismiss();
   }, [state.hoistedId, readOnly]);
+  useEffect(
+    () => () => {
+      if (exitTabTimer.current !== null) {
+        clearTimeout(exitTabTimer.current);
+        exitTabTimer.current = null;
+      }
+    },
+    [readOnly],
+  );
 
   useLayoutEffect(() => {
     const forced = resetKey !== externalReset.current;
@@ -642,7 +658,15 @@ export function OutlineEditor<T = unknown>({
           : next.node.text.indexOf("\n") < 0
             ? next.node.text.length
             : next.node.text.indexOf("\n");
-      dispatch({ type: "focus", id: next.id, start: lineStart + Math.min(column, lineLength) });
+      const target = textareas.current.get(next.id);
+      dispatch({
+        type: "focus",
+        id: next.id,
+        start:
+          textarea && target
+            ? textareaVerticalTarget(textarea, target, direction)
+            : lineStart + Math.min(column, lineLength),
+      });
     }
   };
   const keyDown = (event: KeyboardEvent<HTMLElement>, rowId: string, mode: "text" | "row") => {
@@ -747,6 +771,10 @@ export function OutlineEditor<T = unknown>({
       return;
     }
     event.preventDefault();
+    // These Escape steps belong to the editor. Once focus reaches the container,
+    // its next Escape remains available to an enclosing dialog or other owner.
+    if (event.key === "Escape" && (intent === "row-mode" || intent === "exit"))
+      event.stopPropagation();
     completion.dismiss();
     dismissHover();
     if (intent === "split")
@@ -1039,6 +1067,42 @@ export function OutlineEditor<T = unknown>({
       aria-label={label}
       tabIndex={-1}
       data-read-only="false"
+      onKeyDown={(event) => {
+        const container = event.currentTarget;
+        if (
+          event.target !== container ||
+          container.ownerDocument.activeElement !== container ||
+          event.key !== "Tab" ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          event.defaultPrevented ||
+          event.nativeEvent.defaultPrevented ||
+          composing.current ||
+          event.nativeEvent.isComposing ||
+          event.keyCode === 229
+        )
+          return;
+        const boundary = event.shiftKey ? exitStart.current : exitEnd.current;
+        if (!boundary) return;
+        if (exitTabTimer.current !== null) clearTimeout(exitTabTimer.current);
+        const nativeEvent = event.nativeEvent;
+        // An ancestor may cancel after this handler. Do not leave focus on a
+        // clipped boundary in that case, or override a focus destination it chose.
+        exitTabTimer.current = setTimeout(() => {
+          exitTabTimer.current = null;
+          if (
+            nativeEvent.defaultPrevented &&
+            root.current === container &&
+            container.isConnected &&
+            container.ownerDocument.activeElement === boundary
+          )
+            container.focus({ preventScroll: true });
+        }, 0);
+        // Change only the native traversal starting point. The browser and any
+        // enclosing focus scope still own Tab's default action and containment.
+        boundary.focus({ preventScroll: true });
+      }}
       onPaste={(event) => {
         if (event.target !== event.currentTarget && visible.length > 0) return;
         event.preventDefault();
@@ -1076,6 +1140,9 @@ export function OutlineEditor<T = unknown>({
         if (copySelection(event.clipboardData)) dispatch({ type: "delete" });
       }}
     >
+      <span ref={exitStart} className="fast-ux-sr-only" tabIndex={-1}>
+        Start of {label}
+      </span>
       {showToolbar && (
         <div role="toolbar" aria-label="Outline actions" className="fast-ux-editor__toolbar">
           <Button
@@ -1674,6 +1741,9 @@ export function OutlineEditor<T = unknown>({
                     ? "Suggestions unavailable"
                     : "")}
       </div>
+      <span ref={exitEnd} className="fast-ux-sr-only" tabIndex={-1}>
+        End of {label}
+      </span>
     </section>
   );
 }

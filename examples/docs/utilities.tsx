@@ -56,7 +56,7 @@ function VirtualizerDemo() {
           aria-label="Five hundred notes"
           items={manyItems}
           selectionMode="single"
-          style={{ height: 260, overflow: "auto" }}
+          style={{ height: 260, overflow: "auto", padding: 0 }}
           onSelectionChange={(keys) =>
             setSelected(keys === "all" ? "All" : [...keys].join(", ") || "None yet")
           }
@@ -302,7 +302,7 @@ const utilityDemos: Record<string, ComponentDemo> = {
   },
   Virtualizer: {
     render: () => <VirtualizerDemo />,
-    code: `<P.Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: 48 }}>\n  <P.ListBox aria-label="Notes" items={items} selectionMode="single" style={{ height: 260, overflow: "auto" }}>\n    {item => <P.ListBoxItem id={item.id}>{item.name}</P.ListBoxItem>}\n  </P.ListBox>\n</P.Virtualizer>`,
+    code: `<P.Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: 48 }}>\n  <P.ListBox aria-label="Notes" items={items} selectionMode="single" style={{ height: 260, overflow: "auto", padding: 0 }}>\n    {item => <P.ListBoxItem id={item.id}>{item.name}</P.ListBoxItem>}\n  </P.ListBox>\n</P.Virtualizer>`,
     notes: [
       "A bounded viewport is required. Item heights and virtualizer layout must agree.",
       "This collection utility does not mean the outliner itself is virtualized; large-document editor performance is a separate gate.",

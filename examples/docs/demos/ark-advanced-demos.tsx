@@ -286,6 +286,9 @@ function SignatureDemo() {
 function TourDemo() {
   const targetId = useId(),
     [status, setStatus] = useState("Not started");
+  const opener = useRef<HTMLButtonElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const restoreOpener = useRef(false);
   const steps = useMemo<NonNullable<Parameters<typeof K.useTour>[0]>["steps"]>(
     () => [
       {
@@ -318,10 +321,27 @@ function TourDemo() {
     onStatusChange: (details) => setStatus(details.status),
     steps,
   });
+  useEffect(() => {
+    if (tour.open || !restoreOpener.current) return;
+    restoreOpener.current = false;
+    const trigger = opener.current;
+    if (!trigger?.isConnected) return;
+    const active = trigger.ownerDocument.activeElement;
+    if (active === trigger.ownerDocument.body || content.current?.contains(active))
+      trigger.focus({ preventScroll: true });
+  }, [tour.open]);
   return (
     <>
       <div className="fux-advanced-actions">
-        <button type="button" className={button} onClick={() => tour.start()}>
+        <button
+          ref={opener}
+          type="button"
+          className={button}
+          onClick={() => {
+            restoreOpener.current = true;
+            tour.start();
+          }}
+        >
           Start guided tour
         </button>
         <button
@@ -339,7 +359,7 @@ function TourDemo() {
           <K.Tour.Backdrop />
           <K.Tour.Spotlight />
           <K.Tour.Positioner>
-            <K.Tour.Content>
+            <K.Tour.Content ref={content}>
               <K.Tour.Title>{tour.step?.title}</K.Tour.Title>
               <K.Tour.Description>{tour.step?.description}</K.Tour.Description>
               <K.Tour.ProgressText />

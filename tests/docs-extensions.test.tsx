@@ -94,6 +94,36 @@ test("ghost prompt inserts an editable row and undo removes only that insertion"
   assert.equal(view.queryByRole("textbox", { name: "Edit Follow-up:" }), null);
   assert.ok(draft(view));
 });
+test("the visible insertion policy scenario retains a refused prompt and retries without retyping", async () => {
+  const view = render(<ExtensionsDemo />);
+  await enable(view);
+  await click(view.getByRole("checkbox", { name: "Pause note insertion" }));
+  const prompt = view.getByRole("textbox", {
+    name: "Add a follow-up note: type here",
+  }) as HTMLTextAreaElement;
+  await act(async () => {
+    prompt.focus();
+    fireEvent.change(prompt, {
+      target: { value: "Keep this draft", selectionStart: 15, selectionEnd: 15 },
+    });
+  });
+  assert.equal(prompt.value, "Keep this draft");
+  assert.equal(document.activeElement, prompt);
+  assert.equal(view.queryByRole("textbox", { name: "Edit Keep this draft" }), null);
+  assert.ok(view.getByText("Undo entries 0; redo entries 0"));
+  assert.ok(view.getByText("Action refused: locked."));
+  await click(view.getByRole("checkbox", { name: "Pause note insertion" }));
+  await act(async () => {
+    prompt.focus();
+    fireEvent.keyDown(prompt, { key: "Enter" });
+  });
+  const inserted = view.getByRole("textbox", { name: "Edit Keep this draft" });
+  assert.equal(document.activeElement, inserted);
+  assert.equal(prompt.value, "");
+  assert.ok(view.getByText("Undo entries 1; redo entries 0"));
+  await click(view.getByRole("button", { name: "Undo extension change" }));
+  assert.equal(view.queryByRole("textbox", { name: "Edit Keep this draft" }), null);
+});
 test("public handle envelope export/import preserves nested metadata and imports are undoable", async () => {
   const view = render(<ExtensionsDemo />);
   await click(view.getByRole("button", { name: "Export envelope" }));

@@ -151,6 +151,7 @@ function MountingDemo() {
       </Presence>
       <div
         ref={portal}
+        hidden={!shown}
         className="fux-panel"
         data-padding="md"
         aria-label="Local portal destination"

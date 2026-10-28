@@ -70,19 +70,32 @@ test("collection filtering operates on data without additional selectable contro
   assert.equal(view.queryByRole("listbox"), null);
 });
 
-test("presence and local portal content mount and unmount together", async () => {
+test("presence and local portal content share visibility without remounting the destination", async () => {
   const view = render(arkUtilityDemos["Mounting and presence"]!.render());
-  await act(async () => {
-    fireEvent.click(view.getByRole("button", { name: "Show mounted content" }));
-  });
-  assert.ok(view.getByText("Presence-controlled content"));
-  const destination = view.getByLabelText("Local portal destination");
-  assert.ok(destination.textContent?.includes("Content rendered into the local portal"));
-  await act(async () => {
-    fireEvent.click(view.getByRole("button", { name: "Hide mounted content" }));
-  });
-  await waitFor(() => assert.ok(view.queryByText("Presence-controlled content") === null));
+  const destination = view.getByLabelText("Local portal destination") as HTMLDivElement;
+  assert.equal(destination.hidden, true);
   assert.equal(destination.textContent, "");
+  assert.equal(getComputedStyle(destination).display, "none");
+  for (let cycle = 0; cycle < 2; cycle++) {
+    await act(async () => {
+      fireEvent.click(view.getByRole("button", { name: "Show mounted content" }));
+    });
+    assert.ok(view.getByText("Presence-controlled content"));
+    assert.equal(view.getByLabelText("Local portal destination"), destination);
+    assert.equal(destination.hidden, false);
+    assert.notEqual(getComputedStyle(destination).display, "none");
+    assert.equal(destination.childElementCount, 1);
+    assert.ok(destination.textContent?.includes("Content rendered into the local portal"));
+    await act(async () => {
+      fireEvent.click(view.getByRole("button", { name: "Hide mounted content" }));
+    });
+    await waitFor(() => assert.ok(view.queryByText("Presence-controlled content") === null));
+    assert.equal(view.getByLabelText("Local portal destination"), destination);
+    assert.equal(destination.hidden, true);
+    assert.equal(getComputedStyle(destination).display, "none");
+    assert.equal(destination.textContent, "");
+    assert.equal(destination.childElementCount, 0);
+  }
 });
 
 test("focus utility only activates explicitly and offers a direct exit", async () => {

@@ -87,6 +87,45 @@ fixture described below; no deployment was used to substitute for local QA.
   paste, root/child placement, repeated activation, reader omission and retained
   drafts after policy/plugin refusal. These synthetic composition sequences do not
   certify an Android or other physical IME.
+- A native two-line prompt paste created one node with one undo entry. A visible
+  host-policy refusal retained the typed draft without a revision; after unpausing,
+  Enter inserted that same draft once and focused the real row.
+- Wrapped ArrowDown stayed within the narrow textarea, then crossed into the next
+  row using measured visual geometry rather than a logical character column.
+  Cross-row upward positioning also uses the target's physical text geometry;
+  exhaustive bidirectional/variable-font caret affinity remains unverified.
+- Native canonical copy/paste preserved a collapsed child, custom metadata and task
+  state while generating new IDs for the copied subtree. A visible canonical export
+  verified the result; one undo removed the copy. This is one cloud Chrome clipboard
+  path, not cross-application or Android MIME certification. A desktop pointer drag
+  reordered two sibling rows and one undo restored their exact order.
+- Light/dark highlighted actions now retain their surrounding font and readable
+  text, and current breadcrumbs no longer receive double disabled opacity. The
+  utility Virtualizer showed no horizontal overflow at desktop/narrow widths,
+  supported typeahead to item 250 and End/selection at item 500, and mounted only
+  7–10 options in the exercised states. Hidden portal destinations disappeared;
+  the explicit focus-trap example wrapped and restored focus as intended.
+- Actual canvas output caught an error that the mocked export test could not:
+  the crop demo's dimensionless SVG produced fully transparent PNGs. Giving the
+  local SVG explicit dimensions matching its viewBox produced opaque 302 × 302
+  artwork and an opaque 275 × 275 zoomed/rotated export. Saved pixels and screenshots
+  verified both. A native pointer stroke appeared in the drawing demo; Clear removed
+  it and returned the stroke count to zero.
+- Actual modal testing exposed Escape closing the parent before the editor could
+  enter row mode. The editor now consumes only its text/row Escape transitions.
+  Native text → row → container → Tab reached the following control, reverse Tab
+  reached the previous control, and an editor at the end of a dialog wrapped to
+  the dialog's Close button. A further container Escape closed the modal; revision
+  and undo stayed zero throughout. Standalone capture/bubble cancellation kept the
+  container focused. An owning modal may choose another in-scope focus destination
+  after cancellation; the editor deliberately does not override it.
+
+For repeatable manual focus checks, run `node scripts/build-focus-navigation.mjs`
+after `npm run docs:build`, then open `/focus-navigation.html` through the same
+local development server. The fixture has visible controls for modal wrapping and
+capture/bubble cancellation, with visible revision/history counts and no hidden
+test API. It does not launch a browser or publish anything. Run the ordinary docs
+build again before packaging to remove the extra local fixture assets.
 
 The optional headless fixture remains `tests/browser/fixture.tsx`, driven by
 `node scripts/test-browser.mjs`. That launcher did not reach a page because of a

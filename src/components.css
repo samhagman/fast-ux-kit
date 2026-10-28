@@ -808,6 +808,13 @@ textarea.fux-input {
   color: var(--fux-text);
   text-decoration: none;
 }
+/* The owner disables the current breadcrumb and its link to prevent navigation.
+   It is still the readable current location, not unavailable content. */
+.fux-breadcrumbs__item[data-current],
+.fux-breadcrumbs__item[data-current] .fux-link[data-current] {
+  opacity: 1;
+  cursor: default;
+}
 .fux-tabs {
   display: flex;
   flex-direction: column;
@@ -891,6 +898,29 @@ textarea.fux-input {
 }
 
 /* Overlays: one owner supplies placement, dismissal and focus restoration. */
+/* Tour dialog steps have no owner placement; tooltip steps retain their inline
+   absolute coordinates and transform. Both resolve the owner's layer token. */
+.fux-tour__positioner {
+  --tour-z-index: var(--fux-z-modal);
+  z-index: calc(var(--tour-layer, 2) + var(--tour-z-index));
+}
+.fux-tour__positioner[data-type="dialog"] {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  pointer-events: none;
+}
+.fux-tour__content[data-type="dialog"] {
+  min-block-size: 0;
+  pointer-events: auto;
+}
+.fux-tour__content[data-type="tooltip"] {
+  min-block-size: 0;
+  max-block-size: min(var(--available-height, calc(100dvh - 2rem)), calc(100dvh - 2rem));
+  overflow-y: auto;
+}
 .fux-popover {
   z-index: var(--fux-z-popover);
   max-inline-size: min(calc(100vw - 1rem), var(--fux-max-overlay-width));

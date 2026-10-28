@@ -108,6 +108,14 @@ Actions cover text, split/merge, insertion/deletion, indentation, movement/drop,
 
 “Modifier” means Control or Command. Composition suppresses structural shortcuts and completion acceptance. Vertical text navigation crosses only first/last visual-line boundaries; horizontal caret preservation is approximate, not a pixel-perfect layout guarantee.
 
+Text/row Escape is owned by the editor and does not also dismiss an enclosing
+dialog. From the focused editor container, Tab/Shift+Tab uses native traversal
+from the corresponding editor boundary; an enclosing modal remains responsible
+for containment and wrapping. A further container Escape is available to that
+modal. Ordinary entry still reaches the editor's controls. Standalone canceled
+Tab retains/restores the container; a modal's owner may instead move focus to
+another control inside its scope, and the editor does not override that destination.
+
 ### Policy, rich data and clipboard
 
 `isLocked(node)` is intentionally conservative: locked nodes protect their subtree and structural relationship; moving an ancestor that carries a locked descendant is refused. For more application-specific structural rules, `canChange(before, after, action)` examines the complete proposed document. Refusals remain atomic and are announced; `getRefusalMessage` localizes them. Policies are reevaluated during history travel and replacement, including every ancestor's parent and sibling position; preserving a locked leaf's immediate parent does not permit relocating the branch that carries it. Changes to an unlocked ancestor's text remain allowed when protected descendants and their full positions are unchanged.
