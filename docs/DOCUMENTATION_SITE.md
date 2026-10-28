@@ -18,6 +18,14 @@ third-party package in `THIRD_PARTY_LICENSES.txt`.
 No source maps, credentials, private application data, external fonts, analytics,
 or runtime APIs are included. Do not remove generated legal notice files.
 
+For ordinary local development, `npm run dev` rebuilds and serves the generated
+documentation at `http://127.0.0.1:4173/`. Use `npm run dev -- --port 5271` to choose
+another explicit local port. The server binds only to IPv4 loopback, does not open
+a browser, never chooses a different port silently, and serves only the built
+asset directory. Rebuild and refresh after edits; this is not a live-reload server.
+It is not a deployment or authentication server. Where the command sandbox isolates
+loopback from the browser, use the environment's supported app-preview relay.
+
 ## What is included
 
 - Filterable documentation navigation, a named route for every component, and a
