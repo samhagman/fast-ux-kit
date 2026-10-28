@@ -91,14 +91,6 @@ export const aliasPages = ownerFamilyCoverage
     category: "Component aliases",
     description: `${entry.name} is covered by ${entry.canonical.join(", ")} in the unified styled system.`,
   }));
-export const allPages = [
-  ...foundationPages,
-  ...componentManifest.map((item) => ({ ...item, id: componentId(item.name) })),
-  ...experiencePages,
-  ...utilityPages,
-  ...aliasPages,
-];
-export const sections = allPages.map((page) => [page.id, page.name, page.category] as const);
 const groupOrder = [
   "Get started",
   "Foundations",
@@ -120,6 +112,19 @@ const groupOrder = [
   "Utilities",
   "Component aliases",
 ];
+const ungroupedPages = [
+  ...foundationPages,
+  ...componentManifest.map((item) => ({ ...item, id: componentId(item.name) })),
+  ...experiencePages,
+  ...utilityPages,
+  ...aliasPages,
+];
+// Keep page-to-page navigation in the same order as the visible sidebar.
+const pageGroups = [...new Set([...groupOrder, ...ungroupedPages.map((page) => page.category)])];
+export const allPages = pageGroups.flatMap((category) =>
+  ungroupedPages.filter((page) => page.category === category),
+);
+export const sections = allPages.map((page) => [page.id, page.name, page.category] as const);
 const ownerNames = { aria: "React Aria", ark: "Ark UI", native: "Layout" };
 function readRoute() {
   const id = typeof window === "undefined" ? "overview" : window.location.hash.slice(1);
@@ -331,7 +336,7 @@ function Overview() {
             Explore the components <Symbol name="arrow" />
           </a>
           <a className="secondary-link" href="#installation">
-            Start building <span aria-hidden="true">↗</span>
+            Start building <Symbol name="external" size={16} />
           </a>
         </div>
         <div className="overview-facts">
@@ -353,20 +358,24 @@ function Overview() {
             <p className="mini-eyebrow">A PLACE FOR EVERYTHING</p>
             <h2>Find your building block.</h2>
           </div>
-          <a href="#components">View all components ↗</a>
+          <a className="text-icon-link" href="#components">
+            View all components <Symbol name="external" size={16} />
+          </a>
         </div>
         <div className="category-grid">
-          {[
-            ["color-picker", "Color", "A complete color vocabulary.", "◒"],
-            ["date-picker", "Date & time", "Calendars, ranges and segmented entry.", "▦"],
-            ["select", "Forms & choices", "Clear input, selection and feedback.", "≡"],
-            ["modal-dialog", "Overlays", "Context without losing your place.", "⊞"],
-            ["table", "Collections", "Make information easy to work with.", "▤"],
-            ["outline", "Outliner", "Keep the thought. Fold the detail.", "⌘"],
-          ].map(([id, title, description, glyph]) => (
+          {(
+            [
+              ["color-picker", "Color", "A complete color vocabulary.", "color"],
+              ["date-picker", "Date & time", "Calendars, ranges and segmented entry.", "calendar"],
+              ["select", "Forms & choices", "Clear input, selection and feedback.", "form"],
+              ["modal-dialog", "Overlays", "Context without losing your place.", "layers"],
+              ["table", "Collections", "Make information easy to work with.", "table"],
+              ["outline", "Outliner", "Keep the thought. Fold the detail.", "outline"],
+            ] as const
+          ).map(([id, title, description, icon]) => (
             <a href={`#${id}`} className="category-card" key={id}>
               <span className="category-icon" aria-hidden="true">
-                {glyph}
+                <Symbol name={icon} size={22} />
               </span>
               <h3>{title}</h3>
               <p>{description}</p>
@@ -944,8 +953,8 @@ export function DocsApp() {
           <span className="version-badge">alpha.1</span>
         </div>
         <div className="header-actions">
-          <a className="header-start" href="#installation">
-            Get started ↗
+          <a className="header-start text-icon-link" href="#installation">
+            Get started <Symbol name="external" size={14} />
           </a>
           <span className="header-divider" />
           <IconButton

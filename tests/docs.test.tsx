@@ -51,6 +51,25 @@ test("every family has a named left-nav page and a distinct stable route", async
       `registered route: ${anchor.hash}`,
     );
 });
+test("page sequencing matches every named sidebar link", async () => {
+  const view = await at("calendar"),
+    nav = view.getByRole("navigation", { name: "Documentation" });
+  assert.deepEqual(
+    [...nav.querySelectorAll("a")].map((anchor) => anchor.getAttribute("href")),
+    allPages.map((page) => `#${page.id}`),
+  );
+  const pagination = view.getByRole("navigation", { name: "Documentation pages" });
+  assert.equal(
+    within(pagination)
+      .getByRole("link", { name: /Previous/ })
+      .getAttribute("href"),
+    "#color-wheel",
+  );
+  assert.equal(
+    within(pagination).getByRole("link", { name: /Next/ }).getAttribute("href"),
+    "#range-calendar",
+  );
+});
 test("navigation search includes color families and composition parts, with an empty-state recovery", async () => {
   const view = await at("overview"),
     search = view.getByRole("searchbox", { name: "Find a component" }),

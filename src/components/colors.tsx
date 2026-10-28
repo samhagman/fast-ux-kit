@@ -24,7 +24,7 @@ export function ColorSlider({ label, ...props }: ColorSliderProps) {
   return (
     <P.ColorSlider {...props}>
       <div className="fux-field__heading">
-        <P.Label>{label}</P.Label>
+        {label != null && <P.Label>{label}</P.Label>}
         <P.SliderOutput />
       </div>
       <P.SliderTrack>

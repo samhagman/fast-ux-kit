@@ -234,6 +234,11 @@ svg {
   font-size: 12px;
   text-decoration: none;
 }
+.text-icon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .header-divider {
   block-size: 20px;
   border-inline-start: 1px solid var(--line);

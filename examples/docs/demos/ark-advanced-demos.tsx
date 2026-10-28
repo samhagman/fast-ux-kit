@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import * as K from "../../../src/components/ark-advanced.js";
 import type { ComponentDemo } from "./aria-demos.js";
+import { Symbol } from "../ui.js";
 const button = "fux-control";
 const demo = (
   name: string,
@@ -66,13 +67,13 @@ function FloatingDemo() {
                     −
                   </K.FloatingPanel.StageTrigger>
                   <K.FloatingPanel.StageTrigger stage="maximized" aria-label="Maximize panel">
-                    ↗
+                    <Symbol name="external" size={16} />
                   </K.FloatingPanel.StageTrigger>
                   <K.FloatingPanel.StageTrigger stage="default" aria-label="Restore panel">
-                    □
+                    <Symbol name="layers" size={16} />
                   </K.FloatingPanel.StageTrigger>
                   <K.FloatingPanel.CloseTrigger aria-label="Close panel">
-                    ×
+                    <Symbol name="close" size={16} />
                   </K.FloatingPanel.CloseTrigger>
                 </K.FloatingPanel.Control>
               </K.FloatingPanel.Header>
@@ -90,12 +91,14 @@ function FloatingDemo() {
                 {(api) => (
                   <div className="fux-advanced-actions">
                     <button
+                      type="button"
                       className={button}
                       onClick={() => api.setPosition({ x: api.position.x + 20, y: api.position.y })}
                     >
                       Move right
                     </button>
                     <button
+                      type="button"
                       className={button}
                       onClick={() => api.setSize({ width: 300, height: 330 })}
                     >
@@ -155,16 +158,27 @@ function ImageCropperDemo() {
         {(api) => (
           <>
             <div className="fux-advanced-actions">
-              <button className={button} onClick={() => api.zoomBy(-0.1)} disabled={api.zoom <= 1}>
+              <button
+                type="button"
+                className={button}
+                onClick={() => api.zoomBy(-0.1)}
+                disabled={api.zoom <= 1}
+              >
                 Zoom out
               </button>
-              <button className={button} onClick={() => api.zoomBy(0.1)} disabled={api.zoom >= 3}>
+              <button
+                type="button"
+                className={button}
+                onClick={() => api.zoomBy(0.1)}
+                disabled={api.zoom >= 3}
+              >
                 Zoom in
               </button>
-              <button className={button} onClick={() => api.rotateBy(90)}>
+              <button type="button" className={button} onClick={() => api.rotateBy(90)}>
                 Rotate 90°
               </button>
               <button
+                type="button"
                 className={button}
                 onClick={() => api.flipHorizontally()}
                 aria-pressed={api.flip.horizontal}
@@ -172,6 +186,7 @@ function ImageCropperDemo() {
                 Flip horizontally
               </button>
               <button
+                type="button"
                 className={button}
                 onClick={() => {
                   request.current++;
@@ -183,6 +198,7 @@ function ImageCropperDemo() {
                 Reset crop
               </button>
               <button
+                type="button"
                 className={button}
                 onClick={async () => {
                   const current = ++request.current;
@@ -305,10 +321,11 @@ function TourDemo() {
   return (
     <>
       <div className="fux-advanced-actions">
-        <button className={button} onClick={() => tour.start()}>
+        <button type="button" className={button} onClick={() => tour.start()}>
           Start guided tour
         </button>
         <button
+          type="button"
           id={targetId}
           className={button}
           onClick={() => setStatus("Example action selected")}
@@ -410,7 +427,7 @@ export const arkAdvancedDemos: Record<string, ComponentDemo> = {
     "Tour, useTour, Portal",
     () => <TourDemo />,
     `const tour = useTour({ steps: [{ id: "welcome", type: "dialog", title: "Welcome", description: "A short introduction." }] });
-<button onClick={() => tour.start()}>Start tour</button>
+<button type="button" onClick={() => tour.start()}>Start tour</button>
 <Tour.Root tour={tour}><Portal><Tour.Backdrop /><Tour.Positioner><Tour.Content>
   <Tour.Title>{tour.step?.title}</Tour.Title><Tour.Description>{tour.step?.description}</Tour.Description>
   <Tour.ActionTrigger action={{ action: "dismiss", label: "Finish" }} />

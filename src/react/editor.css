@@ -89,8 +89,14 @@
 .fast-ux-editor__drag:active {
   cursor: grabbing;
 }
-.fast-ux-editor__select {
-  font-size: 0.7em;
+.fast-ux-editor .fast-ux-editor__select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fux-muted, currentColor);
+}
+.fast-ux-editor .fast-ux-editor__select[aria-pressed="true"] {
+  color: var(--fux-accent, currentColor);
 }
 .fast-ux-editor__text-container {
   flex: 1;

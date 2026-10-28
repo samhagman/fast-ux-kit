@@ -402,12 +402,44 @@ export function OutlineEditor<T = unknown>({
     pendingFocus.current = false;
     textarea.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [state.focusVersion, readOnly]);
-  useLayoutEffect(() => {
+  const resizeTextareas = useCallback(() => {
     for (const textarea of textareas.current.values()) {
       textarea.style.height = "0px";
       textarea.style.height = `${Math.max(24, textarea.scrollHeight)}px`;
     }
-  }, [state.nodes, state.expandedIds, state.hoistedId]);
+  }, []);
+  useLayoutEffect(() => {
+    resizeTextareas();
+  }, [
+    state.nodes,
+    state.expandedIds,
+    state.hoistedId,
+    readOnly,
+    showTasks,
+    renderSuffix,
+    renderStatus,
+    resizeTextareas,
+  ]);
+  useLayoutEffect(() => {
+    if (readOnly || !root.current) return;
+    const element = root.current;
+    let width = element.getBoundingClientRect().width;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver((entries) => {
+            const nextWidth = entries.find((entry) => entry.target === element)?.contentRect.width;
+            if (nextWidth === undefined || nextWidth === width) return;
+            width = nextWidth;
+            resizeTextareas();
+          });
+    observer?.observe(element);
+    window.addEventListener("resize", resizeTextareas);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", resizeTextareas);
+    };
+  }, [readOnly, resizeTextareas]);
   useEffect(() => {
     completionRef.current.dismiss();
   }, [readOnly, state.hoistedId]);
@@ -1019,7 +1051,21 @@ export function OutlineEditor<T = unknown>({
                     selectRow(node.id, event.shiftKey, event.metaKey || event.ctrlKey)
                   }
                 >
-                  Select
+                  <svg
+                    aria-hidden="true"
+                    focusable="false"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="2.5" y="2.5" width="15" height="15" rx="3" />
+                    {selected && <path d="m6 10 2.5 2.5L14 7" />}
+                  </svg>
                 </Button>
                 {showTasks && node.checked !== undefined && (
                   <label className="fast-ux-editor__task">

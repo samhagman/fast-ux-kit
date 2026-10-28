@@ -295,7 +295,19 @@ export function Outliner<T = unknown>({
                       aria-label={getHoistLabel?.(node) ?? `Focus on ${node.text}`}
                       onPress={() => navigate(node.id)}
                     >
-                      <span aria-hidden="true">↗</span>
+                      <svg
+                        aria-hidden="true"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M4 9V4h5m6 0h5v5m0 6v5h-5M9 20H4v-5" />
+                      </svg>
                     </Button>
                   )}
                 </div>

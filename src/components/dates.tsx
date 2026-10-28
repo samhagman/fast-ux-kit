@@ -3,6 +3,26 @@ import * as A from "react-aria-components";
 import type { ReactNode, Ref } from "react";
 import * as P from "./primitives.js";
 
+function CalendarIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="4" y="5" width="16" height="16" rx="2" />
+      <path d="M8 3v4m8-4v4M4 10h16M8 14h2m4 0h2m-8 3h2m4 0h2" />
+    </svg>
+  );
+}
+
 interface FieldDetails {
   label: ReactNode;
   hint?: string;
@@ -43,12 +63,15 @@ function CalendarContents({
       previousMonth = month;
     }
   }
+  const periodLabel = Boolean(
+    state.visibleDuration.days || state.visibleDuration.weeks || offsets.length > 1,
+  );
   return (
     <>
       <header className="fux-calendar__header">
         <P.Button
           slot="previous"
-          aria-label={previousLabel ?? (offsets.length > 1 ? "Previous period" : "Previous month")}
+          aria-label={previousLabel ?? (periodLabel ? "Previous period" : "Previous month")}
         >
           <span aria-hidden="true" className="fux-directional">
             ‹
@@ -57,7 +80,7 @@ function CalendarContents({
         <P.Heading />
         <P.Button
           slot="next"
-          aria-label={nextLabel ?? (offsets.length > 1 ? "Next period" : "Next month")}
+          aria-label={nextLabel ?? (periodLabel ? "Next period" : "Next month")}
         >
           <span aria-hidden="true" className="fux-directional">
             ›
@@ -106,7 +129,7 @@ export function RangeCalendar<T extends A.DateValue>({
   ...props
 }: RangeCalendarProps<T>) {
   return (
-    <P.RangeCalendar {...props}>
+    <P.RangeCalendar {...props} className="fux-calendar--range">
       {({ state }) => (
         <CalendarContents state={state} previousLabel={previousLabel} nextLabel={nextLabel} />
       )}
@@ -174,10 +197,12 @@ export function DatePicker<T extends A.DateValue>({
       <P.Label>{label}</P.Label>
       <P.Group>
         <Segments />
-        <P.Button aria-label={openLabel}>▦</P.Button>
+        <P.Button aria-label={openLabel}>
+          <CalendarIcon />
+        </P.Button>
       </P.Group>
       <Details hint={hint} error={error} />
-      <P.Popover>
+      <P.Popover className="fux-popover--calendar">
         <P.Dialog>
           <Calendar previousLabel={previousLabel} nextLabel={nextLabel} />
         </P.Dialog>
@@ -205,10 +230,12 @@ export function DateRangePicker<T extends A.DateValue>({
         <Segments slot="start" />
         <span aria-hidden="true">–</span>
         <Segments slot="end" />
-        <P.Button aria-label={openLabel}>▦</P.Button>
+        <P.Button aria-label={openLabel}>
+          <CalendarIcon />
+        </P.Button>
       </P.Group>
       <Details hint={hint} error={error} />
-      <P.Popover>
+      <P.Popover className="fux-popover--calendar">
         <P.Dialog>
           <RangeCalendar previousLabel={previousLabel} nextLabel={nextLabel} />
         </P.Dialog>

@@ -12,7 +12,23 @@ export function Symbol({
   size = 18,
 }: {
   name:
-    "search" | "sun" | "moon" | "menu" | "close" | "arrow" | "check" | "copy" | "reset" | "grid";
+    | "search"
+    | "sun"
+    | "moon"
+    | "menu"
+    | "close"
+    | "arrow"
+    | "external"
+    | "check"
+    | "copy"
+    | "reset"
+    | "grid"
+    | "color"
+    | "calendar"
+    | "form"
+    | "layers"
+    | "table"
+    | "outline";
   size?: number;
 }) {
   const paths: Record<typeof name, ReactNode> = {
@@ -32,6 +48,39 @@ export function Symbol({
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     close: <path d="m6 6 12 12M6 18 18 6" />,
     arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
+    external: <path d="M6 18 18 6M6 6h12v12" />,
+    color: (
+      <>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 4a8 8 0 0 0 0 16Z" fill="currentColor" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="4" y="5" width="16" height="16" rx="2" />
+        <path d="M8 3v4m8-4v4M4 10h16M8 14h2m4 0h2m-8 3h2m4 0h2" />
+      </>
+    ),
+    form: (
+      <>
+        <rect x="3" y="5" width="4" height="4" rx="1" />
+        <rect x="3" y="15" width="4" height="4" rx="1" />
+        <path d="M11 7h10M11 17h10" />
+      </>
+    ),
+    layers: (
+      <>
+        <rect x="3" y="3" width="13" height="13" rx="2" />
+        <rect x="8" y="8" width="13" height="13" rx="2" fill="var(--paper)" />
+      </>
+    ),
+    table: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 9h18M3 14h18M10 4v16" />
+      </>
+    ),
+    outline: <path d="M5 4v16M5 6h6m-6 6h6m-6 6h6M15 6h6m-6 6h6m-6 6h6" />,
     check: <path d="m5 12 4 4L19 6" />,
     copy: (
       <>
