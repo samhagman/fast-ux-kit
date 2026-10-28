@@ -93,3 +93,15 @@ export function Pagination({
     </ArkPagination.Root>
   );
 }
+
+export {
+  componentManifest,
+  ariaComponentManifest,
+  arkComponentManifest,
+  ownerEntryPoints,
+  componentUtilities,
+  ownerFamilyCoverage,
+} from "./manifest.js";
+export type { ComponentManifestEntry, OwnerCoverageEntry } from "./manifest.js";
+export * from "./ark-specialized.js";
+export { Carousel, FloatingPanel, ImageCropper, SignaturePad, Tour } from "./ark-advanced.js";

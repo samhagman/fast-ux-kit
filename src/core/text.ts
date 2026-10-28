@@ -29,7 +29,8 @@ export function parseOutlineText(
     if (!raw.trim()) continue;
     const prefix = raw.match(/^[\t ]*/)?.[0] ?? "";
     const width = [...prefix].reduce(
-      (total, char) => (char === "\t" ? total + 4 - (total % 4) : total + 1),
+      (total, char) =>
+        char === "\t" ? total + spacesPerLevel - (total % spacesPerLevel) : total + 1,
       0,
     );
     while (indents.length && indents[indents.length - 1]! >= width) {
@@ -39,9 +40,9 @@ export function parseOutlineText(
     const depth = parents.length;
     let value = raw
       .slice(prefix.length)
-      .trim()
-      .replace(/^(?:[-*+] |\d+[.)] )/, "");
-    const task = value.match(/^\[([ xX])\]\s*/);
+      .replace(/^(?:[-*+]|\d+[.)])(?:[ \t]+|$)/, "")
+      .trim();
+    const task = value.match(/^\[([ xX])\](?:[ \t]+|$)/);
     if (task) value = value.slice(task[0].length);
     const node: Mutable = {
       id: createId(),
@@ -161,6 +162,11 @@ export function importOutlineJSON<T = unknown>(json: string): OutlineDocument<T>
     const frame = pending.pop()!;
     if (++count > 100_000 || frame.depth > 256)
       throw new TypeError("Outline JSON exceeds its validation budget.");
+    if (
+      typeof frame.value === "number" &&
+      (!Number.isFinite(frame.value) || Object.is(frame.value, -0))
+    )
+      throw new TypeError("Outline JSON numbers must round-trip exactly.");
     if (frame.value !== null && typeof frame.value === "object")
       for (const item of Object.values(frame.value))
         pending.push({ value: item, depth: frame.depth + 1 });
@@ -180,4 +186,37 @@ function* outlineNodes<T>(nodes: readonly OutlineNode<T>[]): Generator<OutlineNo
     yield node;
     pending.push(...(node.children ?? []));
   }
+}
+
+/** A trusted host codec may use any textual format; decoded trees always cross model validation. */
+export interface OutlineCodec<T = unknown> {
+  readonly id: string;
+  readonly mimeType: string;
+  readonly encode: (nodes: readonly OutlineNode<T>[]) => string;
+  readonly decode: (source: string) => readonly OutlineNode<T>[];
+}
+export function encodeOutline<T>(nodes: readonly OutlineNode<T>[], codec: OutlineCodec<T>): string {
+  const issues = validateOutline(nodes);
+  if (issues.length) throw new InvalidOutlineError(issues);
+  const source = codec.encode(nodes);
+  if (typeof source !== "string") throw new TypeError("Outline codec must encode a string.");
+  return source;
+}
+export function decodeOutline<T>(
+  source: string,
+  codec: OutlineCodec<T>,
+): readonly OutlineNode<T>[] {
+  if (typeof source !== "string") throw new TypeError("Outline codec source must be a string.");
+  const nodes = codec.decode(source);
+  const issues = validateOutline(nodes);
+  if (issues.length) throw new InvalidOutlineError(issues);
+  return nodes;
+}
+export function createOutlineJSONCodec<T = unknown>(): OutlineCodec<T> {
+  return {
+    id: "outline-json-v1",
+    mimeType: "application/x-fast-ux-outline+json",
+    encode: exportOutlineJSON,
+    decode: (source) => importOutlineJSON<T>(source).nodes,
+  };
 }

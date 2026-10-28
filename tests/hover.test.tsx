@@ -272,5 +272,25 @@ test("a removed or replaced provider cannot publish its pending hover", async ()
   hook.rerender({ providers: [] });
   await act(async () => pending.resolve(offer("Removed provider")));
   assert.equal(hook.result.current.session, null);
-  assert.equal(hook.result.current.status, "empty");
+  assert.equal(hook.result.current.status, "idle");
+});
+
+test("a ready hover closes when its provider is removed or replaced, aborting its context", async () => {
+  let signal: AbortSignal | undefined;
+  const provider: TextHoverProvider<ReactNode> = {
+    id: "definition",
+    hover: (request) => {
+      signal = request.signal;
+      return offer("Available");
+    },
+  };
+  const hook = renderHook(
+    ({ providers }) => useTextHover({ providers, getContext: () => initial }),
+    { initialProps: { providers: [provider] } },
+  );
+  await act(async () => hook.result.current.request(initial, 2, "keyboard"));
+  assert.equal(hook.result.current.status, "ready");
+  hook.rerender({ providers: [{ id: "definition", hover: () => offer("Replaced") }] });
+  assert.equal(hook.result.current.session, null);
+  assert.equal(signal?.aborted, true);
 });

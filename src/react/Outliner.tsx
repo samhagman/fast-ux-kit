@@ -15,6 +15,7 @@ import {
   getOutlinePath,
   InvalidOutlineError,
   toggleExpanded,
+  outlineIds,
   validateOutline,
   type OutlineNode,
 } from "../core/index.js";
@@ -33,6 +34,9 @@ export interface OutlineRenderContext {
 export interface OutlineExpansionChange {
   readonly id: string;
   readonly isExpanded: boolean;
+  /** All affected IDs, including descendants for an Alt-modified recursive disclosure. */
+  readonly affectedIds: readonly string[];
+  readonly recursive: boolean;
 }
 
 type ReaderSectionProps = Omit<
@@ -69,6 +73,8 @@ export interface OutlinerProps<T = unknown> extends ReaderSectionProps {
   readonly allowMedia?: RichContentProps["allowMedia"];
   readonly renderBody?: (node: OutlineNode<T>) => ReactNode;
   readonly renderAccessory?: (node: OutlineNode<T>) => ReactNode;
+  /** Trusted summary shown only while a branch is collapsed. */
+  readonly renderCollapsed?: (node: OutlineNode<T>) => ReactNode;
   readonly renderStatus?: (node: OutlineNode<T>) => ReactNode;
   readonly renderSuffix?: (node: OutlineNode<T>) => ReactNode;
   readonly renderContent?: (node: OutlineNode<T>, context: OutlineRenderContext) => ReactNode;
@@ -109,6 +115,7 @@ export function Outliner<T = unknown>({
   renderContent,
   renderBody,
   renderAccessory,
+  renderCollapsed,
   renderStatus,
   renderSuffix,
   disclosurePosition = "end",
@@ -185,11 +192,17 @@ export function Outliner<T = unknown>({
   let renderedCount = 0;
   let renderLimited = false;
 
-  function toggle(id: string) {
-    const next = toggleExpanded(expanded, id);
+  function toggle(id: string, recursive = false) {
+    const ids = recursive ? outlineIds([findOutlineNode(nodes, id)!.node]) : [id];
+    const next = new Set(toggleExpanded(expanded, id));
+    const isExpanded = next.has(id);
+    for (const affected of ids) {
+      if (isExpanded) next.add(affected);
+      else next.delete(affected);
+    }
     if (expandedIds === undefined) setLocalExpanded(next);
     // Call once from the event, not from a state updater (which Strict Mode can replay).
-    onExpandedChange?.(next, { id, isExpanded: next.has(id) });
+    onExpandedChange?.(next, { id, isExpanded, affectedIds: ids, recursive });
   }
 
   function renderList(
@@ -235,7 +248,7 @@ export function Outliner<T = unknown>({
                       }
                       aria-expanded={isExpanded}
                       aria-controls={childListId}
-                      onPress={() => toggle(node.id)}
+                      onPress={(event) => toggle(node.id, event.altKey)}
                     >
                       <span className="fast-ux-outliner__marker" aria-hidden="true">
                         ▸
@@ -269,6 +282,9 @@ export function Outliner<T = unknown>({
                     )}
                     {renderSuffix?.(node)}
                     {renderBody?.(node)}
+                    {hasChildren && !isExpanded && renderCollapsed && (
+                      <div className="fast-ux-outliner__summary">{renderCollapsed(node)}</div>
+                    )}
                   </div>
                   {renderAccessory?.(node)}
                   {enableHoist && (

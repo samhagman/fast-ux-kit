@@ -88,9 +88,13 @@ export function useTextHover({
   const [state, setState] = useState<HoverState>(idle);
   const options = useRef({ providers, getContext, disabled });
   options.current = { providers, getContext, disabled };
-  const active = useRef<{ id: number; context: TextRequestContext; abort: AbortController } | null>(
-    null,
-  );
+  const active = useRef<{
+    id: number;
+    context: TextRequestContext;
+    abort: AbortController;
+    provider?: TextHoverProvider<ReactNode>;
+    ready?: boolean;
+  } | null>(null);
   const serial = useRef(0);
   const mounted = useRef(true);
 
@@ -118,7 +122,20 @@ export function useTextHover({
     } catch {
       /* A failing host lookup invalidates pending content. */
     }
-    if (options.current.disabled || !context || !sameTextContext(active.current.context, context))
+    const provider = active.current.provider;
+    const providerPresent =
+      !provider ||
+      options.current.providers.some(
+        (candidate) =>
+          candidate.id === provider.id &&
+          (!active.current?.ready || candidate.hover === provider.hover),
+      );
+    if (
+      options.current.disabled ||
+      !context ||
+      !sameTextContext(active.current.context, context) ||
+      !providerPresent
+    )
       dismiss();
   });
 
@@ -179,6 +196,7 @@ export function useTextHover({
           )
             continue;
           seen.add(provider.id);
+          if (active.current) active.current.provider = provider;
           try {
             const offered: unknown = await provider.hover({
               ...context,
@@ -203,6 +221,7 @@ export function useTextHover({
               range: { start: offered.range.start, end: offered.range.end },
               content: offered.content,
             };
+            if (active.current) active.current.ready = true;
             setState({ status: "ready", error: null, session: { context, offer, offset, origin } });
             return;
           } catch (error) {

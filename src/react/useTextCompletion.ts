@@ -5,6 +5,7 @@ import {
   filterCompletions,
   sameTextContext,
   validTextRange,
+  textDataField,
   type TextCompletion,
   type TextCompletionOffer,
   type TextCompletionProvider,
@@ -173,15 +174,16 @@ export function useTextCompletion({
           const offers = results.flatMap((result) =>
             result.status === "fulfilled" ? [result.value] : [],
           );
-          const usable = offers.filter(
-            (offer): offer is TextCompletionOffer =>
-              offer !== null &&
-              typeof offer === "object" &&
-              Array.isArray(offer.items) &&
-              validTextRange(offer.range, context.text) &&
-              offer.range.start <= context.selection.start &&
-              offer.range.end >= context.selection.end,
-          );
+          const usable = offers.flatMap((offer) => {
+            const range = textDataField(offer, "range") as TextCompletionOffer["range"];
+            const items = textDataField(offer, "items");
+            return Array.isArray(items) &&
+              validTextRange(range, context.text) &&
+              range.start <= context.selection.start &&
+              range.end >= context.selection.end
+              ? [{ range: { start: range.start, end: range.end }, items }]
+              : [];
+          });
           const first = usable[0];
           if (!first) {
             const failure = results.find((result) => result.status === "rejected");

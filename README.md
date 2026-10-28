@@ -24,8 +24,10 @@ Install the resulting tarball into another app; it contains compiled ESM and Typ
 declarations, not workspace aliases. Install matching React, React DOM and
 `react-aria-components` peers in the consumer. Ark is optional unless importing
 `@samhagman/fast-ux-kit/ark` or the unified `/components` layer; then install `@ark-ui/react@5.39.3` as well.
-Use `/components/aria` for styled Button, Field, Checkbox, Link, ModalDialog and
-layout components without the optional Ark dependency. Both styled entries use
+Use `/components/aria` for the 56 default-owner/native families—including color,
+calendar/date/time, inputs, collections, navigation, overlays and layout—without
+the optional Ark JavaScript dependency. `/components` adds 30 specialized families
+(including Pagination) and the full catalog metadata. Both styled entries use
 the same `/components.css` and semantic tokens.
 A private Git dependency alone is **not** the distribution contract: this repository
 does not commit build outputs or run implicit prepare scripts. Use tested tarballs
@@ -76,14 +78,48 @@ import { Button, Field, Checkbox, Pagination } from "@samhagman/fast-ux-kit/comp
 import "@samhagman/fast-ux-kit/components.css"; // shared tokens + styling
 ```
 
-Button, Field, Checkbox, IconButton, Link and ModalDialog use React Aria; Pagination
-uses Ark UI. Stack, Row and Panel provide bounded layout composition.
-All share the `--fux-*` semantic tokens and control geometry through one typed
-component layer. Override theme tokens at the application root, including portals.
-Advanced headless primitives are separately available from `/aria` and `/ark`;
-these escape hatches are not a universal prop-translation layer. [Composition rules](docs/ARCHITECTURE.md) assign one behavior owner per
-control. Application-specific facades and CSS Modules stay with the application
-until each shared abstraction has a proven second use.
+The current catalog contains **86 canonical styled families**: 56 default-owner or
+native families and 30 optional specialized families. This counts families, not
+leaf parts, raw re-exports or utility hooks. It is an implementation inventory,
+not browser/device certification.
+
+- **Ready-to-compose recipes:** labeled fields, date/time pickers, color controls,
+  tables, collections, navigation, dialogs and feedback.
+- **Styled compound APIs:** `Primitives` preserves the default owner's exact prop
+  types and render props. Specialized families such as `Drawer`, `FileUpload`,
+  `PasswordInput`, `Steps` and `Toast` expose their typed `Root`/part anatomy.
+- **One shared visual system:** `--fux-*` semantic tokens, 44px control targets,
+  logical spacing, light/dark scopes, forced-colors and reduced-motion rules.
+- **Explicit escape hatches:** `/aria` and `/ark` expose complete **unstyled** owner
+  APIs. Raw exports do not become styled merely by importing the kit stylesheet.
+
+```tsx
+import { ColorPicker, DatePicker, Primitives } from "@samhagman/fast-ux-kit/components/aria";
+import { PasswordInput } from "@samhagman/fast-ux-kit/components";
+
+<ColorPicker label="Accent" defaultValue="#315b8d" />;
+<DatePicker label="Deadline" />;
+<PasswordInput.Root>
+  <PasswordInput.Label>Password</PasswordInput.Label>
+  <PasswordInput.Control>
+    <PasswordInput.Input />
+    <PasswordInput.VisibilityTrigger>
+      <PasswordInput.Indicator fallback="Show">Hide</PasswordInput.Indicator>
+    </PasswordInput.VisibilityTrigger>
+  </PasswordInput.Control>
+</PasswordInput.Root>;
+```
+
+See the [complete component API and inventory](docs/COMPONENT_API.md),
+[component verification ledger](docs/COMPONENT_COVERAGE.md), and
+[composition rules](docs/ARCHITECTURE.md). `componentManifest`,
+`componentUtilities` and `ownerFamilyCoverage` provide machine-readable catalog,
+infrastructure and canonical-overlap mappings. Every canonical family has a
+named documentation route and an actual component composition.
+
+Override theme tokens at the application/theme root **and the portal root**. Never
+attach two behavior owners to the same control, or add another focus trap inside
+an already managed overlay. Application-specific facades remain application-owned.
 
 ## Safe document commands
 
@@ -108,8 +144,9 @@ synthetic test content, not an app deployment or a substitute for device QA.
 `CHROMIUM_PATH` if needed). Browser startup was blocked in the initial cloud
 environment; see the behavior coverage ledger for unverified platform gates.
 
-The primary shared controls intentionally omit per-call `style`/`className` forks;
-use semantic variants and root theme tokens. `IconButton` children must be a
+The small Button/Field/layout recipes intentionally limit per-call style forks;
+use semantic variants and root theme tokens. Styled `Primitives` and specialized
+compound parts retain their owner styling/ref/render-prop contracts for composition. `IconButton` children must be a
 non-interactive decorative icon. Advanced upstream primitives remain available
 from the headless subpaths when a consumer needs a capability beyond that API.
 

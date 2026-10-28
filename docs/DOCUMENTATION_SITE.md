@@ -20,18 +20,28 @@ or runtime APIs are included. Do not remove generated legal notice files.
 
 ## What is included
 
-- Filterable documentation navigation and mobile navigation disclosure.
+- Filterable documentation navigation, a named route for every component, and a
+  keyboard-contained mobile navigation dialog.
 - Light and dark semantic palettes, including modal portal styling.
-- Real Button, IconButton, Link, Field, Checkbox, ModalDialog, Pagination,
-  Stack, Row and Panel examples.
+- A route and real composition for each of the 86 canonical styled families,
+  including all seven color families, date/time, collections and specialized controls.
+- Explicit alias routes and non-visual utility pages; raw exports are labeled unstyled.
+- Controlled/local state examples, typed compound anatomy and copyable usage code.
 - Controlled outline folding, collapse/expand all, branch focus, reset and
   disclosure-position controls.
 - Explicitly enabled local outline editing, safe rich Markdown and text highlights.
 - Copyable examples, API summaries, token swatches and accessibility boundaries.
 
-All interactions are local to the page. Reloading resets demonstration state.
+Demonstration state is local to the page. Reloading resets it. File pickers,
+clipboard copying and download buttons use browser capabilities only when
+explicitly activated. The drawing example is not a legal signing workflow.
 Copy buttons require clipboard permission; a manual-copy fallback is displayed
 when the browser denies access. Nothing is saved or transmitted.
+Switching an example from Preview to Code unmounts its live subtree, closes its
+portals and resets temporary state. Returning to Preview creates a fresh instance.
+Example failures have a local Reset action without removing page navigation.
+Rich-document footnotes and backlinks scroll and focus within the page without
+replacing the documentation route.
 
 ## Private hosting contract
 

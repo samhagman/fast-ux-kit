@@ -36,18 +36,27 @@ export function TextPopup({
       if (!element.current || !anchor.isConnected) return;
       const caret = textareaCaretRect(anchor, offset),
         bounds = element.current.getBoundingClientRect();
-      const width = Math.min(384, win.innerWidth - 16),
-        height = Math.min(bounds.height || 240, win.innerHeight - 16);
-      const below = win.innerHeight - caret.bottom - 8,
-        above = caret.top - 8;
+      const viewport = win.visualViewport;
+      const viewportLeft = viewport?.offsetLeft ?? 0,
+        viewportTop = viewport?.offsetTop ?? 0;
+      const viewportWidth = viewport?.width ?? win.innerWidth,
+        viewportHeight = viewport?.height ?? win.innerHeight;
+      const right = viewportLeft + viewportWidth,
+        bottom = viewportTop + viewportHeight;
+      const width = Math.max(0, Math.min(384, viewportWidth - 16)),
+        height = Math.max(0, Math.min(bounds.height || 240, viewportHeight - 16));
+      const below = bottom - caret.bottom - 8,
+        above = caret.top - viewportTop - 8;
       const top =
-        below >= height || below >= above ? caret.bottom + 4 : Math.max(8, caret.top - height - 4);
+        below >= height || below >= above
+          ? caret.bottom + 4
+          : Math.max(viewportTop + 8, caret.top - height - 4);
       setPosition({
         position: "fixed",
-        top: Math.max(8, Math.min(win.innerHeight - height - 8, top)),
-        left: Math.max(8, Math.min(win.innerWidth - width - 8, caret.left)),
+        top: Math.max(viewportTop + 8, Math.min(bottom - height - 8, top)),
+        left: Math.max(viewportLeft + 8, Math.min(right - width - 8, caret.left)),
         width,
-        maxHeight: Math.max(44, Math.max(below, above)),
+        maxHeight: Math.max(0, Math.min(viewportHeight - 16, Math.max(below, above))),
         visibility: "visible",
         zIndex: "var(--fux-z-popover, 20)",
       });
@@ -55,12 +64,16 @@ export function TextPopup({
     place();
     doc.addEventListener("scroll", place, true);
     win.addEventListener("resize", place);
+    win.visualViewport?.addEventListener("resize", place);
+    win.visualViewport?.addEventListener("scroll", place);
     const observer = win.ResizeObserver ? new win.ResizeObserver(place) : null;
     observer?.observe(anchor);
     observer?.observe(element.current);
     return () => {
       doc.removeEventListener("scroll", place, true);
       win.removeEventListener("resize", place);
+      win.visualViewport?.removeEventListener("resize", place);
+      win.visualViewport?.removeEventListener("scroll", place);
       observer?.disconnect();
     };
   }, [anchor, offset, container]);

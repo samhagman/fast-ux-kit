@@ -10,12 +10,14 @@ import {
   outdentOutlineNode,
   parseOutlineText,
   selectionRoots,
+  sameOutlineContent,
   validateOutline,
   InvalidOutlineError,
   type OutlineNode,
   type OutlineEditPolicy,
   type OutlineCommandFailure,
   type OutlineCommandResult,
+  type OutlineCommand,
 } from "./index.js";
 
 export interface OutlineCaret {
@@ -27,6 +29,7 @@ export interface OutlineSnapshot<T = unknown> {
   readonly nodes: readonly OutlineNode<T>[];
   readonly caret: OutlineCaret | null;
   readonly selection: ReadonlySet<string>;
+  readonly selectionAnchor?: string | null;
 }
 export interface OutlineHistory<T = unknown> {
   readonly past: readonly OutlineSnapshot<T>[];
@@ -56,6 +59,11 @@ export interface OutlineEditorOptions<T = unknown> extends OutlineEditPolicy<T> 
   readonly mergeData?: (left: OutlineNode<T>, right: OutlineNode<T>) => T;
 }
 export type OutlineAction<T = unknown> =
+  | {
+      readonly type: "transaction";
+      readonly commands: readonly OutlineCommand<T>[];
+      readonly caret?: OutlineCaret;
+    }
   | {
       readonly type: "text";
       readonly id: string;
@@ -99,7 +107,7 @@ export type OutlineAction<T = unknown> =
     }
   | {
       readonly type: "paste-nodes";
-      readonly afterId: string;
+      readonly afterId?: string;
       readonly nodes: readonly OutlineNode<T>[];
       readonly createId: () => string;
     }
@@ -151,9 +159,94 @@ const snapshot = <T>(state: OutlineEditorState<T>): OutlineSnapshot<T> => ({
   nodes: state.nodes,
   caret: state.caret,
   selection: state.selection,
+  selectionAnchor: state.selectionAnchor,
 });
 const clamp = (value: number, length: number) =>
   Math.max(0, Math.min(length, Number.isFinite(value) ? Math.trunc(value) : 0));
+
+/** History/replacement must preserve protected nodes and their complete structural placement.
+ * Compare positions, not ancestor object identities: editing an unlocked ancestor title is valid.
+ */
+function changesLockedStructure<T>(
+  before: readonly OutlineNode<T>[],
+  after: readonly OutlineNode<T>[],
+  isLocked: (node: OutlineNode<T>) => boolean,
+): boolean {
+  interface Location {
+    node: OutlineNode<T>;
+    parentId: string | null;
+    index: number;
+  }
+  const nextLocations = new Map<string, Location>();
+  const nextPending: Location[] = after.map((node, index) => ({ node, index, parentId: null }));
+  while (nextPending.length) {
+    const location = nextPending.pop()!;
+    nextLocations.set(location.node.id, location);
+    for (const [index, node] of (location.node.children ?? []).entries())
+      nextPending.push({ node, index, parentId: location.node.id });
+  }
+  const pending = before.map((node, index) => ({
+    node,
+    index,
+    parentId: null as string | null,
+    inheritedLock: false,
+    stableParent: true,
+  }));
+  while (pending.length) {
+    const current = pending.pop()!;
+    const next = nextLocations.get(current.node.id);
+    const protectedNode = current.inheritedLock || isLocked(current.node);
+    const stablePlacement =
+      current.stableParent &&
+      !!next &&
+      next.parentId === current.parentId &&
+      next.index === current.index;
+    if (protectedNode && (!stablePlacement || next?.node !== current.node)) return true;
+    for (const [index, node] of (current.node.children ?? []).entries())
+      pending.push({
+        node,
+        index,
+        parentId: current.node.id,
+        inheritedLock: protectedNode,
+        stableParent: stablePlacement,
+      });
+  }
+  return false;
+}
+
+/** Keep interaction targets visible without reopening reader-local folds. */
+function reconcileInteraction<T>(state: OutlineEditorState<T>): OutlineEditorState<T> {
+  const rows = editorVisibleRows(state);
+  const visible = new Map(rows.map((row) => [row.id, row.node]));
+  let caret = state.caret;
+  if (caret) {
+    const target = visible.get(caret.id);
+    if (target)
+      caret = {
+        id: caret.id,
+        start: clamp(caret.start, target.text.length),
+        end: clamp(caret.end, target.text.length),
+      };
+    else {
+      const ancestor = [...getOutlinePath(state.nodes, caret.id)]
+        .reverse()
+        .find((node) => visible.has(node.id));
+      const fallback = ancestor ?? rows[0]?.node;
+      caret = fallback ? { id: fallback.id, start: 0, end: 0 } : null;
+    }
+  }
+  const selection = new Set([...state.selection].filter((id) => visible.has(id)));
+  if (state.selection.size && !selection.size && caret) selection.add(caret.id);
+  return {
+    ...state,
+    caret,
+    selection,
+    selectionAnchor:
+      state.selectionAnchor && visible.has(state.selectionAnchor)
+        ? state.selectionAnchor
+        : (caret?.id ?? null),
+  };
+}
 
 /** Reconcile trusted host content without putting server loads into user undo history. */
 export function reconcileOutlineEditorState<T>(
@@ -165,14 +258,123 @@ export function reconcileOutlineEditorState<T>(
     expandedIds: state.expandedIds,
     hoistedId: state.hoistedId,
   });
-  const ids = new Set(outlineIds(nodes));
-  return {
+  const next = reconcileInteraction({
     ...base,
-    caret: state.caret && ids.has(state.caret.id) ? state.caret : null,
-    selection: new Set([...state.selection].filter((id) => ids.has(id))),
+    caret:
+      state.caret && !findOutlineNode(nodes, state.caret.id)
+        ? (() => {
+            const ancestor = [...getOutlinePath(state.nodes, state.caret!.id)]
+              .reverse()
+              .find((node) => findOutlineNode(nodes, node.id));
+            return ancestor ? { id: ancestor.id, start: 0, end: 0 } : state.caret;
+          })()
+        : state.caret,
+    selection: state.selection,
+    selectionAnchor: state.selectionAnchor,
     revision: state.revision + 1,
-    focusVersion: state.focusVersion,
-  };
+    focusVersion: state.focusVersion + 1,
+  });
+  return next;
+}
+
+/** Runtime callers and extension adapters receive an atomic refusal for malformed actions. */
+function validAction<T>(action: OutlineAction<T>): boolean {
+  if (!action || typeof action !== "object" || Array.isArray(action)) return false;
+  const value = action as unknown as Record<string, unknown>;
+  const string = (key: string) => typeof value[key] === "string";
+  const optionalString = (key: string) => value[key] === undefined || string(key);
+  const number = (key: string) => typeof value[key] === "number" && Number.isFinite(value[key]);
+  const optionalNumber = (key: string) => value[key] === undefined || number(key);
+  const optionalBoolean = (key: string) =>
+    value[key] === undefined || typeof value[key] === "boolean";
+  const ids = (optional = false) =>
+    (optional && value.ids === undefined) ||
+    (Array.isArray(value.ids) && value.ids.every((id) => typeof id === "string"));
+  switch (action.type) {
+    case "text":
+      return (
+        string("id") &&
+        string("text") &&
+        optionalNumber("caret") &&
+        (value.time === undefined || number("time") || value.time === Number.NEGATIVE_INFINITY)
+      );
+    case "split":
+      return string("id") && string("newId") && number("start") && optionalNumber("end");
+    case "merge":
+      return string("id") && ["backward", "forward"].includes(action.direction);
+    case "insert":
+      return (
+        string("id") &&
+        optionalString("afterId") &&
+        optionalString("text") &&
+        (value.parentId === undefined || value.parentId === null || string("parentId")) &&
+        optionalNumber("index") &&
+        optionalNumber("caret")
+      );
+    case "delete":
+    case "indent":
+    case "outdent":
+      return ids(true);
+    case "move":
+      return ids(true) && ["up", "down"].includes(action.direction);
+    case "drop":
+      return ids() && (value.parentId === null || string("parentId")) && number("index");
+    case "paste":
+      return (
+        string("id") &&
+        string("text") &&
+        number("start") &&
+        optionalNumber("end") &&
+        typeof value.createId === "function"
+      );
+    case "paste-nodes":
+      return (
+        optionalString("afterId") &&
+        Array.isArray(value.nodes) &&
+        typeof value.createId === "function"
+      );
+    case "tasks":
+      return ids();
+    case "task":
+      return string("id") && (value.checked === null || optionalBoolean("checked"));
+    case "replace":
+      return Array.isArray(value.nodes);
+    case "toggle":
+      return string("id");
+    case "expand":
+      return ids() && typeof value.expanded === "boolean";
+    case "expand-all":
+      return (
+        typeof value.expanded === "boolean" &&
+        (value.depth === undefined ||
+          (number("depth") && Number.isInteger(value.depth) && (value.depth as number) >= 0))
+      );
+    case "hoist":
+      return value.id === null || string("id");
+    case "caret":
+      return string("id") && number("start") && number("end");
+    case "focus":
+    case "reveal":
+      return string("id") && optionalNumber("start") && optionalNumber("end");
+    case "select":
+      return string("id") && optionalBoolean("extend") && optionalBoolean("toggle");
+    case "transaction":
+      return (
+        Array.isArray(value.commands) &&
+        (action.caret === undefined ||
+          (!!action.caret &&
+            typeof action.caret.id === "string" &&
+            Number.isFinite(action.caret.start) &&
+            Number.isFinite(action.caret.end)))
+      );
+    case "undo":
+    case "redo":
+    case "select-all":
+    case "clear-selection":
+      return true;
+    default:
+      return false;
+  }
 }
 
 /** Pure editor state machine. Reading/navigation and document editing have separate authority. */
@@ -181,8 +383,7 @@ export function reduceOutlineEditor<T>(
   action: OutlineAction<T>,
   options: OutlineEditorOptions<T> = {},
 ): OutlineEditorState<T> {
-  if (!action || typeof action !== "object" || typeof action.type !== "string")
-    return { ...state, refusal: "invalid-command" };
+  if (!validAction(action)) return { ...state, refusal: "invalid-command" };
   const fail = (reason: OutlineCommandFailure): OutlineEditorState<T> => ({
     ...state,
     refusal: reason,
@@ -190,11 +391,16 @@ export function reduceOutlineEditor<T>(
   const focus = (id: string, start = 0, end = start): OutlineEditorState<T> => {
     const location = findOutlineNode(state.nodes, id);
     if (!location) return fail("not-found");
+    const outside =
+      state.hoistedId &&
+      ![...location.ancestors, location.node].some((node) => node.id === state.hoistedId);
+    if (outside && action.type !== "reveal") return fail("invalid-command");
     const expandedIds = new Set(state.expandedIds);
     location.ancestors.forEach((node) => expandedIds.add(node.id));
     return {
       ...state,
       expandedIds,
+      hoistedId: outside ? null : state.hoistedId,
       caret: {
         id,
         start: clamp(start, location.node.text.length),
@@ -202,6 +408,7 @@ export function reduceOutlineEditor<T>(
       },
       selection: new Set(),
       selectionAnchor: id,
+      history: { ...state.history, group: null },
       focusVersion: state.focusVersion + 1,
       refusal: null,
     };
@@ -223,16 +430,11 @@ export function reduceOutlineEditor<T>(
       caret: { id: action.id, start, end },
       selection: new Set(),
       selectionAnchor: action.id,
+      history: { ...state.history, group: null },
     };
   }
-  if (action.type === "focus" || action.type === "reveal") {
-    const next = focus(action.id, action.start, action.end);
-    return action.type === "reveal" &&
-      state.hoistedId &&
-      !getOutlinePath(state.nodes, action.id).some((node) => node.id === state.hoistedId)
-      ? { ...next, hoistedId: null }
-      : next;
-  }
+  if (action.type === "focus" || action.type === "reveal")
+    return focus(action.id, action.start, action.end);
   if (action.type === "clear-selection")
     return { ...state, selection: new Set(), selectionAnchor: null };
   if (action.type === "select-all") {
@@ -291,35 +493,29 @@ export function reduceOutlineEditor<T>(
       if (expanded && depthAllowed) expandedIds.add(id);
       else expandedIds.delete(id);
     }
-    let next = { ...state, expandedIds, refusal: null };
-    // A hidden focused descendant returns to the nearest visible ancestor.
-    if (state.caret) {
-      const visible = new Set(editorVisibleRows(next).map((row) => row.id));
-      if (!visible.has(state.caret.id)) {
-        const parent = [...getOutlinePath(state.nodes, state.caret.id)]
-          .reverse()
-          .find((node) => visible.has(node.id));
-        next = {
-          ...next,
-          caret: parent ? { id: parent.id, start: 0, end: 0 } : null,
-          focusVersion: state.focusVersion + 1,
-        };
-      }
-    }
-    return next;
+    const next = reconcileInteraction({ ...state, expandedIds, refusal: null });
+    return {
+      ...next,
+      focusVersion:
+        next.caret?.id !== state.caret?.id ? state.focusVersion + 1 : state.focusVersion,
+    };
   }
+
   if (action.type === "hoist") {
     if (action.id !== null && !findOutlineNode(state.nodes, action.id)) return fail("not-found");
     const expandedIds = new Set(state.expandedIds);
     if (action.id) expandedIds.add(action.id);
-    return {
+    return reconcileInteraction({
       ...state,
       hoistedId: action.id,
       expandedIds,
+      caret: state.caret ?? (action.id ? { id: action.id, start: 0, end: 0 } : null),
       selection: new Set(),
       selectionAnchor: null,
+      history: { ...state.history, group: null },
+      focusVersion: state.focusVersion + 1,
       refusal: null,
-    };
+    });
   }
   // Every remaining intent can mutate content, including history and replacement.
   if (options.readOnly !== false) return fail("read-only");
@@ -331,6 +527,8 @@ export function reduceOutlineEditor<T>(
     expandedIds = state.expandedIds,
   ): OutlineEditorState<T> => {
     if (!result.ok) return fail(result.reason);
+    if (action.type !== "replace" && sameOutlineContent(state.nodes, result.nodes))
+      return { ...state, refusal: null };
     if (options.canChange && !options.canChange(state.nodes, result.nodes, action))
       return fail("locked");
     if (result.nodes === state.nodes) return { ...state, refusal: null };
@@ -343,7 +541,7 @@ export function reduceOutlineEditor<T>(
     const past = coalesce
       ? state.history.past
       : [...state.history.past, snapshot(state)].slice(-Math.max(1, options.historyLimit ?? 100));
-    return {
+    return reconcileInteraction({
       ...state,
       nodes: result.nodes,
       caret: caret && ids.has(caret.id) ? caret : null,
@@ -355,33 +553,27 @@ export function reduceOutlineEditor<T>(
       revision: state.revision + 1,
       focusVersion: state.focusVersion + 1,
       refusal: null,
-    };
+    });
   };
+  if (action.type === "transaction")
+    return finish(
+      applyOutlineTransaction(state.nodes, action.commands, policy),
+      action.caret ?? state.caret,
+    );
   if (action.type === "undo" || action.type === "redo") {
     const stack = action.type === "undo" ? state.history.past : state.history.future;
     const restored = stack.at(-1);
     if (!restored) return state;
     // Locking is re-evaluated at travel time: history is not a backdoor around policy.
-    if (options.isLocked) {
-      for (const id of outlineIds(state.nodes)) {
-        const current = findOutlineNode(state.nodes, id)!;
-        if (!options.isLocked(current.node) && !current.ancestors.some(options.isLocked)) continue;
-        const previous = findOutlineNode(restored.nodes, id);
-        if (
-          !previous ||
-          previous.node !== current.node ||
-          previous.parentId !== current.parentId ||
-          previous.index !== current.index
-        )
-          return fail("locked");
-      }
-    }
+    if (options.isLocked && changesLockedStructure(state.nodes, restored.nodes, options.isLocked))
+      return fail("locked");
     if (options.canChange && !options.canChange(state.nodes, restored.nodes, action))
       return fail("locked");
     const ids = new Set(outlineIds(restored.nodes));
-    return {
+    return reconcileInteraction({
       ...state,
       ...restored,
+      selectionAnchor: restored.selectionAnchor ?? restored.caret?.id ?? null,
       hoistedId: state.hoistedId && ids.has(state.hoistedId) ? state.hoistedId : null,
       history:
         action.type === "undo"
@@ -398,24 +590,11 @@ export function reduceOutlineEditor<T>(
       revision: state.revision + 1,
       focusVersion: state.focusVersion + 1,
       refusal: null,
-    };
+    });
   }
   if (action.type === "replace") {
     if (validateOutline(action.nodes).length) return fail("invalid-outline");
-    if (
-      options.isLocked &&
-      outlineIds(state.nodes).some((id) => {
-        const current = findOutlineNode(state.nodes, id)!;
-        const next = findOutlineNode(action.nodes, id);
-        return (
-          (options.isLocked!(current.node) || current.ancestors.some(options.isLocked!)) &&
-          (!next ||
-            next.node !== current.node ||
-            next.parentId !== current.parentId ||
-            next.index !== current.index)
-        );
-      })
-    )
+    if (options.isLocked && changesLockedStructure(state.nodes, action.nodes, options.isLocked))
       return fail("locked");
     return finish({ ok: true, nodes: action.nodes }, null);
   }
@@ -441,8 +620,9 @@ export function reduceOutlineEditor<T>(
     return finish(applyOutlineTransaction(state.nodes, commands, policy));
   }
   if (action.type === "paste-nodes") {
-    const source = findOutlineNode(state.nodes, action.afterId);
-    if (!source) return fail("not-found");
+    const source =
+      action.afterId === undefined ? undefined : findOutlineNode(state.nodes, action.afterId);
+    if (action.afterId !== undefined && !source) return fail("not-found");
     if (validateOutline(action.nodes).length) return fail("invalid-outline");
     const copies = new Map<OutlineNode<T>, OutlineNode<T>>();
     const stack = action.nodes.map((node) => ({ node, exit: false })).reverse();
@@ -467,8 +647,18 @@ export function reduceOutlineEditor<T>(
       state.nodes,
       copied.map((node, index) => ({
         type: "insert" as const,
-        parentId: source.parentId,
-        index: source.index + 1 + index,
+        parentId: source
+          ? source.node.id === state.hoistedId
+            ? source.node.id
+            : source.parentId
+          : state.hoistedId,
+        index: source
+          ? source.node.id === state.hoistedId
+            ? index
+            : source.index + 1 + index
+          : (state.hoistedId
+              ? (findOutlineNode(state.nodes, state.hoistedId)!.node.children?.length ?? 0)
+              : state.nodes.length) + index,
         node,
       })),
       policy,
@@ -501,7 +691,11 @@ export function reduceOutlineEditor<T>(
     if (action.afterId && !after) return fail("not-found");
     const node: OutlineNode<T> = { id: action.id, text: action.text ?? "" };
     const parentId =
-      action.parentId !== undefined ? action.parentId : (after?.parentId ?? state.hoistedId);
+      action.parentId !== undefined
+        ? action.parentId
+        : after?.node.id === state.hoistedId
+          ? state.hoistedId
+          : (after?.parentId ?? state.hoistedId);
     return finish(
       applyOutlineCommand(
         state.nodes,
@@ -538,7 +732,9 @@ export function reduceOutlineEditor<T>(
       source.index === siblings.length - 1 &&
       source.node.id !== state.hoistedId
     )
-      return finish(outdentOutlineNode(state.nodes, action.id, policy));
+      return source.parentId === state.hoistedId
+        ? state
+        : finish(outdentOutlineNode(state.nodes, action.id, policy));
     const start = clamp(action.start, source.node.text.length),
       end = Math.max(start, clamp(action.end ?? start, source.node.text.length));
     const prefix = source.node.text.slice(0, start),
@@ -548,15 +744,17 @@ export function reduceOutlineEditor<T>(
         state.nodes,
         {
           type: "insert",
-          parentId: source.parentId,
-          index: source.index,
+          parentId: source.node.id === state.hoistedId ? source.node.id : source.parentId,
+          index: source.node.id === state.hoistedId ? 0 : source.index,
           node: { id: action.newId, text: "" },
         },
         policy,
       );
       return finish(inserted, { id: source.node.id, start: 0, end: 0 });
     }
-    const asChild = !!source.node.children?.length && state.expandedIds.has(source.node.id);
+    const asChild =
+      source.node.id === state.hoistedId ||
+      (!!source.node.children?.length && state.expandedIds.has(source.node.id));
     const newNode: OutlineNode<T> = {
       id: action.newId,
       text: suffix,
@@ -633,17 +831,18 @@ export function reduceOutlineEditor<T>(
     if (!source) return fail("not-found");
     const start = clamp(action.start, source.node.text.length),
       end = Math.max(start, clamp(action.end ?? start, source.node.text.length));
-    if (!/[\r\n]/.test(action.text))
-      return reduceOutlineEditor(
-        state,
-        {
-          type: "text",
-          id: action.id,
-          text: source.node.text.slice(0, start) + action.text + source.node.text.slice(end),
-          caret: start + action.text.length,
-        },
-        options,
+    if (!/[\r\n]/.test(action.text)) {
+      const text = source.node.text.slice(0, start) + action.text + source.node.text.slice(end);
+      const caret = start + action.text.length;
+      return finish(
+        applyOutlineCommand(
+          state.nodes,
+          { type: "update", id: action.id, changes: { text } },
+          policy,
+        ),
+        { id: action.id, start: caret, end: caret },
       );
+    }
     const parsed = parseOutlineText(action.text, {
       createId: action.createId,
     }) as readonly OutlineNode<T>[];
@@ -673,7 +872,12 @@ export function reduceOutlineEditor<T>(
     for (let i = 1; i < parsed.length; i++) {
       const inserted = applyOutlineCommand(
         candidate,
-        { type: "insert", parentId: source.parentId, index: source.index + i, node: parsed[i]! },
+        {
+          type: "insert",
+          parentId: source.node.id === state.hoistedId ? source.node.id : source.parentId,
+          index: source.node.id === state.hoistedId ? i - 1 : source.index + i,
+          node: parsed[i]!,
+        },
         policy,
       );
       if (!inserted.ok) return fail(inserted.reason);
@@ -725,7 +929,13 @@ export function reduceOutlineEditor<T>(
           if (parent) expanded.add(parent);
         }
       const next = finish(moved, state.caret, null, expanded);
-      return next.nodes !== state.nodes ? { ...next, selection: state.selection } : next;
+      return next.nodes !== state.nodes
+        ? reconcileInteraction({
+            ...next,
+            selection: state.selection,
+            selectionAnchor: state.selectionAnchor,
+          })
+        : next;
     }
     if (action.type === "drop") {
       if (action.parentId !== null) {
@@ -750,9 +960,22 @@ export function reduceOutlineEditor<T>(
       );
       if (action.parentId) expanded.add(action.parentId);
       const next = finish(result, state.caret, null, expanded);
-      return next.nodes !== state.nodes ? { ...next, selection: state.selection } : next;
+      return next.nodes !== state.nodes
+        ? reconcileInteraction({
+            ...next,
+            selection: state.selection,
+            selectionAnchor: state.selectionAnchor,
+          })
+        : next;
     }
-    if (action.type === "outdent") ids.reverse();
+    if (action.type === "outdent") {
+      if (
+        state.hoistedId &&
+        ids.some((id) => findOutlineNode(state.nodes, id)?.parentId === state.hoistedId)
+      )
+        return state;
+      ids.reverse();
+    }
 
     for (const id of ids) {
       let result: OutlineCommandResult<T>;
@@ -787,7 +1010,11 @@ export function reduceOutlineEditor<T>(
     }
     const result = finish({ ok: true, nodes: candidate }, caret, null, expanded);
     return action.type !== "delete" && result.nodes !== state.nodes
-      ? { ...result, selection: state.selection }
+      ? reconcileInteraction({
+          ...result,
+          selection: state.selection,
+          selectionAnchor: state.selectionAnchor,
+        })
       : result;
   }
   return fail("invalid-command");

@@ -333,3 +333,64 @@ test("multiple Markdown blocks scope footnote targets and labels uniquely", () =
   for (const link of view.container.querySelectorAll<HTMLElement>("[aria-describedby]"))
     assert.ok(document.getElementById(link.getAttribute("aria-describedby")!));
 });
+
+test("a failed trusted renderer recovers when its immutable block data or registered component changes", () => {
+  const originalError = console.error;
+  const caught: unknown[] = [];
+  console.error = (...args: unknown[]) => caught.push(args);
+  try {
+    const Renderer = ({ block }: { block: import("../src/rich/index.js").ReactBlock }) => {
+      if (!(block.props as { ready?: boolean })?.ready) throw new Error("Fixture unavailable");
+      return <span>Recovered content</span>;
+    };
+    const registry = { react: { card: Renderer } };
+    const bad = rich([
+      { id: "card", kind: "react", renderer: "card", label: "Card", props: { ready: false } },
+    ]);
+    const view = render(<RichContent document={bad} registry={registry} />);
+    assert.ok(view.getByText("Card: renderer unavailable."));
+    const good = rich([
+      { id: "card", kind: "react", renderer: "card", label: "Card", props: { ready: true } },
+    ]);
+    view.rerender(<RichContent document={good} registry={registry} />);
+    assert.ok(view.getByText("Recovered content"));
+    view.rerender(<RichContent document={bad} registry={registry} />);
+    assert.ok(view.getByText("Card: renderer unavailable."));
+    view.rerender(
+      <RichContent
+        document={bad}
+        registry={{ react: { card: () => <span>Replacement renderer</span> } }}
+      />,
+    );
+    assert.ok(view.getByText("Replacement renderer"));
+    assert.ok(caught.length > 0);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("application-defined block kinds use only explicit own-property trusted registry entries", () => {
+  const document = rich([
+    { id: "metric", kind: "metric", value: 7 },
+    { id: "prototype", kind: "__proto__", value: 8 },
+  ]);
+  const before = serializeRichDocument(document);
+  const view = render(
+    <RichContent
+      document={document}
+      registry={{
+        blocks: {
+          metric: ({ block, reducedMotion }) => (
+            <output aria-label="Metric" data-reduced={reducedMotion}>
+              {"value" in block && typeof block.value === "number" ? block.value : "Unavailable"}
+            </output>
+          ),
+        },
+      }}
+    />,
+  );
+  assert.equal(view.getByLabelText("Metric").textContent, "7");
+  assert.equal(view.getByLabelText("Metric").getAttribute("data-reduced"), "true");
+  assert.ok(view.getByText("Unsupported content: __proto__. Data is preserved."));
+  assert.equal(serializeRichDocument(document), before);
+});

@@ -14,6 +14,7 @@ import {
   parseOutlineText,
   planOutlineDrop,
   reduceOutlineEditor,
+  reconcileOutlineEditorState,
   selectionRoots,
   serializeOutlineText,
   type OutlineNode,
@@ -406,4 +407,246 @@ test("every successful canonical export fits the import length/count/depth budge
   assert.throws(() => exportOutlineJSON([{ ...n("a"), data: "x".repeat(8_000_000) }]), /budget/);
   const within = [{ ...n("a"), data: Array(99_980).fill(0) }];
   assert.deepEqual(importOutlineJSON(exportOutlineJSON(within)).nodes, within);
+});
+
+test("folded selection and history restoration never retain hidden interaction targets", () => {
+  let state = run(createOutlineEditorState(tree()), { type: "select", id: "a1x" });
+  state = run(state, { type: "text", id: "a1x", text: "Updated" });
+  state = run(state, { type: "expand", ids: ["a"], expanded: false });
+  const undone = run(state, { type: "undo" });
+  assert.equal(undone.expandedIds.has("a"), false);
+  assert.equal(undone.caret?.id, "a");
+  assert.deepEqual([...undone.selection], ["a"]);
+  assert.equal(undone.selectionAnchor, "a");
+});
+
+test("hoisting repairs outside focus, and host replacement clamps surviving carets", () => {
+  let state = run(createOutlineEditorState(tree()), { type: "focus", id: "c", start: 5 });
+  state = run(state, { type: "hoist", id: "a" });
+  assert.equal(state.caret?.id, "a");
+  assert.equal(state.history.past.length, 0);
+  const changed = reconcileOutlineEditorState(state, [n("a", "X")]);
+  assert.deepEqual(changed.caret, { id: "a", start: 0, end: 0 });
+  const focused = run(changed, { type: "focus", id: "a", start: 1 });
+  const replaced = reconcileOutlineEditorState(focused, [n("a", "")]);
+  assert.deepEqual(replaced.caret, { id: "a", start: 0, end: 0 });
+});
+
+test("custom command transactions are atomic, undoable and obey global and whole-transition policy", () => {
+  const original = createOutlineEditorState(tree());
+  const action: OutlineAction = {
+    type: "transaction",
+    commands: [
+      { type: "update", id: "a", changes: { data: { tag: "review" } } },
+      { type: "update", id: "b", changes: { text: "Tagged" } },
+    ],
+    caret: { id: "b", start: 99, end: 99 },
+  };
+  const next = run(original, action);
+  assert.equal(next.history.past.length, 1);
+  assert.deepEqual(next.caret, { id: "b", start: 6, end: 6 });
+  assert.strictEqual(run(next, { type: "undo" }).nodes, original.nodes);
+  for (const policy of [
+    {},
+    { ...edit, isLocked: (node: OutlineNode) => node.id === "b" },
+    { ...edit, canChange: () => false },
+  ]) {
+    const refused: OutlineEditorState = reduceOutlineEditor(original, action, policy);
+    assert.strictEqual(refused.nodes, original.nodes);
+    assert.equal(refused.history.past.length, 0);
+  }
+});
+
+test("caret relocation breaks a typing burst while plain paste remains its own history step", () => {
+  let state = run(createOutlineEditorState([n("a", "")]), {
+    type: "text",
+    id: "a",
+    text: "a",
+    time: 1,
+  });
+  state = run(state, { type: "text", id: "a", text: "ab", time: 2 });
+  assert.equal(state.history.past.length, 1);
+  state = run(state, { type: "caret", id: "a", start: 0, end: 0 });
+  state = run(state, { type: "text", id: "a", text: "Xab", caret: 1, time: 3 });
+  assert.equal(state.history.past.length, 2);
+  state = run(state, { type: "paste", id: "a", start: 1, text: "Y", createId: () => "unused" });
+  assert.equal(state.history.past.length, 3);
+  assert.equal(run(state, { type: "undo" }).nodes[0]?.text, "Xab");
+});
+
+test("scope-root split and structured paste stay inside the hoist, never create invisible siblings", () => {
+  const initial = createOutlineEditorState([n("before"), n("scope", "Scope"), n("after")], {
+    hoistedId: "scope",
+  });
+  const split = run(initial, { type: "split", id: "scope", start: 2, newId: "child" });
+  assert.deepEqual(ids(split.nodes), ["before", "scope", "after"]);
+  assert.deepEqual(ids(findOutlineNode(split.nodes, "scope")!.node.children!), ["child"]);
+  assert.equal(split.caret?.id, "child");
+  const above = run(initial, { type: "split", id: "scope", start: 0, newId: "blank" });
+  assert.deepEqual(ids(above.nodes), ["before", "scope", "after"]);
+  assert.equal(findOutlineNode(above.nodes, "blank")?.parentId, "scope");
+  const paste = run(initial, {
+    type: "paste-nodes",
+    afterId: "scope",
+    nodes: [n("incoming")],
+    createId: () => "copy",
+  });
+  assert.equal(findOutlineNode(paste.nodes, "copy")?.parentId, "scope");
+  const text = run(initial, {
+    type: "paste",
+    id: "scope",
+    start: 5,
+    text: "A\nB",
+    createId: (() => {
+      let id = 0;
+      return () => `paste-${id++}`;
+    })(),
+  });
+  assert.equal(findOutlineNode(text.nodes, text.caret!.id)?.parentId, "scope");
+});
+
+test("focus cannot target an unrelated hoist; reveal can, but a missing reveal preserves scope", () => {
+  const state = createOutlineEditorState(tree(), { hoistedId: "a" });
+  assert.equal(run(state, { type: "focus", id: "b" }).refusal, "invalid-command");
+  assert.equal(run(state, { type: "reveal", id: "b" }).hoistedId, null);
+  const missing = run(state, { type: "reveal", id: "missing" });
+  assert.equal(missing.hoistedId, "a");
+  assert.equal(missing.refusal, "not-found");
+});
+
+test("canonical import refuses overflowing and negative-zero JSON numbers", () => {
+  for (const value of ["1e400", "-0"])
+    assert.throws(
+      () => importOutlineJSON(`{"version":1,"nodes":[{"id":"a","text":"A","data":${value}}]}`),
+      /round-trip/,
+    );
+});
+
+test("malformed runtime editor actions refuse atomically rather than throwing across every action family", () => {
+  const initial = createOutlineEditorState(tree());
+  const malformed: unknown[] = [
+    null,
+    undefined,
+    [],
+    {},
+    { type: "unknown" },
+    { type: "text", id: "a", text: null },
+    { type: "split", id: "a" },
+    { type: "paste", id: "a", start: 0, text: "text" },
+    { type: "paste-nodes", afterId: "a", nodes: null },
+    { type: "tasks" },
+    { type: "delete", ids: "a" },
+    { type: "expand", ids: null, expanded: true },
+    { type: "expand-all", expanded: true, depth: -1 },
+    { type: "expand-all", expanded: true, depth: 1.5 },
+    { type: "drop", ids: ["a"], parentId: null },
+    { type: "transaction" },
+    { type: "transaction", commands: [], caret: {} },
+    { type: "caret", id: "a", start: NaN, end: 0 },
+    { type: "move", direction: "sideways" },
+    { type: "merge", id: "a", direction: "sideways" },
+    { type: "task", id: "a", checked: "yes" },
+  ];
+  for (const action of malformed) {
+    const next = reduceOutlineEditor(initial, action as OutlineAction, edit);
+    assert.equal(next.refusal, "invalid-command", JSON.stringify(action));
+    assert.strictEqual(next.nodes, initial.nodes);
+    assert.strictEqual(next.history, initial.history);
+    assert.strictEqual(next.caret, initial.caret);
+  }
+});
+
+test("outdent and empty-final-child Return cannot escape a hoisted parent", () => {
+  const state = createOutlineEditorState([n("scope", "Scope", [n("child", "")]), n("outside")], {
+    hoistedId: "scope",
+  });
+  for (const action of [
+    { type: "outdent", ids: ["child"] },
+    { type: "split", id: "child", start: 0, newId: "new" },
+  ] as const) {
+    const next = run(state, action);
+    assert.strictEqual(next.nodes, state.nodes);
+    assert.equal(next.hoistedId, "scope");
+  }
+});
+
+test("readable import handles mixed tab stops, whitespace markers, empty list items and literal brackets", () => {
+  let count = 0;
+  const nodes = parseOutlineText(
+    "Parent\n  - First\n\t+\tPeer\n- \n- [ ] \n- [x]literal\n3)   Last",
+    { createId: () => `parse-${count++}` },
+  );
+  assert.deepEqual(
+    nodes[0]!.children!.map((node) => node.text),
+    ["First", "Peer"],
+  );
+  assert.equal(nodes[1]!.text, "");
+  assert.equal(nodes[2]!.text, "");
+  assert.equal(nodes[2]!.checked, false);
+  assert.equal(nodes[3]!.text, "[x]literal");
+  assert.equal(nodes[3]!.checked, undefined);
+  assert.equal(nodes[4]!.text, "Last");
+  const four = parseOutlineText("Parent\n    First\n\tPeer", { spacesPerLevel: 4 });
+  assert.deepEqual(
+    four[0]!.children!.map((node) => node.text),
+    ["First", "Peer"],
+  );
+});
+
+test("same-place drops and net-zero extension transactions do not create phantom history or revisions", () => {
+  const state = createOutlineEditorState(tree());
+  const dropped = run(state, { type: "drop", ids: ["b", "c"], parentId: null, index: 1 });
+  assert.strictEqual(dropped.nodes, state.nodes);
+  assert.equal(dropped.history.past.length, 0);
+  assert.equal(dropped.revision, 0);
+  const transaction = run(state, {
+    type: "transaction",
+    commands: [
+      { type: "update", id: "b", changes: { text: "Temporary" } },
+      { type: "update", id: "b", changes: { text: "Beta" } },
+    ],
+  });
+  assert.strictEqual(transaction.nodes, state.nodes);
+  assert.equal(transaction.history.past.length, 0);
+  assert.equal(transaction.revision, 0);
+});
+
+test("structural moves preserve a viable range anchor and prune selection hidden by a host-directed drop", () => {
+  const nodes = [n("a"), n("b"), n("parent", "Parent", [n("target", "Target", [n("leaf")])])];
+  let state = run(createOutlineEditorState(nodes, { expandedIds: new Set() }), {
+    type: "select",
+    id: "a",
+  });
+  state = run(state, { type: "select", id: "b", extend: true });
+  const reordered = run(state, { type: "move", direction: "down" });
+  assert.equal(reordered.selectionAnchor, "a");
+  const dropped = run(state, { type: "drop", ids: ["a", "b"], parentId: "target", index: 0 });
+  assert.equal(dropped.caret?.id, "parent");
+  assert.deepEqual([...dropped.selection], ["parent"]);
+  assert.equal(dropped.expandedIds.has("parent"), false);
+});
+
+test("single-line and multiline paste retain the original intent at whole-transition policy", () => {
+  const state = createOutlineEditorState([n("a", "Before")]);
+  const seen: string[] = [];
+  for (const text of ["One", "One\nTwo"]) {
+    let id = 0;
+    const action: OutlineAction = {
+      type: "paste",
+      id: "a",
+      start: 0,
+      text,
+      createId: () => `paste-${id++}`,
+    };
+    const next = reduceOutlineEditor(state, action, {
+      ...edit,
+      canChange: (_before, _after, intent) => {
+        seen.push(intent.type);
+        return intent.type !== "paste";
+      },
+    });
+    assert.strictEqual(next.nodes, state.nodes);
+    assert.equal(next.refusal, "locked");
+  }
+  assert.deepEqual(seen, ["paste", "paste"]);
 });

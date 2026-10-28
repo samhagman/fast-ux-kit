@@ -20,6 +20,8 @@ try {
   const paths = packed.files.map((file) => file.path);
   assert.ok(paths.includes("dist/index.js"));
   assert.ok(paths.includes("dist/components/index.d.ts"));
+  assert.ok(paths.includes("dist/components/ark-specialized.css"));
+  assert.ok(paths.includes("dist/components/ark-advanced.css"));
   assert.ok(
     paths.every((path) => /^(dist\/|docs\/|README\.md$|NOTICE\.md$|package\.json$)/.test(path)),
     `Unexpected package files: ${paths}`,
@@ -44,10 +46,12 @@ try {
 import {validateOutline} from '@samhagman/fast-ux-kit/core';
 import {Outliner} from '@samhagman/fast-ux-kit';
 import {Button} from '@samhagman/fast-ux-kit/aria';
-import {Button as StyledButton} from '@samhagman/fast-ux-kit/components/aria';
+import {Button as StyledButton, ColorPicker, DatePicker, Select, Primitives} from '@samhagman/fast-ux-kit/components/aria';
 import {createElement} from 'react';
 import {renderToString} from 'react-dom/server';
 assert.match(renderToString(createElement(StyledButton, null, 'Save')), /fux-control/);
+assert.match(renderToString(createElement(ColorPicker, {label:'Accent',defaultValue:'#225544'})), /Accent/);
+assert.ok(DatePicker && Select && Primitives.Table);
 assert.deepEqual(validateOutline([{id:'one',text:'One'}]),[]);
 assert.equal(typeof Outliner,'function');assert.ok(Button);
 try { await import('@samhagman/fast-ux-kit/ark'); throw Error('Ark unexpectedly installed'); }
@@ -67,21 +71,28 @@ console.log('Core, React reader and RAC entry work with Ark absent.');`,
   ]);
   await writeFile(
     join(fixture, "consumer.tsx"),
-    `import {createElement} from 'react';
+    `import {createElement, createRef} from 'react';
 import {renderToString} from 'react-dom/server';
-import {Outliner, OutlineEditor, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, type OutlineNode, type OutlinePlugin} from '@samhagman/fast-ux-kit';
-import {Button, Field, Pagination} from '@samhagman/fast-ux-kit/components';
+import {Outliner, OutlineEditor, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle} from '@samhagman/fast-ux-kit';
+import {Button, Field, Pagination, ColorPicker, DatePicker, Table, componentManifest} from '@samhagman/fast-ux-kit/components';
 import {Pagination as AdvancedPagination} from '@samhagman/fast-ux-kit/ark';
 const nodes: readonly OutlineNode[] = [{id:'root',text:'Root',children:[{id:'child',text:'Child'}]}];
-const plugin: OutlinePlugin = {id:'consumer-plugin',beforeAction:action=>action};
+const plugin: OutlinePlugin = {id:'consumer-plugin',beforeAction:action=>action,keymap:(event,context)=>event.key==='F2'?{type:'transaction',commands:[{type:'update',id:context.rowId,changes:{text:'Updated by extension'}}]}:undefined};
+const codec: OutlineCodec = createOutlineJSONCodec();
+if(decodeOutline(encodeOutline(nodes,codec),codec)[0]?.id!=='root') throw Error('Codec roundtrip failed');
+const editorRef=createRef<OutlineEditorHandle>();
+function publicExtensionAPI() { const source=editorRef.current?.exportWith(codec); if(source) editorRef.current?.importWith(codec,source); }
 const provider=createReferenceCompletionProvider({id:'people',trigger:'@',entities:[{id:'person',spelling:'reader'}]});
 const document=importMarkdownDocument('# Packed Markdown\\n\\n- [x] Preserved');
 let state=createOutlineEditorState(nodes);
 state=reduceOutlineEditor(state,{type:'text',id:'root',text:'Updated'}, {readOnly:false});
 if(state.nodes[0]?.text!=='Updated') throw Error('Consumer pure editor command failed');
-const app = <><Outliner nodes={nodes} aria-label="Consumer outline"/><OutlineEditor defaultNodes={nodes} readOnly={false} plugins={[plugin]} completionProviders={[provider]}/><RichContent document={document}/><Button variant="primary">Save</Button><Field label="Name"/><Pagination label="Results" count={40}/></>;
+state=reduceOutlineEditor(state,{type:'transaction',commands:[{type:'update',id:'root',changes:{text:'Atomic'}}]}, {readOnly:false});
+if(state.nodes[0]?.text!=='Atomic') throw Error('Consumer atomic transaction failed');
+const app = <><Outliner nodes={nodes} aria-label="Consumer outline"/><OutlineEditor ref={editorRef} defaultNodes={nodes} readOnly={false} plugins={[plugin]} completionProviders={[provider]}/><RichContent document={document}/><Button variant="primary" onPress={publicExtensionAPI}>Save</Button><Field label="Name"/><Pagination label="Results" count={40}/><ColorPicker label="Accent" defaultValue="#225544"/><DatePicker label="Date"/><Table label="Rows" columns={[{id:'name',label:'Name',render:row=>row.name}]} rows={[{id:'one',name:'One'}]}/></>;
 if (!renderToString(app).includes('Consumer outline')) throw Error('SSR failed');
 if (!AdvancedPagination.Root) throw Error('Ark export failed');
+if (!componentManifest.some(item=>item.name==='ColorPicker')) throw Error('Component catalog incomplete');
 console.log('Packed consumer types + SSR pass.');`,
   );
   run(process.execPath, [

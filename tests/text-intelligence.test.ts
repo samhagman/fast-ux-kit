@@ -171,3 +171,96 @@ test("keyboard mapping respects composition, native linebreaks and platform modi
   assert.equal(resolveOutlineKey({ key: "Escape" }, "text"), "row-mode");
   assert.equal(resolveOutlineKey({ key: "Escape" }, "row"), "exit");
 });
+
+test("malformed classifications, diagnostic text and completion details are ignored without executing getters", () => {
+  let getterCalls = 0;
+  const unsafe = {
+    id: "unsafe",
+    label: "Word",
+    get detail() {
+      getterCalls++;
+      return "Should not execute";
+    },
+  };
+  assert.deepEqual(
+    filterCompletions([unsafe, { id: "object", label: "Word", detail: {} } as never], ""),
+    [],
+  );
+  assert.equal(getterCalls, 0);
+  const analysis = currentTextAnalysis(
+    {
+      text: "word",
+      classifications: [{ start: 0, end: 4, kind: {} } as never],
+      diagnostics: [{ start: 0, end: 4, severity: "error", message: {} } as never],
+    },
+    "word",
+  );
+  assert.deepEqual(analysis?.classifications, []);
+  assert.deepEqual(analysis?.diagnostics, []);
+  assert.equal(
+    currentTextAnalysis(
+      {
+        get text() {
+          getterCalls++;
+          return "word";
+        },
+      },
+      "word",
+    ),
+    undefined,
+  );
+  assert.equal(
+    validTextRange(
+      {
+        get start() {
+          getterCalls++;
+          return 0;
+        },
+        end: 4,
+      },
+      "word",
+    ),
+    false,
+  );
+  assert.equal(getterCalls, 0);
+  assert.equal(
+    acceptTextCompletion("word", { range: { start: 0, end: 4 }, items: [] }, {
+      id: "bad",
+      label: {},
+    } as never),
+    null,
+  );
+});
+
+test("reference completions respect exclusions anywhere in the offered token and require an explicit trigger", async () => {
+  const context: TextRequestContext = {
+    surfaceId: "s",
+    rowId: "r",
+    revision: 0,
+    text: "@alice",
+    selection: { start: 4, end: 4 },
+  };
+  for (const range of [
+    { start: 0, end: 1 },
+    { start: 5, end: 6 },
+  ]) {
+    const provider = createReferenceCompletionProvider({
+      id: "people",
+      trigger: "@",
+      entities: [{ id: "a", spelling: "alice" }],
+      exclusions: () => [range],
+    });
+    assert.equal(
+      await provider.complete({
+        ...context,
+        reason: "explicit",
+        signal: new AbortController().signal,
+      }),
+      null,
+    );
+  }
+  assert.throws(
+    () => createReferenceCompletionProvider({ id: "bad", trigger: "", entities: [] }),
+    /trigger/,
+  );
+});

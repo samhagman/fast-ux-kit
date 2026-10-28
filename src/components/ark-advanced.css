@@ -1,0 +1,152 @@
+/* Advanced anatomy retains its single interaction owner; no second focus/drag manager. */
+.fux-advanced-stack,
+.fux-image-cropper__root {
+  display: grid;
+  gap: var(--fux-space-md);
+  min-inline-size: 0;
+}
+.fux-advanced-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fux-space-sm);
+  margin-block: var(--fux-space-sm);
+}
+.fux-advanced-actions output {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.fux-carousel__item-group {
+  min-inline-size: 0;
+}
+.fux-carousel__item-group[data-orientation="vertical"] {
+  max-block-size: 22rem;
+}
+.fux-carousel__item {
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+.fux-carousel__progress-text {
+  color: var(--fux-muted);
+  font-variant-numeric: tabular-nums;
+}
+.fux-carousel__indicator:focus-visible {
+  outline: 2px solid var(--fux-focus);
+  outline-offset: var(--fux-focus-offset);
+}
+.fux-floating-panel__content {
+  display: flex;
+  flex-direction: column;
+  max-block-size: calc(100dvh - 1rem);
+}
+.fux-floating-panel__header {
+  flex-wrap: wrap;
+}
+.fux-floating-panel__control {
+  margin-inline-start: auto;
+}
+.fux-floating-panel__body {
+  min-block-size: 0;
+  flex: 1;
+  overscroll-behavior: contain;
+}
+.fux-floating-panel__body textarea {
+  inline-size: 100%;
+  box-sizing: border-box;
+}
+.fux-floating-panel__resize-trigger[data-axis="se"]::after {
+  content: "◢";
+  position: absolute;
+  inset-inline-end: 0.25rem;
+  inset-block-end: 0.25rem;
+  color: var(--fux-muted);
+}
+.fux-image-cropper__viewport {
+  isolation: isolate;
+}
+.fux-image-cropper__grid[data-axis="horizontal"] {
+  border-block: 1px solid currentColor;
+}
+.fux-image-cropper__grid[data-axis="vertical"] {
+  border-inline: 1px solid currentColor;
+}
+.fux-image-cropper__selection:focus-visible {
+  outline: 3px solid var(--fux-focus);
+  outline-offset: 3px;
+}
+.fux-image-cropper__handle {
+  cursor: grab;
+}
+.fux-crop-preview {
+  max-inline-size: min(100%, 20rem);
+  max-block-size: 20rem;
+  object-fit: contain;
+  border: 1px solid var(--fux-border);
+  border-radius: var(--fux-radius);
+}
+.fux-signature-pad__control {
+  min-block-size: 12rem;
+  color: var(--fux-text);
+}
+.fux-signature-pad__segment {
+  stroke: none;
+}
+.fux-signature-pad__root[data-disabled] .fux-signature-pad__control {
+  opacity: var(--fux-disabled-opacity);
+}
+.fux-tour__content {
+  overflow-wrap: anywhere;
+  max-block-size: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+.fux-tour__control {
+  margin-block-start: var(--fux-space-md);
+}
+.fux-tour__spotlight {
+  pointer-events: none;
+}
+@media (max-width: 480px) {
+  .fux-carousel__item {
+    padding: var(--fux-space-md);
+  }
+  .fux-carousel__control {
+    justify-content: center;
+  }
+  .fux-floating-panel__body {
+    padding: var(--fux-space-md);
+  }
+  .fux-image-cropper__viewport {
+    block-size: 15rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(
+    .fux-carousel__item-group,
+    .fux-floating-panel__positioner,
+    .fux-tour__positioner,
+    .fux-tour__spotlight
+  ) {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .fux-image-cropper__selection {
+    border-color: CanvasText;
+    outline-color: Highlight;
+  }
+  .fux-image-cropper__handle::after {
+    background: Canvas;
+    border-color: CanvasText;
+  }
+  .fux-image-cropper__grid {
+    color: CanvasText;
+  }
+  .fux-carousel__indicator::after {
+    background: ButtonText;
+  }
+  .fux-carousel__indicator[data-current]::after {
+    background: Highlight;
+  }
+}

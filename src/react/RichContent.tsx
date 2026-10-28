@@ -33,6 +33,8 @@ export interface RichRendererProps<B extends RichBlock = RichBlock> {
 }
 /** Application code only. A trusted registry is NOT a sandbox for imported JavaScript. */
 export interface RichRendererRegistry {
+  /** Trusted renderers for application-defined kinds; built-in kinds retain their safe defaults. */
+  readonly blocks?: Readonly<Record<string, ComponentType<RichRendererProps>>>;
   readonly diagrams?: Readonly<Record<string, ComponentType<RichRendererProps<DiagramBlock>>>>;
   readonly react?: Readonly<Record<string, ComponentType<RichRendererProps<ReactBlock>>>>;
 }
@@ -65,10 +67,18 @@ function Fallback({ children }: { children: ReactNode }) {
   );
 }
 class RendererBoundary extends Component<
-  { children: ReactNode; label: string },
-  { failed: boolean }
+  { children: ReactNode; label: string; resetKey: unknown; renderer: unknown },
+  { failed: boolean; resetKey: unknown; renderer: unknown }
 > {
-  state = { failed: false };
+  state = { failed: false, resetKey: null as unknown, renderer: null as unknown };
+  static getDerivedStateFromProps(
+    props: { resetKey: unknown; renderer: unknown },
+    state: { resetKey: unknown; renderer: unknown },
+  ) {
+    return props.resetKey !== state.resetKey || props.renderer !== state.renderer
+      ? { failed: false, resetKey: props.resetKey, renderer: props.renderer }
+      : null;
+  }
   static getDerivedStateFromError() {
     return { failed: true };
   }
@@ -367,7 +377,12 @@ export function RichContent({ document, registry, allowMedia, className }: RichC
             ? registry.diagrams[diagram.renderer]
             : undefined;
         body = Renderer ? (
-          <RendererBoundary key={`${block.id}-${diagram.renderer}`} label={diagram.label}>
+          <RendererBoundary
+            key={`${block.id}-${diagram.renderer}`}
+            label={diagram.label}
+            resetKey={block}
+            renderer={Renderer}
+          >
             <Renderer block={diagram} reducedMotion={reducedMotion} />
           </RendererBoundary>
         ) : (
@@ -382,7 +397,12 @@ export function RichContent({ document, registry, allowMedia, className }: RichC
             ? registry.react[react.renderer]
             : undefined;
         body = Renderer ? (
-          <RendererBoundary key={`${block.id}-${react.renderer}`} label={react.label}>
+          <RendererBoundary
+            key={`${block.id}-${react.renderer}`}
+            label={react.label}
+            resetKey={block}
+            renderer={Renderer}
+          >
             <Renderer block={react} reducedMotion={reducedMotion} />
           </RendererBoundary>
         ) : (
@@ -414,8 +434,19 @@ export function RichContent({ document, registry, allowMedia, className }: RichC
         );
         break;
       }
-      default:
-        body = <Fallback>Unsupported content: {block.kind}. Data is preserved.</Fallback>;
+      default: {
+        const Renderer =
+          registry?.blocks && Object.hasOwn(registry.blocks, block.kind)
+            ? registry.blocks[block.kind]
+            : undefined;
+        body = Renderer ? (
+          <RendererBoundary key={block.id} label={block.kind} resetKey={block} renderer={Renderer}>
+            <Renderer block={block} reducedMotion={reducedMotion} />
+          </RendererBoundary>
+        ) : (
+          <Fallback>Unsupported content: {block.kind}. Data is preserved.</Fallback>
+        );
+      }
     }
     return (
       <div

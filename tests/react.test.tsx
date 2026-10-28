@@ -379,3 +379,44 @@ test("a pending controlled hoist does not steal focus when unrelated folding pro
   view.rerender(<Outliner {...props} expandedIds={new Set(["alpha"])} />);
   assert.equal(document.activeElement, button);
 });
+
+test("Alt disclosure recursively changes only its branch in a single controlled request", () => {
+  const changes: { expanded: ReadonlySet<string>; affected: readonly string[] }[] = [];
+  const view = render(
+    <Outliner
+      nodes={nodes}
+      defaultExpandedIds={new Set(["alpha", "nested", "beta"])}
+      onExpandedChange={(expanded, change) =>
+        changes.push({ expanded, affected: change.affectedIds })
+      }
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Collapse Alpha" }), { altKey: true });
+  assert.equal(changes.length, 1);
+  assert.deepEqual(changes[0]!.affected, ["alpha", "nested", "leaf"]);
+  assert.equal(changes[0]!.expanded.has("nested"), false);
+  assert.equal(changes[0]!.expanded.has("beta"), true);
+  fireEvent.click(view.getByRole("button", { name: "Expand Alpha" }), { altKey: true });
+  assert.ok(view.getByText("Leaf"));
+  assert.equal(changes.length, 2);
+});
+
+test("collapsed reader summaries mount only for folded branches and keep nested controls independent", () => {
+  let presses = 0;
+  const view = render(
+    <Outliner
+      nodes={[{ id: "branch", text: "Branch", children: [{ id: "leaf", text: "Leaf" }] }]}
+      defaultExpandedIds={new Set()}
+      renderCollapsed={(node) => <button onClick={() => presses++}>Summary for {node.text}</button>}
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Summary for Branch" }));
+  assert.equal(presses, 1);
+  assert.equal(view.queryByText("Leaf"), null);
+  fireEvent.click(view.getByRole("button", { name: "Expand Branch" }));
+  assert.equal(view.queryByRole("button", { name: "Summary for Branch" }), null);
+  assert.equal(view.queryByRole("button", { name: "Summary for Leaf" }), null);
+  assert.ok(view.getByText("Leaf"));
+  fireEvent.click(view.getByRole("button", { name: "Collapse Branch" }));
+  assert.ok(view.getByRole("button", { name: "Summary for Branch" }));
+});

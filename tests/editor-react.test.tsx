@@ -643,6 +643,10 @@ test("pointer reorder crosses its threshold, previews a gap, commits once and ca
   assert.equal(changes.length, 0);
   pointer(document, "pointermove", 10, 300);
   assert.match(view.getByRole("status").textContent ?? "", /Move to level/);
+  assert.equal(
+    view.container.querySelector(".fast-ux-editor__drop-end")?.getAttribute("data-drop-depth"),
+    "1",
+  );
   pointer(document, "pointerup", 10, 300);
   assert.deepEqual(
     ref.current!.getState().nodes.map((node) => node.id),
@@ -710,4 +714,199 @@ test("editor suggestions and interactive information stay inside the enclosing m
     view.unmount();
     await new Promise<void>((resolve) => dom.window.requestAnimationFrame(() => resolve()));
   });
+});
+
+test("plugin keymaps compose in order, use policy-gated transactions, and yield to IME", () => {
+  const ref = createRef<OutlineEditorHandle>();
+  const calls: string[] = [];
+  const view = render(
+    <OutlineEditor
+      ref={ref}
+      defaultNodes={fixture}
+      readOnly={false}
+      plugins={[
+        {
+          id: "first",
+          keymap: (event, context) => {
+            if (event.key !== "F2") return undefined;
+            calls.push("first");
+            return {
+              type: "transaction",
+              commands: [{ type: "update", id: context.rowId, changes: { checked: true } }],
+            };
+          },
+        },
+        {
+          id: "second",
+          keymap: (event) => {
+            if (event.key === "F2") calls.push("second");
+            return undefined;
+          },
+        },
+      ]}
+    />,
+  );
+  const input = textarea(view, "Alpha");
+  focus(input, 2);
+  fireEvent.keyDown(input, { key: "F2" });
+  assert.deepEqual(calls, ["first"]);
+  assert.equal(ref.current!.getState().nodes[0]!.checked, true);
+  assert.equal(ref.current!.getState().history.past.length, 1);
+  fireEvent.compositionStart(input);
+  fireEvent.keyDown(input, { key: "F2", isComposing: true });
+  assert.deepEqual(calls, ["first"]);
+  fireEvent.compositionEnd(input);
+  act(() => ref.current!.dispatch({ type: "undo" }));
+  assert.equal(ref.current!.getState().nodes[0]!.checked, undefined);
+});
+
+test("custom codecs roundtrip through the public handle, validate trees, and cannot bypass read-only", () => {
+  const codec = {
+    id: "line-pairs",
+    mimeType: "text/x-line-pairs",
+    encode: (nodes: readonly OutlineNode[]) =>
+      nodes.map((node) => `${node.id}:${node.text}`).join("\n"),
+    decode: (source: string) =>
+      source.split("\n").map((line) => {
+        const at = line.indexOf(":");
+        return { id: line.slice(0, at), text: line.slice(at + 1) };
+      }),
+  };
+  const ref = createRef<OutlineEditorHandle>();
+  const view = render(
+    <OutlineEditor ref={ref} defaultNodes={[{ id: "a", text: "A" }]} readOnly={false} />,
+  );
+  assert.equal(ref.current!.exportWith(codec), "a:A");
+  act(() => ref.current!.importWith(codec, "b:B"));
+  assert.equal(ref.current!.getState().nodes[0]!.id, "b");
+  assert.equal(ref.current!.getState().history.past.length, 1);
+  assert.throws(() => ref.current!.importWith(codec, "b:B\nb:Duplicate"), /Duplicate/);
+  act(() => ref.current!.dispatch({ type: "undo" }));
+  assert.equal(ref.current!.exportWith(codec), "a:A");
+  view.rerender(<OutlineEditor ref={ref} readOnly />);
+  act(() => ref.current!.importWith(codec, "c:C"));
+  assert.equal(ref.current!.exportWith(codec), "a:A");
+  assert.equal(ref.current!.getState().refusal, "read-only");
+});
+
+test("reader-mode editor preserves recursive disclosure changes without content writes", () => {
+  const ref = createRef<OutlineEditorHandle>();
+  const deep = [
+    { id: "a", text: "A", children: [{ id: "b", text: "B", children: [{ id: "c", text: "C" }] }] },
+  ];
+  const view = render(<OutlineEditor ref={ref} defaultNodes={deep} />);
+  fireEvent.click(view.getByRole("button", { name: "Collapse A" }), { altKey: true });
+  assert.equal(ref.current!.getState().expandedIds.has("b"), false);
+  assert.equal(ref.current!.getState().revision, 0);
+});
+
+test("structural clipboard shortcuts never hijack a rich child input's native selection", () => {
+  const ref = createRef<OutlineEditorHandle>();
+  const view = render(
+    <OutlineEditor
+      ref={ref}
+      defaultNodes={fixture}
+      readOnly={false}
+      renderBody={() => <input aria-label="Independent note" defaultValue="Native text" />}
+    />,
+  );
+  focus(textarea(view, "Alpha"), 0);
+  fireEvent.keyDown(textarea(view, "Alpha"), { key: "Escape" });
+  const input = view.getAllByRole("textbox", { name: "Independent note" })[0]!;
+  act(() => input.focus());
+  let writes = 0;
+  const clipboardData = { setData: () => writes++, getData: () => "" };
+  fireEvent.copy(input, { clipboardData });
+  fireEvent.cut(input, { clipboardData });
+  assert.equal(writes, 0);
+  assert.equal(ref.current!.getState().nodes.length, 2);
+});
+
+test("collapsing a hovered descendant dismisses its otherwise fresh information", async () => {
+  const ref = createRef<OutlineEditorHandle>();
+  const provider = {
+    id: "info",
+    hover: () => ({ range: { start: 0, end: 5 }, content: "Child details" }),
+  };
+  const view = render(
+    <OutlineEditor ref={ref} defaultNodes={fixture} readOnly={false} hoverProviders={[provider]} />,
+  );
+  focus(textarea(view, "Child"), 2);
+  await act(async () => fireEvent.keyDown(textarea(view, "Child"), { key: "F1", altKey: true }));
+  assert.ok(view.getByRole("dialog", { name: "Text information" }));
+  act(() => ref.current!.dispatch({ type: "expand", ids: ["a"], expanded: false }));
+  assert.equal(view.queryByRole("dialog", { name: "Text information" }), null);
+});
+
+test("row-mode readable paste inserts task subtrees rather than concatenating the focused title", () => {
+  const ref = createRef<OutlineEditorHandle>();
+  const view = render(<OutlineEditor ref={ref} defaultNodes={fixture} readOnly={false} />);
+  focus(textarea(view, "Beta"), 2);
+  fireEvent.keyDown(textarea(view, "Beta"), { key: "Escape" });
+  const row = view.container.querySelector<HTMLElement>('[data-node-id="b"]')!;
+  fireEvent.paste(row, {
+    clipboardData: {
+      getData: (type: string) => (type === "text/plain" ? "- [x] Pasted\n  - Child" : ""),
+    },
+  });
+  const nodes = ref.current!.getState().nodes;
+  assert.equal(nodes[1]!.text, "Beta");
+  assert.equal(nodes[2]!.text, "Pasted");
+  assert.equal(nodes[2]!.checked, true);
+  assert.equal(nodes[2]!.children![0]!.text, "Child");
+  assert.equal(ref.current!.getState().history.past.length, 1);
+});
+
+test("an empty editable outline accepts readable and canonical paste with one undo step", () => {
+  const ref = createRef<OutlineEditorHandle>();
+  const view = render(<OutlineEditor ref={ref} defaultNodes={[]} readOnly={false} />);
+  const section = view.getByRole("region", { name: "Outline editor" });
+  fireEvent.paste(section, {
+    clipboardData: { getData: (type: string) => (type === "text/plain" ? "First\nSecond" : "") },
+  });
+  assert.deepEqual(
+    ref.current!.getState().nodes.map((node) => node.text),
+    ["First", "Second"],
+  );
+  assert.equal(ref.current!.getState().history.past.length, 1);
+  act(() => ref.current!.dispatch({ type: "undo" }));
+  const json = JSON.stringify({
+    version: 1,
+    nodes: [{ id: "source", text: "Rich", data: { saved: true } }],
+  });
+  fireEvent.paste(section, {
+    clipboardData: { getData: (type: string) => (type.includes("fast-ux") ? json : "Rich") },
+  });
+  assert.deepEqual(ref.current!.getState().nodes[0]!.data, { saved: true });
+  assert.notEqual(ref.current!.getState().nodes[0]!.id, "source");
+});
+
+test("suggestion placement follows a narrowed visual viewport and cleans up viewport listeners", async () => {
+  const viewport = new dom.window.EventTarget();
+  Object.assign(viewport, { offsetLeft: 20, offsetTop: 80, width: 280, height: 260 });
+  Object.defineProperty(dom.window, "visualViewport", { configurable: true, value: viewport });
+  const provider: TextCompletionProvider = {
+    id: "viewport",
+    complete: () => ({ range: { start: 0, end: 5 }, items: [{ id: "alpine", label: "Alpine" }] }),
+  };
+  const view = render(
+    <OutlineEditor defaultNodes={fixture} readOnly={false} completionProviders={[provider]} />,
+  );
+  try {
+    const input = textarea(view, "Alpha");
+    focus(input, 2);
+    await act(async () => fireEvent.keyDown(input, { key: " ", ctrlKey: true }));
+    const layer = view.getByRole("listbox").parentElement!;
+    assert.equal(layer.style.width, "264px");
+    assert.ok(parseFloat(layer.style.top) >= 88);
+    assert.ok(parseFloat(layer.style.left) >= 28);
+    Object.assign(viewport, { width: 220, offsetTop: 100 });
+    act(() => viewport.dispatchEvent(new dom.window.Event("resize")));
+    assert.equal(layer.style.width, "204px");
+    assert.ok(parseFloat(layer.style.top) >= 108);
+    view.unmount();
+    act(() => viewport.dispatchEvent(new dom.window.Event("scroll")));
+  } finally {
+    Object.defineProperty(dom.window, "visualViewport", { configurable: true, value: undefined });
+  }
 });

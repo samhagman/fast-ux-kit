@@ -227,3 +227,30 @@ export function planOutlineDrop<T>(
   }
   return { parentId: parent?.id ?? null, index, depth };
 }
+
+/** Semantic model equality without serializing host data or traversing application objects. */
+export function sameOutlineContent<T>(
+  left: readonly OutlineNode<T>[],
+  right: readonly OutlineNode<T>[],
+): boolean {
+  const pending: [readonly OutlineNode<T>[], readonly OutlineNode<T>[]][] = [[left, right]];
+  while (pending.length) {
+    const [a, b] = pending.pop()!;
+    if (a === b) continue;
+    if (a.length !== b.length) return false;
+    for (let index = 0; index < a.length; index++) {
+      const first = a[index]!,
+        second = b[index]!;
+      if (first === second) continue;
+      if (
+        first.id !== second.id ||
+        first.text !== second.text ||
+        first.checked !== second.checked ||
+        !Object.is(first.data, second.data)
+      )
+        return false;
+      pending.push([first.children ?? [], second.children ?? []]);
+    }
+  }
+  return true;
+}

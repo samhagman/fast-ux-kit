@@ -4,32 +4,34 @@ This is an independently authored, native React implementation. This document re
 
 ## Verified with executable tests
 
-| Area                      | Implemented contract                                                                                                                                            | Evidence                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Immutable core            | Stable IDs, complete hidden-tree validation, cycles/duplicates, path cloning, atomic commands, no partial refusal                                               | `core.test.ts`, `editor-core.test.ts`                                         |
-| Reader                    | Semantic disclosures, controlled/local expansion, normal link/keyboard behavior, no automatic editor activation                                                 | `react.test.tsx`                                                              |
-| Mobile-oriented structure | Inline-end disclosure, shared 44px geometry, bounded nesting, lazy hidden branches, hoist and return focus                                                      | `react.test.tsx`; CSS contract, not device certification                      |
-| Rich prose                | Whole Markdown source preserved; semantic GFM, tasks/tables/code/footnotes, Unicode/RTL, inert HTML/MDX, safe URLs                                              | `rich.test.tsx`                                                               |
-| Rich extension blocks     | Images, media/transcripts, drawing snapshots, host diagram/React registry, fallback/error boundaries, unknown data preservation                                 | `rich.test.tsx`                                                               |
-| Split                     | Insert-before at caret zero, expanded-parent first child, collapsed-parent sibling, selected-range removal, empty-final-child lift                              | `editor-core.test.ts`, `editor-react.test.tsx`                                |
-| Merge                     | Previous/next visible row, parent-child splicing, surviving children retained, rich metadata loss refused                                                       | `editor-core.test.ts`, `editor-react.test.tsx`                                |
-| Structure                 | Indent, outdent with adoption, sibling ordering, branch-boundary movement, hoist boundary, selected roots                                                       | `editor-core.test.ts`                                                         |
-| History                   | Typing bursts, structural transaction boundaries, undo/redo, retained fold state, policy reevaluation                                                           | `editor-core.test.ts`, `editor-react.test.tsx`                                |
-| Input lifecycle           | Strict Mode, rapid typing after split, stale select-event focus race, composition guards, authoritative replacement, optimistic acknowledgments/reset           | `editor-react.test.tsx`                                                       |
-| Selection                 | Escape/Return row mode, Shift range, deletion, selected ancestor deduplication, atomic task toggles                                                             | `editor-core.test.ts`, `editor-react.test.tsx`                                |
-| Clipboard                 | Readable export plus canonical MIME, regenerated IDs, metadata/hidden children retained, refusal on failed/ignored canonical write                              | `editor-core.test.ts`, `editor-react.test.tsx`                                |
-| Pointer movement          | Threshold, gap/depth plan, one drop transaction, cancellation, missing/obsolete source safety                                                                   | `editor-core.test.ts`, mocked-layout pointer tests in `editor-react.test.tsx` |
-| Global reader safety      | Insert, paste, task, delete, structural edits, replacement and history cannot mutate content; view actions remain usable                                        | `editor-core.test.ts`, `editor-react.test.tsx`                                |
-| Canonical codecs          | Version rejection, exact JSON data, symmetric size/count/depth budgets, no silent symbol/accessor/sparse/undefined loss                                         | `editor-core.test.ts`, `rich.test.tsx`                                        |
-| Text vocabulary           | UTF-16/end-exclusive/point ranges, overlap segmentation, range invalidation, normalized ranking, references and source-coordinate snippets                      | `text-intelligence.test.ts`                                                   |
-| Completions               | Key precedence, mid-token replacement, exact context/provider freshness, abort/dismiss/unmount, malformed results/errors, one-step acceptance                   | `editor-react.test.tsx`                                                       |
-| Hover                     | Provider order, context snapshots, malformed/accessor rejection, disabled/removed provider behavior, stale caret/row rejection, interactive keyboard/touch info | `hover.test.tsx`, `editor-react.test.tsx`                                     |
-| Highlighted evidence      | Overlap precedence, unchanged source text, one keyboard stop per action including covered ranges, safe fallback                                                 | `highlight.test.tsx`                                                          |
-| Extensions                | Plugin action interception, lifecycle callbacks, typed analysis, separate rich bodies/accessories, folded summaries and insertion prompts                       | `editor-react.test.tsx`                                                       |
-| Dialog composition        | Suggestions and interactive hover remain inside the shared modal scope; popup Escape does not close the parent; hover links receive focus                       | `editor-react.test.tsx`                                                       |
-| SSR                       | Deterministic reader IDs/hydration, independent instances, editor server rendering, rich source handling                                                        | `react.test.tsx`, `editor-react.test.tsx`, `rich.test.tsx`                    |
+| Area                      | Implemented contract                                                                                                                                             | Evidence                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Immutable core            | Stable IDs, complete hidden-tree validation, cycles/duplicates, path cloning, atomic commands, no partial refusal                                                | `core.test.ts`, `editor-core.test.ts`                                         |
+| Reader                    | Semantic disclosures, controlled/local expansion, normal link/keyboard behavior, no automatic editor activation                                                  | `react.test.tsx`                                                              |
+| Mobile-oriented structure | Inline-end disclosure, shared 44px geometry, bounded nesting, lazy hidden branches, hoist and return focus                                                       | `react.test.tsx`; CSS contract, not device certification                      |
+| Rich prose                | Whole Markdown source preserved; semantic GFM, tasks/tables/code/footnotes, Unicode/RTL, inert HTML/MDX, safe URLs                                               | `rich.test.tsx`                                                               |
+| Rich extension blocks     | Images, media/transcripts, drawing snapshots, host diagram/React registry, fallback/error boundaries, unknown data preservation                                  | `rich.test.tsx`                                                               |
+| Split                     | Insert-before at caret zero, expanded-parent first child, collapsed-parent sibling, selected-range removal, empty-final-child lift                               | `editor-core.test.ts`, `editor-react.test.tsx`                                |
+| Merge                     | Previous/next visible row, parent-child splicing, surviving children retained, rich metadata loss refused                                                        | `editor-core.test.ts`, `editor-react.test.tsx`                                |
+| Structure                 | Indent, outdent with adoption, sibling ordering, branch-boundary movement, hoist boundary, selected roots                                                        | `editor-core.test.ts`                                                         |
+| History                   | Typing bursts, structural transaction boundaries, undo/redo, retained fold state, policy reevaluation                                                            | `editor-core.test.ts`, `editor-react.test.tsx`                                |
+| Input lifecycle           | Strict Mode, rapid typing after split, stale select-event focus race, composition guards, authoritative replacement, optimistic acknowledgments/reset            | `editor-react.test.tsx`                                                       |
+| Selection                 | Escape/Return row mode, Shift range, deletion, selected ancestor deduplication, atomic task toggles                                                              | `editor-core.test.ts`, `editor-react.test.tsx`                                |
+| Clipboard                 | Readable export plus canonical MIME, regenerated IDs, metadata/hidden children retained, refusal on failed/ignored canonical write                               | `editor-core.test.ts`, `editor-react.test.tsx`                                |
+| Pointer movement          | Threshold, gap/depth plan, one drop transaction, cancellation, missing/obsolete source safety                                                                    | `editor-core.test.ts`, mocked-layout pointer tests in `editor-react.test.tsx` |
+| Global reader safety      | Insert, paste, task, delete, structural edits, replacement and history cannot mutate content; view actions remain usable                                         | `editor-core.test.ts`, `editor-react.test.tsx`                                |
+| Canonical codecs          | Version rejection, exact JSON data, symmetric size/count/depth budgets, no silent symbol/accessor/sparse/undefined loss                                          | `editor-core.test.ts`, `rich.test.tsx`                                        |
+| Text vocabulary           | UTF-16/end-exclusive/point ranges, overlap segmentation, range invalidation, normalized ranking, references and source-coordinate snippets                       | `text-intelligence.test.ts`                                                   |
+| Completions               | Key precedence, mid-token replacement, exact context/provider freshness, abort/dismiss/unmount, malformed results/errors, one-step acceptance                    | `editor-react.test.tsx`                                                       |
+| Hover                     | Provider order, context snapshots, malformed/accessor rejection, disabled/removed provider behavior, stale caret/row rejection, interactive keyboard/touch info  | `hover.test.tsx`, `editor-react.test.tsx`                                     |
+| Highlighted evidence      | Overlap precedence, unchanged source text, one keyboard stop per action including covered ranges, safe fallback                                                  | `highlight.test.tsx`                                                          |
+| Extensions                | Ordered plugin keymaps, atomic command transactions, validated custom codecs, lifecycle callbacks, typed analysis, rich bodies/accessories and insertion prompts | `editor-react.test.tsx`                                                       |
+| Dialog composition        | Suggestions and interactive hover remain inside the shared modal scope; popup Escape does not close the parent; hover links receive focus                        | `editor-react.test.tsx`                                                       |
+| SSR                       | Deterministic reader IDs/hydration, independent instances, editor server rendering, rich source handling                                                         | `react.test.tsx`, `editor-react.test.tsx`, `rich.test.tsx`                    |
 
-The independent reviewer additionally exercised 9,000 deterministic randomized editor transitions: previous roots remained unchanged, all resulting outlines validated, IDs remained unique, and replaying content intents in default reader mode retained the exact authoritative roots. This is invariant evidence, not proof of every user-visible transition.
+The checked-in `editor-invariants.test.ts` now exercises 5,600 deterministic mixed transitions per run, including scope changes, history, task edits, paste and structure changes. It verifies immutable prior roots, valid trees, visible caret/selection targets and unchanged content under the default reader gate.
+
+The prior independent reviewer additionally exercised 9,000 deterministic randomized editor transitions: previous roots remained unchanged, all resulting outlines validated, IDs remained unique, and replaying content intents in default reader mode retained the exact authoritative roots. This is invariant evidence, not proof of every user-visible transition.
 
 Test counts can change with the draft. Use the final local `npm run check` and `npm run test:consumer` logs for the exact pushed source snapshot as the aggregate result; do not infer that all stages passed merely from a focused test invocation.
 
@@ -70,3 +72,31 @@ DOM emulation tests prove event/state contracts; they cannot establish physical 
 - Full variable-height virtualization. Reader limits and hoisting make bounded rendering explicit; editor rows currently render all visible items.
 
 These boundaries and the open verification gates mean this draft must not be described as “100% complete” or “fully equivalent.” Closing those gates requires evidence and, where needed, additional implementation rather than a wording change.
+
+## Additional regression audit
+
+The current source adds focused executable coverage for:
+
+- Reader recursive branch disclosure and folded-branch summaries (including the
+  editor's read-only mode); hoisted split/paste/outdent boundaries;
+  invalid reveal without scope loss; hidden caret/selection repair after collapse
+  and undo; host replacement offset clamping and history selection anchors.
+- Independent keymap precedence, IME priority, custom codec validation/roundtrip,
+  read-only refusal and one-step command transactions. Same-place drops and
+  net-zero transactions do not create phantom revisions. History/replacement also
+  preserve the complete structural ancestry of locked descendants, including branch
+  reparenting and sibling reordering.
+- Empty-editor paste; readable row paste as subtree insertion; mixed tabs/spaces,
+  marker whitespace, empty list/tasks and literal bracket text; canonical numeric
+  overflow/negative-zero refusal; embedded inputs retaining native clipboard ownership.
+- Malformed diagnostic/completion/accessor rejection; whole-token syntax exclusions;
+  hover provider removal/replacement cleanup and hidden-row invalidation.
+- Trusted custom rich block kinds, prototype-name fallback and recovery after a
+  renderer failure when immutable data or registry component identity changes.
+- Mocked mobile visual-viewport resize/scroll placement and listener cleanup;
+  terminal drag insertion/nesting cues. CSS keeps row selection available on narrow
+  screens instead of hiding that control. These are not native browser/touch proofs.
+
+The latest exact aggregate counts belong in the final local check logs, not a sum
+of overlapping focused suites. No browser/device acceptance gate is closed by these
+regressions alone.

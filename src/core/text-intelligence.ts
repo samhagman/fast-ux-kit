@@ -55,15 +55,29 @@ export interface TextEdit extends TextRange {
   readonly text: string;
 }
 
+/** Read only own data fields: malformed provider results cannot execute accessors. */
+export function textDataField(value: unknown, key: string): unknown {
+  try {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && "value" in descriptor ? descriptor.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 export function validTextRange(range: TextRange, text: string, allowEmpty = true): boolean {
+  const start = textDataField(range, "start"),
+    end = textDataField(range, "end");
   return (
-    !!range &&
-    Number.isInteger(range.start) &&
-    Number.isInteger(range.end) &&
-    range.start >= 0 &&
-    range.end >= range.start &&
-    range.end <= text.length &&
-    (allowEmpty || range.end > range.start)
+    typeof text === "string" &&
+    typeof start === "number" &&
+    typeof end === "number" &&
+    Number.isInteger(start) &&
+    Number.isInteger(end) &&
+    start >= 0 &&
+    end >= start &&
+    end <= text.length &&
+    (allowEmpty || end > start)
   );
 }
 export function sameTextContext(a: TextRequestContext, b: TextRequestContext): boolean {
@@ -88,12 +102,65 @@ export function currentTextAnalysis(
   analysis: TextAnalysis | undefined,
   text: string,
 ): TextAnalysis | undefined {
-  if (analysis?.text !== text) return undefined;
+  if (textDataField(analysis, "text") !== text) return undefined;
+  const classifications = textDataField(analysis, "classifications"),
+    diagnostics = textDataField(analysis, "diagnostics");
   return {
     text,
-    classifications: analysis.classifications?.filter((item) => validTextRange(item, text, false)),
-    diagnostics: analysis.diagnostics?.filter((item) => validTextRange(item, text)),
+    classifications: Array.isArray(classifications)
+      ? classifications.flatMap((item) => {
+          const kind = textDataField(item, "kind");
+          return validTextRange(item, text, false) && typeof kind === "string"
+            ? [{ start: item.start, end: item.end, kind }]
+            : [];
+        })
+      : [],
+    diagnostics: Array.isArray(diagnostics)
+      ? diagnostics.flatMap((item) => {
+          const severity = textDataField(item, "severity"),
+            message = textDataField(item, "message"),
+            code = textDataField(item, "code");
+          return validTextRange(item, text) &&
+            typeof message === "string" &&
+            ["error", "warning", "information", "hint"].includes(severity as string) &&
+            (code === undefined || typeof code === "string")
+            ? [
+                {
+                  start: item.start,
+                  end: item.end,
+                  severity: severity as TextDiagnostic["severity"],
+                  message,
+                  ...(typeof code === "string" ? { code } : {}),
+                },
+              ]
+            : [];
+        })
+      : [],
   };
+}
+
+/** A copied completion contains no provider-owned accessors or unknown renderable fields. */
+export function copyTextCompletion(value: unknown): TextCompletion | null {
+  const id = textDataField(value, "id"),
+    label = textDataField(value, "label");
+  if (typeof id !== "string" || !id || typeof label !== "string") return null;
+  const result: {
+    id: string;
+    label: string;
+    insertText?: string;
+    matchText?: string;
+    detail?: string;
+    kind?: string;
+  } = { id, label };
+  for (const key of ["insertText", "matchText", "detail", "kind"] as const) {
+    const descriptor =
+      value && typeof value === "object" ? Object.getOwnPropertyDescriptor(value, key) : undefined;
+    if (descriptor && !("value" in descriptor)) return null;
+    const field = textDataField(value, key);
+    if (field !== undefined && typeof field !== "string") return null;
+    if (typeof field === "string") result[key] = field;
+  }
+  return result;
 }
 
 const normalized = (text: string) => text.normalize("NFKC").toLocaleLowerCase();
@@ -106,18 +173,9 @@ export function filterCompletions(
   const prefix: TextCompletion[] = [],
     interior: TextCompletion[] = [];
   const seen = new Set<string>();
-  for (const item of items) {
-    if (
-      !item ||
-      typeof item !== "object" ||
-      typeof item.id !== "string" ||
-      !item.id ||
-      seen.has(item.id) ||
-      typeof item.label !== "string" ||
-      (item.insertText !== undefined && typeof item.insertText !== "string") ||
-      (item.matchText !== undefined && typeof item.matchText !== "string")
-    )
-      continue;
+  for (const value of items) {
+    const item = copyTextCompletion(value);
+    if (!item || seen.has(item.id)) continue;
     seen.add(item.id);
     if (replacedText !== undefined && (item.insertText ?? item.label) === replacedText) continue;
     const candidate = normalized(item.matchText ?? item.label);
@@ -131,11 +189,13 @@ export function acceptTextCompletion(
   offer: TextCompletionOffer,
   item: TextCompletion,
 ): { readonly text: string; readonly caret: number } | null {
-  if (!validTextRange(offer.range, text)) return null;
-  const replacement = item.insertText ?? item.label;
+  const range = textDataField(offer, "range") as TextRange;
+  const copied = copyTextCompletion(item);
+  if (!validTextRange(range, text) || !copied) return null;
+  const replacement = copied.insertText ?? copied.label;
   return {
-    text: text.slice(0, offer.range.start) + replacement + text.slice(offer.range.end),
-    caret: offer.range.start + replacement.length,
+    text: text.slice(0, range.start) + replacement + text.slice(range.end),
+    caret: range.start + replacement.length,
   };
 }
 
@@ -239,6 +299,8 @@ export function createReferenceCompletionProvider({
     readonly ReferenceEntity[] | ((context: TextRequestContext) => readonly ReferenceEntity[]);
   readonly exclusions?: (context: TextRequestContext) => readonly TextRange[];
 }): TextCompletionProvider {
+  if (typeof trigger !== "string" || !trigger.length)
+    throw new TypeError("A reference trigger must be nonempty.");
   const offer = (context: TextRequestContext): TextCompletionOffer | null => {
     if (context.selection.start !== context.selection.end) return null;
     const offset = context.selection.start;
@@ -262,6 +324,7 @@ export function createReferenceCompletionProvider({
       if (!referenceCharacter.test(char)) break;
       end += char.length;
     }
+    if (blocked.some((range) => start < range.end && end > range.start)) return null;
     const source = typeof entities === "function" ? entities(context) : entities;
     return {
       range: { start, end },

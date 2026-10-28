@@ -25,6 +25,7 @@ import {
   importOutlineJSON,
   outlineIds,
   planOutlineDrop,
+  parseOutlineText,
   reconcileOutlineEditorState,
   reduceOutlineEditor,
   resolveOutlineKey,
@@ -32,6 +33,10 @@ import {
   selectionRoots,
   serializeOutlineText,
   type OutlineAction,
+  type OutlineKeyEvent,
+  type OutlineCodec,
+  decodeOutline,
+  encodeOutline,
   type OutlineEditorOptions,
   type OutlineEditorState,
   type OutlineNode,
@@ -48,8 +53,18 @@ import { useTextHover } from "./useTextHover.js";
 import { TextPopup } from "./TextPopup.js";
 import { textareaAtVisualBoundary, textareaOffsetAtPoint } from "./text-geometry.js";
 
+export interface OutlineKeyContext<T = unknown> {
+  readonly rowId: string;
+  readonly mode: "text" | "row";
+  readonly state: OutlineEditorState<T>;
+}
 export interface OutlinePlugin<T = unknown> {
   readonly id: string;
+  /** First defined result wins: undefined delegates, null consumes, an action uses normal policy/history. */
+  readonly keymap?: (
+    event: OutlineKeyEvent,
+    context: OutlineKeyContext<T>,
+  ) => OutlineAction<T> | null | undefined;
   /** Return null to consume an action, or a replacement action; never mutate the state. */
   readonly beforeAction?: (
     action: OutlineAction<T>,
@@ -75,6 +90,9 @@ export interface OutlineEditorHandle<T = unknown> {
   readonly reveal: (id: string, caret?: number) => void;
   readonly exportJSON: () => string;
   readonly exportText: () => string;
+  readonly exportWith: (codec: OutlineCodec<T>) => string;
+  /** Decoding errors throw; a valid decoded replacement still obeys editor policy. */
+  readonly importWith: (codec: OutlineCodec<T>, source: string) => void;
 }
 export interface OutlineEditorProps<T = unknown> extends OutlineEditorOptions<T> {
   readonly nodes?: readonly OutlineNode<T>[];
@@ -296,7 +314,7 @@ export function OutlineEditor<T = unknown>({
         originFocus.end !== selectedCaret.current.end)
     )
       return null;
-    const node = findOutlineNode(model.current.nodes, requested.rowId)?.node;
+    const node = editorVisibleRows(model.current).find((row) => row.id === requested.rowId)?.node;
     return node ? { ...requested, text: node.text, revision: model.current.revision } : null;
   }, []);
   const hover = useTextHover({
@@ -410,6 +428,9 @@ export function OutlineEditor<T = unknown>({
       },
       exportJSON: () => exportOutlineJSON(model.current.nodes),
       exportText: () => serializeOutlineText(model.current.nodes),
+      exportWith: (codec) => encodeOutline(model.current.nodes, codec),
+      importWith: (codec, source) =>
+        dispatch({ type: "replace", nodes: decodeOutline(source, codec) }),
     }),
     [dispatch],
   );
@@ -419,6 +440,13 @@ export function OutlineEditor<T = unknown>({
     [state.nodes, state.expandedIds, state.hoistedId],
   );
   const focusedRow = state.caret?.id;
+  const dropDepth = drag?.target
+    ? Math.max(
+        0,
+        drag.target.depth -
+          (state.hoistedId ? getOutlinePath(state.nodes, state.hoistedId).length - 1 : 0),
+      )
+    : 0;
   const selectRow = (rowId: string, extend = false, toggle = false) => {
     completion.dismiss();
     updateMode(true);
@@ -429,12 +457,6 @@ export function OutlineEditor<T = unknown>({
   const syncInput = (textarea: HTMLTextAreaElement, rowId: string) => {
     focused.current = rowId;
     selectedCaret.current = { start: textarea.selectionStart, end: textarea.selectionEnd };
-    dispatch({
-      type: "caret",
-      id: rowId,
-      start: textarea.selectionStart,
-      end: textarea.selectionEnd,
-    });
     const current = findOutlineNode(model.current.nodes, rowId)?.node;
     if (current && current.text !== textarea.value)
       dispatch({
@@ -443,6 +465,13 @@ export function OutlineEditor<T = unknown>({
         text: textarea.value,
         caret: textarea.selectionStart,
         time: Date.now(),
+      });
+    else
+      dispatch({
+        type: "caret",
+        id: rowId,
+        start: textarea.selectionStart,
+        end: textarea.selectionEnd,
       });
   };
   const moveFocus = (
@@ -502,6 +531,27 @@ export function OutlineEditor<T = unknown>({
       event.stopPropagation();
       dismissHover();
       return;
+    }
+    for (const plugin of callbacks.current.plugins) {
+      const mapped = plugin.keymap?.(
+        {
+          key: event.key,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+          isComposing: false,
+        },
+        { rowId, mode, state: model.current },
+      );
+      if (mapped !== undefined) {
+        event.preventDefault();
+        event.stopPropagation();
+        completion.dismiss();
+        dismissHover();
+        if (mapped) dispatch(mapped);
+        return;
+      }
     }
     const intent = resolveOutlineKey(event, mode);
     if (!intent || intent === "line-break") return;
@@ -617,7 +667,7 @@ export function OutlineEditor<T = unknown>({
       return false;
     }
   };
-  const pasteStructured = (clipboard: DataTransfer, rowId: string): boolean => {
+  const pasteStructured = (clipboard: DataTransfer, rowId?: string): boolean => {
     const json = clipboard.getData(OUTLINE_CLIPBOARD_MIME);
     if (!json) return false;
     try {
@@ -762,7 +812,7 @@ export function OutlineEditor<T = unknown>({
         aria-label={label}
         expandedIds={state.expandedIds}
         onExpandedChange={(next, change) =>
-          dispatch({ type: "expand", ids: [change.id], expanded: change.isExpanded })
+          dispatch({ type: "expand", ids: change.affectedIds, expanded: change.isExpanded })
         }
         getRichContent={getRichContent}
         richRegistry={richRegistry}
@@ -770,6 +820,7 @@ export function OutlineEditor<T = unknown>({
         renderContent={renderContent}
         renderBody={renderBody}
         renderAccessory={renderAccessory}
+        renderCollapsed={renderCollapsed}
         renderStatus={renderStatus}
         renderSuffix={renderSuffix}
         enableHoist={showBreadcrumbs}
@@ -787,13 +838,39 @@ export function OutlineEditor<T = unknown>({
       aria-label={label}
       tabIndex={-1}
       data-read-only="false"
+      onPaste={(event) => {
+        if (event.target !== event.currentTarget && visible.length > 0) return;
+        event.preventDefault();
+        updateMode(false);
+        if (pasteStructured(event.clipboardData)) return;
+        try {
+          const pasted = parseOutlineText(event.clipboardData.getData("text/plain"));
+          dispatch({ type: "paste-nodes", nodes: pasted as readonly OutlineNode<T>[], createId });
+        } catch {
+          setClipboardError("The copied outline is invalid. Nothing was inserted.");
+        }
+      }}
       onCopy={(event) => {
-        if (!model.current.selection.size) return;
+        if (
+          !model.current.selection.size ||
+          !(
+            event.target === event.currentTarget ||
+            rowElements.current.get(model.current.caret?.id ?? "") === event.target
+          )
+        )
+          return;
         event.preventDefault();
         copySelection(event.clipboardData);
       }}
       onCut={(event) => {
-        if (!model.current.selection.size) return;
+        if (
+          !model.current.selection.size ||
+          !(
+            event.target === event.currentTarget ||
+            rowElements.current.get(model.current.caret?.id ?? "") === event.target
+          )
+        )
+          return;
         event.preventDefault();
         if (copySelection(event.clipboardData)) dispatch({ type: "delete" });
       }}
@@ -893,9 +970,15 @@ export function OutlineEditor<T = unknown>({
                     : "blocked"
                   : undefined
               }
+              data-drop-depth={drag?.active && drag.gapId === node.id ? dropDepth + 1 : undefined}
               tabIndex={rowMode && focusedRow === node.id ? 0 : -1}
               aria-label={`${node.text || "Empty item"}, level ${row.depth + 1}${selected ? ", selected" : ""}`}
-              style={{ "--outline-depth": Math.min(row.depth, 12) } as CSSProperties}
+              style={
+                {
+                  "--outline-depth": Math.min(row.depth, 12),
+                  "--outline-drop-depth": Math.min(dropDepth, 12),
+                } as CSSProperties
+              }
               onKeyDown={(event) => {
                 if (event.target === event.currentTarget) keyDown(event, node.id, "row");
               }}
@@ -904,13 +987,17 @@ export function OutlineEditor<T = unknown>({
                 event.preventDefault();
                 updateMode(false);
                 if (pasteStructured(event.clipboardData, node.id)) return;
-                dispatch({
-                  type: "paste",
-                  id: node.id,
-                  start: node.text.length,
-                  text: event.clipboardData.getData("text/plain"),
-                  createId,
-                });
+                try {
+                  const pasted = parseOutlineText(event.clipboardData.getData("text/plain"));
+                  dispatch({
+                    type: "paste-nodes",
+                    afterId: node.id,
+                    nodes: pasted as readonly OutlineNode<T>[],
+                    createId,
+                  });
+                } catch {
+                  setClipboardError("The copied outline is invalid. Nothing was inserted.");
+                }
               }}
             >
               <div className="fast-ux-outliner__row fast-ux-editor__row">
@@ -1158,7 +1245,9 @@ export function OutlineEditor<T = unknown>({
                         dispatch({
                           type: "move",
                           direction: event.key === "ArrowUp" ? "up" : "down",
-                          ids: [node.id],
+                          ids: model.current.selection.has(node.id)
+                            ? [...model.current.selection]
+                            : [node.id],
                         });
                       }
                     }}
@@ -1255,6 +1344,15 @@ export function OutlineEditor<T = unknown>({
             </li>
           );
         })}
+        {drag?.active && drag.gapId === null && (
+          <li
+            aria-hidden="true"
+            className="fast-ux-editor__drop-end"
+            data-drop-before={drag.allowed ? "allowed" : "blocked"}
+            data-drop-depth={dropDepth + 1}
+            style={{ "--outline-drop-depth": Math.min(dropDepth, 12) } as CSSProperties}
+          />
+        )}
       </ul>
       <Button
         className="fast-ux-editor__add fux-control"
@@ -1265,25 +1363,26 @@ export function OutlineEditor<T = unknown>({
       >
         Add item
       </Button>
-      {getPlaceholders?.(null).map((placeholder) => (
-        <Button
-          key={placeholder.id}
-          className="fast-ux-editor__placeholder fux-control"
-          onPress={() => {
-            updateMode(false);
-            dispatch({
-              type: "insert",
-              id: createId(),
-              text: placeholder.text ?? "",
-              parentId: null,
-              index: placeholder.index,
-              caret: placeholder.caret,
-            });
-          }}
-        >
-          {placeholder.label}
-        </Button>
-      ))}
+      {!state.hoistedId &&
+        getPlaceholders?.(null).map((placeholder) => (
+          <Button
+            key={placeholder.id}
+            className="fast-ux-editor__placeholder fux-control"
+            onPress={() => {
+              updateMode(false);
+              dispatch({
+                type: "insert",
+                id: createId(),
+                text: placeholder.text ?? "",
+                parentId: null,
+                index: placeholder.index,
+                caret: placeholder.caret,
+              });
+            }}
+          >
+            {placeholder.label}
+          </Button>
+        ))}
       {hover.session && (
         <TextPopup
           container={popupContainer}

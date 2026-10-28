@@ -34,7 +34,7 @@ const notes: readonly OutlineNode<RichOutlineData>[] = [
 - `expandedIds` / `onExpandedChange` are controlled view state; `defaultExpandedIds` initializes local state. Initial branches expand by default.
 - `enableHoist`, `hoistedId`, `defaultHoistedId`, `onHoistChange` and accessible breadcrumbs expose subtree navigation.
 - `renderContent(node, context)` replaces the readable title/body; `context` contains depth, child/expansion state and `hoist()`.
-- `renderBody`, `renderAccessory`, `renderStatus`, `renderSuffix` add trusted React content without replacing disclosure behavior.
+- `renderBody`, `renderAccessory`, `renderStatus`, `renderSuffix` add trusted React content without replacing disclosure behavior. `renderCollapsed` adds a trusted summary only for a folded branch; it is shared by the reader and the editor's read-only mode.
 - `getRichContent`, `richRegistry`, `allowMedia` configure rich documents. Remote media is denied unless allowed by host policy; unsafe protocols remain denied regardless of host policy.
 - `getDisclosureLabel` and `getHoistLabel` localize control names.
 
@@ -110,7 +110,7 @@ Actions cover text, split/merge, insertion/deletion, indentation, movement/drop,
 
 ### Policy, rich data and clipboard
 
-`isLocked(node)` is intentionally conservative: locked nodes protect their subtree and structural relationship; moving an ancestor that carries a locked descendant is refused. For more application-specific structural rules, `canChange(before, after, action)` examines the complete proposed document. Refusals remain atomic and are announced; `getRefusalMessage` localizes them. Policies are reevaluated during history travel.
+`isLocked(node)` is intentionally conservative: locked nodes protect their subtree and structural relationship; moving an ancestor that carries a locked descendant is refused. For more application-specific structural rules, `canChange(before, after, action)` examines the complete proposed document. Refusals remain atomic and are announced; `getRefusalMessage` localizes them. Policies are reevaluated during history travel and replacement, including every ancestor's parent and sibling position; preserving a locked leaf's immediate parent does not permit relocating the branch that carries it. Changes to an unlocked ancestor's text remain allowed when protected descendants and their full positions are unchanged.
 
 A merge never silently discards the removed row's `data`: it refuses unless the host supplies `mergeData(left, right)`. The host owns the semantics of combining rich content. The surviving row's task identity is retained.
 
@@ -177,3 +177,70 @@ Hover supports pointer dwell, keyboard requests and a named touch affordance. It
 ## Verification and release boundaries
 
 See [PARITY.md](PARITY.md) for passing executable contracts, deliberate differences, blocked browser checks and remaining release gates. No “100% equivalent”, Android-ready or assistive-technology certification is claimed by this draft.
+
+## Command, key and codec composition
+
+Plugins are trusted application adapters, not executable document content. Keymaps run
+in plugin order **after** IME and open-popup ownership. Return `undefined` to delegate,
+`null` to consume the key without editing, or an action to use ordinary policy/history.
+A multi-command `transaction` commits once, or refuses without partial changes.
+
+```tsx
+import type { OutlinePlugin } from "@samhagman/fast-ux-kit/react";
+import { createOutlineJSONCodec } from "@samhagman/fast-ux-kit/core";
+
+const markReviewed: OutlinePlugin = {
+  id: "mark-reviewed",
+  keymap: (event, { rowId }) =>
+    event.key === "F2"
+      ? {
+          type: "transaction",
+          commands: [{ type: "update", id: rowId, changes: { checked: true } }],
+        }
+      : undefined,
+};
+
+const canonical = createOutlineJSONCodec();
+const saved = editor.current?.exportWith(canonical);
+if (saved) editor.current?.importWith(canonical, saved);
+```
+
+A custom `OutlineCodec<T>` provides `id`, `mimeType`, `encode(nodes): string` and
+`decode(source): readonly OutlineNode<T>[]`. `encodeOutline`/`decodeOutline` validate
+tree shape at the seam. Codec-specific source budgets and fidelity are the host's
+contract; codecs must not execute imported source. Handle `importWith` throws on a
+decode/validation error; valid imports dispatch an undoable `replace` subject to
+read-only, locks, plugin interception and whole-transition policy. The codec's MIME
+label does not automatically register OS clipboard support.
+
+The rich registry also accepts `blocks`, a map from application-defined block kind
+to trusted React component receiving `{ block, reducedMotion }`. Built-in kinds
+retain their default rendering; unknown, unregistered kinds retain safe visible
+fallbacks. Only own registry properties resolve. Host data must remain immutable;
+a failed registered renderer is retried when its block or component identity changes.
+
+## Interaction edge contracts
+
+- Alt-press a reader or editor disclosure to expand/collapse its complete branch.
+  `onExpandedChange` includes `affectedIds` and `recursive` alongside `id` and
+  `isExpanded`; one gesture emits one callback. Other branches retain local folds.
+- At a hoisted root, split and structural paste insert children rather than invisible
+  siblings. Outdent and empty-final-child Return stop at the scope boundary. Explicit
+  `reveal` can leave a scope; ordinary `focus` cannot target an unrelated hidden row.
+- Collapse and history travel keep current folds and repair caret/selection to a
+  visible ancestor. Host replacement clamps surviving offsets and clears user history.
+- Row-mode readable paste inserts parsed subtrees; text-mode paste edits the title
+  at its selected range. An empty editable container accepts both readable and
+  canonical paste. Native copy/cut in embedded inputs is not intercepted.
+- Readable import skips blank lines, recognizes common list/task markers, retains
+  empty marked list items, and follows indentation changes. `spacesPerLevel` sets
+  tab stops (default 2); it is not an arbitrary Markdown parser. `[x]literal` without
+  separating whitespace remains literal text.
+- Pure no-op drops and net-zero transactions do not create content revisions/history.
+  Explicit host/user replacement remains a distinct operation.
+- Drag previews include a nesting-level cue and a terminal insertion gap. On narrow
+  screens editor controls wrap rather than hiding the selection control. Real touch
+  geometry and accessibility remain open device gates.
+- Text popups listen to visual-viewport resize/scroll, so placement can react to a
+  mobile keyboard. The coordinate contract is tested with mocks, not certified on
+  an Android keyboard or browser zoom.
