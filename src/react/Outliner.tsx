@@ -99,6 +99,23 @@ function initialExpansion<T>(
   return expanded;
 }
 
+/** Local visibility check for a previously focused descendant, never a tab-order manager. */
+function readerFocusVisible(element: HTMLElement, section: HTMLElement): boolean {
+  if (!section.contains(element)) return false;
+  for (let current: HTMLElement | null = element; current; current = current.parentElement) {
+    if (current.hidden || current.hasAttribute("inert")) return false;
+    const style = current.ownerDocument.defaultView?.getComputedStyle(current);
+    if (
+      style?.display === "none" ||
+      style?.visibility === "hidden" ||
+      style?.visibility === "collapse"
+    )
+      return false;
+    if (current === section) return true;
+  }
+  return false;
+}
+
 /**
  * Read-first nested disclosure lists, deliberately NOT an ARIA tree or an editor.
  * Tab visits disclosures and embedded links normally; Enter/Space toggle the focused button.
@@ -138,6 +155,8 @@ export function Outliner<T = unknown>({
   const returnToId = useRef<string | null>(null);
   const navigationPending = useRef<string | null | undefined>(undefined);
   const focusedNode = useRef<string | null>(null);
+  const focusedElement = useRef<HTMLElement | null>(null);
+  const focusedPath = useRef<readonly string[]>([]);
   const [localHoisted, setLocalHoisted] = useState(defaultHoistedId);
   useMemo(() => {
     const issues = validateOutline(nodes);
@@ -175,16 +194,32 @@ export function Outliner<T = unknown>({
       (returnButton ?? section).focus();
       return;
     }
-    // If a controlled fold removes a focused descendant, return to its nearest visible ancestor.
-    if (focusedNode.current && document.activeElement === document.body) {
-      const path = getOutlinePath(nodes, focusedNode.current).slice().reverse();
+    // Recover only focus actually lost with a reader descendant. A host scope
+    // change or removed branch may leave no surviving ancestor disclosure.
+    if (
+      focusedNode.current &&
+      focusedElement.current &&
+      section.ownerDocument.activeElement === section.ownerDocument.body &&
+      !readerFocusVisible(focusedElement.current, section)
+    ) {
+      const currentPath = getOutlinePath(nodes, focusedNode.current);
+      const path = (currentPath.length ? currentPath.map((node) => node.id) : focusedPath.current)
+        .slice()
+        .reverse();
       const controls = [...section.querySelectorAll<HTMLElement>("[data-disclosure-id]")];
       const ancestor = path
-        .map((node) => controls.find((button) => button.dataset.disclosureId === node.id))
+        .map((id) =>
+          controls.find(
+            (button) => button.dataset.disclosureId === id && readerFocusVisible(button, section),
+          ),
+        )
         .find(Boolean);
-      ancestor?.focus();
+      focusedNode.current = null;
+      focusedElement.current = null;
+      focusedPath.current = [];
+      (ancestor ?? section).focus({ preventScroll: true });
     }
-  }, [activeHoist, expanded, nodes]);
+  });
 
   // Bound React's nested rendering independently from complete iterative data validation.
   const MAX_RENDER_DEPTH = 128;
@@ -339,11 +374,25 @@ export function Outliner<T = unknown>({
       onFocusCapture={(event) => {
         focusedNode.current =
           (event.target as Element).closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? null;
+        focusedElement.current = focusedNode.current ? (event.target as HTMLElement) : null;
+        focusedPath.current = focusedNode.current
+          ? getOutlinePath(nodes, focusedNode.current).map((node) => node.id)
+          : [];
         sectionProps.onFocusCapture?.(event);
       }}
       onBlurCapture={(event) => {
-        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node))
+        const outside =
+          event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node);
+        // Intentional blur of a still-visible control is not lost DOM focus. In
+        // particular, a later async host update must not pull focus back inside.
+        const deliberateBlur =
+          !event.relatedTarget &&
+          readerFocusVisible(event.target as HTMLElement, event.currentTarget);
+        if (outside || deliberateBlur) {
           focusedNode.current = null;
+          focusedElement.current = null;
+          focusedPath.current = [];
+        }
         sectionProps.onBlurCapture?.(event);
       }}
       className={["fast-ux-outliner", className].filter(Boolean).join(" ")}

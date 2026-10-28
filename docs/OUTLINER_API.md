@@ -40,6 +40,13 @@ const notes: readonly OutlineNode<RichOutlineData>[] = [
 
 Collapsed child lists retain their ARIA target but do not mount their descendants. Expanded inline rendering is limited to 128 levels and 5,000 rows, with visible notices rather than silent truncation; all canonical data remains intact. Hoist deeper content to inspect it. This is not virtualization.
 
+When a controlled fold, scope change or host replacement removes the focused
+reader descendant, focus returns to its nearest surviving visible disclosure, or
+to the reader section when none survives (including an empty reader). Focus moved
+outside, or intentionally blurred while the control remains visible, is not
+pulled back by a later host update. User-initiated hoist and return retain their
+explicit navigation destinations.
+
 ## Explicit editing
 
 ```tsx

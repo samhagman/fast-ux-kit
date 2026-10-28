@@ -5,6 +5,7 @@ import { FloatingPanel as OwnerFloatingPanel } from "@ark-ui/react/floating-pane
 import { ImageCropper as OwnerImageCropper } from "@ark-ui/react/image-cropper";
 import { SignaturePad as OwnerSignaturePad } from "@ark-ui/react/signature-pad";
 import { Tour as OwnerTour } from "@ark-ui/react/tour";
+import { TourBackdrop } from "./tour-backdrop.js";
 
 /** Presentation only: refs, polymorphism, prop types and state machines stay intact. */
 function part<T>(Component: T, className: string): T {
@@ -41,6 +42,9 @@ export const SignaturePad: typeof OwnerSignaturePad = /* @__PURE__ */ family(
   OwnerSignaturePad,
   "signature-pad",
 );
-export const Tour: typeof OwnerTour = /* @__PURE__ */ family(OwnerTour, "tour");
+export const Tour: typeof OwnerTour = /* @__PURE__ */ Object.assign(
+  /* @__PURE__ */ family(OwnerTour, "tour"),
+  { Backdrop: TourBackdrop },
+);
 export { Portal } from "@ark-ui/react/portal";
 export { useTour } from "@ark-ui/react/tour";

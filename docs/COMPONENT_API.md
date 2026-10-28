@@ -270,6 +270,8 @@ Part names below are composition surfaces, not additional family counts. Default
 - **Tour:** `Tour.ActionTrigger`, `Tour.Actions`, `Tour.Arrow`, `Tour.ArrowTip`, `Tour.Backdrop`, `Tour.CloseTrigger`, `Tour.Content`, `Tour.Context`, `Tour.Control`, `Tour.Description`, `Tour.Positioner`, `Tour.ProgressText`, `Tour.Root`, `Tour.Spotlight`, `Tour.Title`.
 - **Pagination:** `Root`, `PrevTrigger`, `Item`, `Ellipsis`, `NextTrigger`.
 
+`Tour.Backdrop` preserves the owner's document-space tooltip mask and spotlight coordinates while sizing its height to its owner document during an open tooltip step. Mount the overlay in a document-body portal; a positioned or transformed ancestor changes that coordinate space. An explicit inline `style.height` or `style.blockSize` on the backdrop or its `asChild` element opts out of automatic sizing; `undefined` does not. Dialog and closed states retain the owner's sizing behavior. Placement, focus, dismissal, and the cutout remain owner-managed.
+
 ## Canonical overlap mapping
 
 Use the canonical family for the shared visual system. The source owner exports remain available, unstyled, through their raw entrypoint.

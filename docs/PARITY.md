@@ -119,12 +119,28 @@ fixture described below; no deployment was used to substitute for local QA.
   and undo stayed zero throughout. Standalone capture/bubble cancellation kept the
   container focused. An owning modal may choose another in-scope focus destination
   after cancellation; the editor deliberately does not override it.
+- A controlled reader host update no longer strands focus on the document body.
+  Native hoist to an unrelated subtree, removal of the focused branch and clearing
+  the reader recover to the section; controlled collapse recovers to the surviving
+  ancestor disclosure. A deliberately focused outside control stays focused.
+  Eleven focused regressions additionally cover intentional blur, hidden content,
+  Strict Mode, unmount and a removed leaf's captured ancestor path.
+- Tour dialog placement, narrow content scrolling and opener return were verified
+  through start, next, finish, dismissal and restart. Its targeted backdrop now
+  covers the complete document while retaining the owner's cutout coordinates:
+  native page-bottom coverage, target alignment, zoom-driven growth/shrink and
+  closed teardown passed. Starting at 393 × 248 CSS px and completing the sequence
+  also passed. Changing zoom while a targeted step is already open may temporarily
+  move its tethered card outside the viewport; normal Tab navigation scrolls the
+  focused control back into view. This owner placement limitation is not hidden by
+  a second geometry or focus manager.
 
 For repeatable manual focus checks, run `node scripts/build-focus-navigation.mjs`
 after `npm run docs:build`, then open `/focus-navigation.html` through the same
-local development server. The fixture has visible controls for modal wrapping and
-capture/bubble cancellation, with visible revision/history counts and no hidden
-test API. It does not launch a browser or publish anything. Run the ordinary docs
+local development server. The fixture has visible controls for modal wrapping,
+capture/bubble cancellation and controlled reader hoist/removal/collapse, with
+visible revision/history counts and no hidden test API. It does not launch a
+browser or publish anything. Run the ordinary docs
 build again before packaging to remove the extra local fixture assets.
 
 The optional headless fixture remains `tests/browser/fixture.tsx`, driven by

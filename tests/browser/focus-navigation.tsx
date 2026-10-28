@@ -2,11 +2,75 @@
 import { useState, type KeyboardEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, ModalDialog } from "../../src/components/aria.js";
-import { OutlineEditor } from "../../src/react/index.js";
+import { OutlineEditor, Outliner } from "../../src/react/index.js";
+import type { OutlineNode } from "../../src/core/index.js";
 import "../../src/components.css";
 import "../../src/styles.css";
 
 type Cancellation = "none" | "capture" | "bubble";
+
+const readerRoots: readonly OutlineNode[] = [
+  { id: "a", text: "Reader branch A", children: [{ id: "a-child", text: "Reader child A" }] },
+  { id: "b", text: "Reader branch B", children: [{ id: "b-child", text: "Reader child B" }] },
+];
+
+function ReaderFocusExample() {
+  const [nodes, setNodes] = useState(readerRoots);
+  const [hoistedId, setHoistedId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(new Set(["a", "b"]));
+  // These fixture-only host controls deliberately preserve the existing DOM focus
+  // on pointer activation, modeling incoming props without a separate focus move.
+  const preserveFocus = (event: React.MouseEvent) => event.preventDefault();
+  return (
+    <section aria-label="Controlled reader checks">
+      <h2>Controlled reader focus</h2>
+      <p>
+        Focus an Inspect button, then use a host control below. Pointer activation preserves the
+        current focus until the props change.
+      </p>
+      <button type="button" onMouseDown={preserveFocus} onClick={() => setHoistedId("b")}>
+        Host hoist to B
+      </button>
+      <button type="button" onMouseDown={preserveFocus} onClick={() => setNodes([readerRoots[1]!])}>
+        Host remove A
+      </button>
+      <button type="button" onMouseDown={preserveFocus} onClick={() => setNodes([])}>
+        Host clear reader
+      </button>
+      <button
+        type="button"
+        onMouseDown={preserveFocus}
+        onClick={() => setExpandedIds(new Set(["b"]))}
+      >
+        Host collapse A
+      </button>
+      <button
+        type="button"
+        onMouseDown={preserveFocus}
+        onClick={() => {
+          setNodes(readerRoots);
+          setHoistedId(null);
+          setExpandedIds(new Set(["a", "b"]));
+        }}
+      >
+        Reset reader
+      </button>
+      <button type="button">Outside reader control</button>
+      <Outliner
+        aria-label="Controlled reader"
+        nodes={nodes}
+        enableHoist
+        hoistedId={hoistedId}
+        onHoistChange={setHoistedId}
+        expandedIds={expandedIds}
+        onExpandedChange={setExpandedIds}
+        renderBody={(node) =>
+          node.id.endsWith("-child") ? <button type="button">Inspect {node.id}</button> : null
+        }
+      />
+    </section>
+  );
+}
 
 function FocusExample({
   name,
@@ -83,6 +147,7 @@ function Fixture() {
       <ModalDialog title="Modal focus example" isOpen={open} onOpenChange={setOpen}>
         <FocusExample name="Modal" cancellation={cancellation} after={after} />
       </ModalDialog>
+      <ReaderFocusExample />
     </main>
   );
 }
