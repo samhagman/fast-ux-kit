@@ -42,6 +42,10 @@
     "./rich": {
       "types": "./dist/rich/index.d.ts",
       "import": "./dist/rich/index.js"
+    },
+    "./components/aria": {
+      "types": "./dist/components/aria.d.ts",
+      "import": "./dist/components/aria.js"
     }
   },
   "sideEffects": [
@@ -60,7 +64,8 @@
     "prebuild": "node scripts/clean-dist.mjs",
     "format": "prettier --write src tests scripts examples docs *.json *.md",
     "format:check": "prettier --check src tests scripts examples docs *.json *.md",
-    "test:browser": "node scripts/test-browser.mjs"
+    "test:browser": "node scripts/test-browser.mjs",
+    "docs:build": "node scripts/build-docs.mjs"
   },
   "peerDependencies": {
     "@ark-ui/react": "^5.39.3",

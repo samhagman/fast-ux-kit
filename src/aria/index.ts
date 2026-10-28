@@ -4,6 +4,16 @@
 // Keep upstream prop types instead of inventing a universal adapter.
 export {
   Button,
+  NumberField,
+  NumberFieldStateContext,
+  TimeField,
+  ColorArea,
+  ColorThumb,
+  parseColor,
+  DateInput,
+  DateSegment,
+  RadioGroup,
+  Radio,
   Checkbox,
   Dialog,
   DialogTrigger,
@@ -38,4 +48,10 @@ export {
   TooltipTrigger,
   I18nProvider,
 } from "react-aria-components";
-export type { ButtonProps, TextFieldProps, DialogProps } from "react-aria-components";
+export type {
+  ButtonProps,
+  LinkProps,
+  NumberFieldProps,
+  TextFieldProps,
+  DialogProps,
+} from "react-aria-components";

@@ -24,6 +24,9 @@ Install the resulting tarball into another app; it contains compiled ESM and Typ
 declarations, not workspace aliases. Install matching React, React DOM and
 `react-aria-components` peers in the consumer. Ark is optional unless importing
 `@samhagman/fast-ux-kit/ark` or the unified `/components` layer; then install `@ark-ui/react@5.39.3` as well.
+Use `/components/aria` for styled Button, Field, Checkbox, Link, ModalDialog and
+layout components without the optional Ark dependency. Both styled entries use
+the same `/components.css` and semantic tokens.
 A private Git dependency alone is **not** the distribution contract: this repository
 does not commit build outputs or run implicit prepare scripts. Use tested tarballs
 or an explicitly authorized private registry release, not copied source trees.
@@ -118,3 +121,11 @@ keyboard intents, structured clipboard, hoist, extension slots and text intellig
 See [editor API](docs/OUTLINER_API.md) and [behavior coverage](docs/PARITY.md) for
 exact supported semantics, optimistic host synchronization, tests and remaining
 platform gaps. No source pane is enabled merely by viewing a document.
+
+## Documentation playground
+
+`npm run docs:build` builds the documentation and live component playground into
+`.docs-site/`. The examples use real kit components, synthetic local state and
+hashed self-contained production assets. Building does not deploy or change access.
+See [documentation site](docs/DOCUMENTATION_SITE.md) for the private hosting contract
+and verification boundaries.

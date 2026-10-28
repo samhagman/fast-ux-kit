@@ -28,3 +28,20 @@
   --fux-z-popover: 20;
   --fux-shadow-overlay: 0 6px 24px rgb(0 0 0 / 0.15);
 }
+/* Optional semantic roles for products with distinct fields, controls and surfaces. */
+:root {
+  --fux-input-font-size: var(--fux-font-size);
+  --fux-error-text: var(--fux-danger);
+  --fux-input-surface: var(--fux-surface);
+  --fux-control-surface: var(--fux-surface);
+  --fux-control-weight: 550;
+  --fux-danger-surface: var(--fux-danger);
+  --fux-quiet-text: var(--fux-text);
+  --fux-label-size: var(--fux-font-size);
+  --fux-label-weight: 600;
+  --fux-focus-offset: 2px;
+  --fux-panel-radius: var(--fux-radius);
+  --fux-raised: var(--fux-surface);
+  --fux-tint: var(--fux-surface);
+  --fux-tint-border: var(--fux-border);
+}

@@ -19,3 +19,11 @@ test("theme target overrides cannot shrink baseline shared controls below 44px",
     assert.match(read(path), /max\(44px, var\(--fux-target(?:, 44px)?\)\)/);
   }
 });
+
+test("block links preserve stacked content and readable fields have distinct semantic roles", () => {
+  const css = read("components.css");
+  assert.match(css, /\.fux-link\[data-variant="block"\]\s*\{\s*display: block;/);
+  assert.match(css, /\.fux-input\s*\{\s*font-size: var\(--fux-input-font-size\);/);
+  assert.match(css, /\.fux-error\s*\{\s*color: var\(--fux-error-text\);/);
+  assert.match(css, /\.fux-checkbox__mark\s*\{[^}]*flex: none;/);
+});

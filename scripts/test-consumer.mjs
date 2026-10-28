@@ -44,6 +44,10 @@ try {
 import {validateOutline} from '@samhagman/fast-ux-kit/core';
 import {Outliner} from '@samhagman/fast-ux-kit';
 import {Button} from '@samhagman/fast-ux-kit/aria';
+import {Button as StyledButton} from '@samhagman/fast-ux-kit/components/aria';
+import {createElement} from 'react';
+import {renderToString} from 'react-dom/server';
+assert.match(renderToString(createElement(StyledButton, null, 'Save')), /fux-control/);
 assert.deepEqual(validateOutline([{id:'one',text:'One'}]),[]);
 assert.equal(typeof Outliner,'function');assert.ok(Button);
 try { await import('@samhagman/fast-ux-kit/ark'); throw Error('Ark unexpectedly installed'); }

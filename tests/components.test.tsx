@@ -228,3 +228,36 @@ test("modal uses accessible title and explicit close ownership", async () => {
   });
   assert.deepEqual(changes, [false]);
 });
+
+test("Aria-only styled entry retains refs, rich checkbox labels and layout semantics", async () => {
+  const kit = await import("../src/components/aria.js");
+  let button: HTMLButtonElement | null = null;
+  const view = render(
+    <kit.Stack align="start" justify="between" wrap data-testid="stack">
+      <kit.Row align="end" data-testid="row">
+        <kit.IconButton
+          label="Dismiss"
+          ref={(node) => {
+            button = node;
+          }}
+        >
+          ×
+        </kit.IconButton>
+      </kit.Row>
+      <kit.Panel as="section" tone="tinted" aria-label="Details">
+        <kit.Checkbox label={<strong>Include details</strong>} />
+        <kit.Link href="#details" className="navigation-layout">
+          Details
+        </kit.Link>
+      </kit.Panel>
+    </kit.Stack>,
+  );
+  assert.equal(button, view.getByRole("button", { name: "Dismiss" }));
+  assert.equal(view.getByRole("button", { name: "Dismiss" }).getAttribute("data-icon"), "true");
+  assert.equal(view.getByTestId("stack").dataset.align, "start");
+  assert.equal(view.getByTestId("stack").dataset.justify, "between");
+  assert.equal(view.getByTestId("row").dataset.align, "end");
+  assert.equal(view.getByRole("region", { name: "Details" }).dataset.tone, "tinted");
+  assert.ok(view.getByRole("checkbox", { name: "Include details" }));
+  assert.ok(view.getByRole("link", { name: "Details" }).classList.contains("navigation-layout"));
+});
