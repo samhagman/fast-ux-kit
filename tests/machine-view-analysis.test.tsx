@@ -5,6 +5,30 @@ import type { MachineDocument, MachineInspectionFrame } from "../src/core/machin
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { MachineView } = await import("../src/react/machine-view.js");
 afterEach(() => cleanup());
+
+test("historical frame sequence is distinct from the latest session sequence and cursor", () => {
+  const view = render(
+    <MachineView
+      defaultValue={fixture}
+      mode="inspect"
+      inspectionSession={{
+        source: "committed",
+        connection: "connected",
+        sequence: 14,
+        cursor: "cursor-14",
+        frames: [frame("historical", { sequence: 11 }), frame("latest", { sequence: 14 })],
+      }}
+    />,
+  );
+  fireEvent.click(view.getByRole("tab", { name: "Trace" }));
+  fireEvent.click(view.getByRole("button", { name: /TICK historical/ }));
+  fireEvent.click(view.getByRole("tab", { name: "Runtime" }));
+  assert.equal(view.getByText("Frame sequence").nextElementSibling?.textContent, "11");
+  assert.equal(view.getByText("Session sequence").nextElementSibling?.textContent, "14");
+  assert.equal(view.getByText("Session cursor").nextElementSibling?.textContent, "cursor-14");
+  assert.equal(view.queryByText("Sequence", { exact: true }), null);
+  assert.equal(view.queryByText("Cursor", { exact: true }), null);
+});
 const fixture: MachineDocument = {
   version: 1,
   rootId: "main",

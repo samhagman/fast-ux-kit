@@ -2788,15 +2788,21 @@ function MachineViewSurface({
                                 </dd>
                                 <dt>Parent actor</dt>
                                 <dd>{frame.parentActorId ?? "Root actor"}</dd>
+                                {frame.sequence !== undefined && (
+                                  <>
+                                    <dt>Frame sequence</dt>
+                                    <dd>{frame.sequence}</dd>
+                                  </>
+                                )}
                                 {inspectionSession?.sequence !== undefined && (
                                   <>
-                                    <dt>Sequence</dt>
+                                    <dt>Session sequence</dt>
                                     <dd>{inspectionSession.sequence}</dd>
                                   </>
                                 )}
                                 {inspectionSession?.cursor && (
                                   <>
-                                    <dt>Cursor</dt>
+                                    <dt>Session cursor</dt>
                                     <dd>{inspectionSession.cursor}</dd>
                                   </>
                                 )}
