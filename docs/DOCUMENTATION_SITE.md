@@ -117,6 +117,12 @@ it never publishes documents, dispatches live services or retries effects. Runti
 metadata is opt-in. See [Machine View](MACHINE_VIEW.md) for the exact contract and
 unsupported semantics.
 
+`#machine-tree-view` is a separate lazy hierarchy reader over the same portable
+model, also previewed in the gallery. It demonstrates parallel branches,
+references, ancestor-context search, target reveal and host-refused selection.
+Its explicit local simulation controls live outside the presentation component;
+selection and folding never send an event. See [Machine Tree View](MACHINE_TREE_VIEW.md).
+
 The lab puts its actual document before optional instructions and policy probes.
 Scenario selection and deliberate edit activation share one control band. Reset
 and scenario changes restore reading mode. The closed guide remains available

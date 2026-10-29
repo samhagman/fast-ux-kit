@@ -167,11 +167,14 @@ export function ComponentGallery({
   initialPosition,
   onPositionChange,
   machinePreview,
+  machineTreePreview,
 }: {
   initialPosition?: GalleryPosition;
   onPositionChange?: (position: GalleryPosition) => void;
   /** A consumer-owned, lazy Machine View composition. */
   machinePreview?: ReactNode;
+  /** An independently reusable hierarchy-first composition. */
+  machineTreePreview?: ReactNode;
 }) {
   const initial = useRef(initialPosition);
   const initialIndex = Math.max(
@@ -385,6 +388,35 @@ export function ComponentGallery({
             <p>A clear view of changing behavior.</p>
             <a href="#machine-view">
               Open Machine View <Symbol name="arrow" size={16} />
+            </a>
+          </footer>
+        </article>
+        <article className="gallery-showcase gallery-showcase--tree">
+          <header>
+            <div>
+              <span className="gallery-category">Behavior, unfolded</span>
+              <h2>Machine Tree View</h2>
+            </div>
+            <Symbol name="outline" />
+          </header>
+          <div className="gallery-showcase-preview gallery-tree-preview">
+            <PreviewBoundary
+              fallback={
+                <p role="alert">
+                  The hierarchy preview could not render. Open Machine Tree View to try the full
+                  reader.
+                </p>
+              }
+            >
+              {machineTreePreview ?? (
+                <p>Explore nested states and outgoing transition routes without a canvas.</p>
+              )}
+            </PreviewBoundary>
+          </div>
+          <footer>
+            <p>Nested behavior. Clear destinations.</p>
+            <a href="#machine-tree-view">
+              Open Machine Tree View <Symbol name="arrow" size={16} />
             </a>
           </footer>
         </article>

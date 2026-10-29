@@ -25,6 +25,9 @@ try {
   assert.ok(paths.includes("dist/core/machine/index.js"));
   assert.ok(paths.includes("dist/core/machine/analysis.d.ts"));
   assert.ok(paths.includes("dist/react/machine-view.css"));
+  assert.ok(paths.includes("dist/react/machine-tree-view.css"));
+  assert.ok(paths.includes("dist/react/machine-tree-view.d.ts"));
+  assert.ok(paths.includes("dist/core/machine/tree.d.ts"));
   assert.ok(paths.includes("dist/react/outline-search.css"));
   assert.ok(paths.includes("dist/core/outline-search.d.ts"));
   assert.ok(paths.includes("dist/core/outline-productivity.d.ts"));
@@ -50,8 +53,8 @@ try {
     join(fixture, "without-ark.mjs"),
     `import assert from 'node:assert/strict';
 import {validateOutline} from '@samhagman/fast-ux-kit/core';
-import {Outliner, MachineView, OutlineSearch, searchOutline} from '@samhagman/fast-ux-kit';
-import {createMachineSnapshot, searchMachineDocument, compareMachineInspectionContexts} from '@samhagman/fast-ux-kit/machine';
+import {Outliner, MachineView, MachineTreeView, OutlineSearch, searchOutline} from '@samhagman/fast-ux-kit';
+import {createMachineSnapshot, searchMachineDocument, compareMachineInspectionContexts, buildMachineTree, projectMachineTree} from '@samhagman/fast-ux-kit/machine';
 import {Button} from '@samhagman/fast-ux-kit/aria';
 import {Button as StyledButton, ColorPicker, DatePicker, Select, Primitives} from '@samhagman/fast-ux-kit/components/aria';
 import {createElement} from 'react';
@@ -68,6 +71,9 @@ assert.deepEqual(createMachineSnapshot(machine).activeIds,['idle']);
 assert.equal(searchMachineDocument(machine,'idle')[0]?.elementId,'idle');
 assert.equal(compareMachineInspectionContexts().status,'unavailable');
 assert.match(renderToString(createElement(MachineView,{value:machine,readOnly:true})),/Consumer machine/);
+assert.match(renderToString(createElement(MachineTreeView,{value:machine})),/role="tree"/);
+assert.equal(projectMachineTree(buildMachineTree(machine)).rows.length,2);
+assert.ok(import.meta.resolve('@samhagman/fast-ux-kit/machine-tree.css').endsWith('machine-tree-view.css'));
 try { await import('@samhagman/fast-ux-kit/ark'); throw Error('Ark unexpectedly installed'); }
 catch(error) { assert.equal(error.code,'ERR_MODULE_NOT_FOUND'); }
 console.log('Core, React reader and RAC entry work with Ark absent.');`,
@@ -90,6 +96,8 @@ import {renderToString} from 'react-dom/server';
 import {Outliner, OutlineEditor, OutlineSearch, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, searchOutline, outlineTagInventory, projectOutline, applyOutlineSort, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle, type OutlineItemDetails, type OutlineNoteAdapter, type OutlineNoteKeyContext, MachineView, type MachineDocument, createMachineSnapshot, searchMachineDocument, compareMachineInspectionContexts, type MachineContextDiff} from '@samhagman/fast-ux-kit';
 import {Button, Field, Pagination, ColorPicker, DatePicker, Table, componentManifest} from '@samhagman/fast-ux-kit/components';
 import {Pagination as AdvancedPagination} from '@samhagman/fast-ux-kit/ark';
+import {MachineTreeView, type MachineTreeViewProps} from '@samhagman/fast-ux-kit/react';
+import {buildMachineTree, projectMachineTree, machineTreeRowId, type MachineTreeActiveStates} from '@samhagman/fast-ux-kit/machine';
 const nodes: readonly OutlineNode[] = [{id:'root',text:'Root',children:[{id:'child',text:'Child'}]}];
 const detailed: readonly OutlineNode<OutlineItemDetails>[] = [{id:'b',text:'Beta #review',data:{note:'Reusable note',completed:true,checkbox:false}},{id:'a',text:'Alpha'}];
 if(searchOutline(detailed,'has:note').matchedIds[0]!=='b') throw Error('Search export failed');
@@ -123,6 +131,10 @@ state=reduceOutlineEditor(state,{type:'transaction',commands:[{type:'update',id:
 if(state.nodes[0]?.text!=='Atomic') throw Error('Consumer atomic transaction failed');
 const machine: MachineDocument={version:1,rootId:'main',machines:[{id:'main',label:'Typed machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
 if(createMachineSnapshot(machine).activeIds[0]!=='idle') throw Error('Machine core failed');
+const activity: readonly MachineTreeActiveStates[]=[{machineId:'main',activeIds:['idle']}];
+const treeProps: MachineTreeViewProps={value:machine,activeStates:activity,selectedId:machineTreeRowId('node','main','idle')};
+if(projectMachineTree(buildMachineTree(machine,{activeStates:activity})).rows.length!==2) throw Error('Machine tree core failed');
+if(!renderToString(<MachineTreeView {...treeProps}/>).includes('role="tree"')) throw Error('Machine tree SSR failed');
 if(searchMachineDocument(machine,'idle')[0]?.elementId!=='idle') throw Error('Machine search failed');
 const comparison: MachineContextDiff=compareMachineInspectionContexts();
 if(comparison.status!=='unavailable') throw Error('Machine comparison failed');

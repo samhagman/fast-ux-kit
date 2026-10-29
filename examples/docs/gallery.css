@@ -523,3 +523,17 @@
     flex-basis: 100%;
   }
 }
+
+.gallery-showcase--tree {
+  grid-column: 1 / -1;
+}
+.gallery-tree-preview {
+  block-size: 260px;
+}
+.gallery-tree-preview .fux-machine-tree__header,
+.gallery-tree-preview .fux-machine-tree__footer {
+  display: none;
+}
+.gallery-tree-preview .fux-machine-tree {
+  border: 0;
+}

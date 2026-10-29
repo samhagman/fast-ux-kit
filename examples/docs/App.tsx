@@ -38,6 +38,12 @@ const OutlineSearchLab = lazy(() =>
 const OutlineNoteLab = lazy(() =>
   import("./outline-note-lab.js").then((module) => ({ default: module.OutlineNoteLab })),
 );
+const MachineTreeLab = lazy(() =>
+  import("./machine-tree-lab.js").then((module) => ({ default: module.MachineTreeLab })),
+);
+const MachineTreeGalleryPreview = lazy(() =>
+  import("./machine-tree-lab.js").then((module) => ({ default: module.MachineTreeGalleryPreview })),
+);
 const MachineLab = lazy(() =>
   import("./machine-lab.js").then((module) => ({ default: module.MachineLab })),
 );
@@ -1004,6 +1010,11 @@ export function DocsApp() {
       <ComponentGallery
         initialPosition={galleryPosition.current}
         onPositionChange={rememberGalleryPosition}
+        machineTreePreview={
+          <Suspense fallback={<p role="status">Loading Machine Tree View preview…</p>}>
+            <MachineTreeGalleryPreview />
+          </Suspense>
+        }
         machinePreview={
           <Suspense fallback={<p role="status">Loading Machine View preview…</p>}>
             <MachineGalleryPreview />
@@ -1026,6 +1037,8 @@ export function DocsApp() {
       <OutlineSearchLab />
     ) : active === "outline-note-lab" ? (
       <OutlineNoteLab />
+    ) : active === "machine-tree-view" ? (
+      <MachineTreeLab />
     ) : active === "machine-view" ? (
       <MachineLab />
     ) : experiencePages.some((item) => item.id === active) ? (

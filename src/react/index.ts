@@ -32,6 +32,7 @@ export {
 } from "./useTextHover.js";
 export { HighlightText, type TextHighlight, type HighlightTextProps } from "./HighlightText.js";
 export * from "./machine-view.js";
+export * from "./machine-tree-view.js";
 export {
   OutlineSearch,
   type OutlineSearchProps,

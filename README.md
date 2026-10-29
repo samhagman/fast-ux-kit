@@ -112,6 +112,26 @@ See the [Machine View API and boundaries](docs/MACHINE_VIEW.md), and the hosted
 committed-snapshot inspection. The portable `/machine` entry contains no React or
 DOM code. Importing `/styles.css` already includes the optional Machine View skin.
 
+## Machine Tree View
+
+`MachineTreeView` is a separate read-only hierarchy over the same `MachineDocument`.
+It presents nested states and outgoing transitions in document flow, with
+ancestor-context search, target reveal, keyboard navigation and supplied activity.
+Selection, folding and search never edit or execute a machine.
+
+```tsx
+import { MachineTreeView } from "@samhagman/fast-ux-kit/react";
+import "@samhagman/fast-ux-kit/tokens.css";
+import "@samhagman/fast-ux-kit/machine-tree.css";
+
+<MachineTreeView value={machine} label="Review hierarchy" />;
+```
+
+See [Machine Tree View](docs/MACHINE_TREE_VIEW.md) for controlled row identities,
+bounded portable projection and exact activity semantics. The separate
+`#machine-tree-view` lab and gallery composition use synthetic data. `/styles.css`
+also includes this optional skin.
+
 ## Building other interfaces
 
 ```tsx

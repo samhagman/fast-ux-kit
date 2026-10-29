@@ -1,6 +1,7 @@
 @import "./components.css";
 @import "./react/editor.css";
 @import "./react/machine-view.css";
+@import "./react/machine-tree-view.css";
 @import "./react/outline-search.css";
 /* Optional skin: a continuous document with separate glyph and touch geometry. */
 .fast-ux-outliner {

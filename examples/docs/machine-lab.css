@@ -34,7 +34,8 @@
   font-size: 0.8125rem;
   font-weight: 550;
 }
-.machine-lab select {
+.machine-lab select,
+.machine-tree-lab__example select {
   min-block-size: 44px;
   max-inline-size: 100%;
   border: 1px solid var(--fux-border);
@@ -44,6 +45,24 @@
   color: var(--ink);
   font: inherit;
   font-size: 1rem;
+}
+.machine-tree-lab {
+  min-inline-size: 0;
+}
+.machine-tree-lab__example {
+  display: grid;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 550;
+}
+.machine-tree-lab__section {
+  border-block-start: 1px solid var(--line);
+  margin-block-start: 2rem;
+  padding-block-start: 1.5rem;
+}
+.machine-tree-lab__section pre {
+  max-inline-size: 100%;
+  overflow: auto;
 }
 .machine-lab__check {
   display: flex;
