@@ -1,0 +1,125 @@
+/* Optional local-search reader skin; shared tokens and the reader stylesheet own the document. */
+.fast-ux-outline-search {
+  color: var(--fux-text, inherit);
+  font: inherit;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+.fast-ux-outline-search__controls,
+.fast-ux-outline-search__note-controls,
+.fast-ux-outline-search__result-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fux-space-sm, 0.5rem);
+  min-inline-size: 0;
+}
+.fast-ux-outline-search__field {
+  display: grid;
+  flex: 1 1 14rem;
+  gap: var(--fux-space-xs, 0.25rem);
+  min-inline-size: 0;
+}
+.fast-ux-outline-search__field input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 44px;
+  min-block-size: max(44px, var(--fux-target, 44px));
+  border: 1px solid var(--fux-border, currentColor);
+  border-radius: var(--fux-radius, 0.25rem);
+  padding-inline: var(--fux-space-sm, 0.5rem);
+  color: var(--fux-text, inherit);
+  background: var(--fux-input-surface, transparent);
+  font: inherit;
+  font-size: var(--fux-input-font-size, 1rem);
+}
+.fast-ux-outline-search button {
+  min-inline-size: 44px;
+  min-block-size: max(44px, var(--fux-target, 44px));
+  max-inline-size: 100%;
+  white-space: normal;
+}
+.fast-ux-outline-search :is(input, button):focus-visible {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: var(--fux-focus-offset, 2px);
+}
+.fast-ux-outline-search [aria-pressed="true"] {
+  background: var(--fux-selected, transparent);
+}
+.fast-ux-outline-search__help,
+.fast-ux-outline-search__path,
+.fast-ux-outline-search__context-label,
+.fast-ux-outline-search__note {
+  color: var(--fux-muted, inherit);
+}
+.fast-ux-outline-search__help,
+.fast-ux-outline-search__path {
+  font-size: var(--fux-label-size, 0.8125rem);
+}
+.fast-ux-outline-search__note {
+  margin-block: var(--fux-space-xs, 0.25rem);
+  white-space: pre-wrap;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+.fast-ux-outline-search__results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.fast-ux-outline-search__results > li {
+  padding-block: var(--fux-space-sm, 0.5rem);
+  border-block-end: 1px solid var(--fux-border-subtle, transparent);
+}
+.fast-ux-outline-search__result-content {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.fast-ux-outline-search__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--fux-space-xs, 0.25rem);
+  flex: 0 1 auto;
+  min-inline-size: 44px;
+  max-inline-size: min(45%, 16rem);
+}
+.fast-ux-outline-search__additional-toggle {
+  overflow-wrap: anywhere;
+}
+.fast-ux-outline-search__path {
+  margin-block: 0 var(--fux-space-xs, 0.25rem);
+}
+.fast-ux-outline-search [data-search-kind="match"] mark {
+  color: inherit;
+  background: var(--fux-highlight, transparent);
+}
+.fast-ux-outline-search__task-mark,
+.fast-ux-outline-search__completed {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-inline-end: var(--fux-space-xs, 0.25rem);
+  color: var(--fux-muted, inherit);
+}
+.fast-ux-outline-search__task-mark svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+.fast-ux-outline-search__completed {
+  font-size: var(--fux-label-size, 0.8125rem);
+}
+.fast-ux-outline-search__diagnostics {
+  padding-inline-start: var(--fux-space-xl, 1.25rem);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fast-ux-outline-search *,
+  .fast-ux-outline-search *::before,
+  .fast-ux-outline-search *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

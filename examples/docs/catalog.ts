@@ -37,6 +37,13 @@ export const experiencePages = [
     category: "Outliner",
   },
   {
+    id: "outline-search-lab",
+    name: "Outline search lab",
+    description:
+      "Local context/flat search, notes, tags, independent completion visibility and deliberate atomic sorting.",
+    category: "Outliner",
+  },
+  {
     id: "outline",
     name: "Outline reader",
     description:

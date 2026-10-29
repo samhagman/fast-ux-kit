@@ -29,6 +29,22 @@ This is an independently authored, native React implementation. This document re
 | Dialog composition        | Suggestions and interactive hover remain inside the shared modal scope; popup Escape does not close the parent; hover links receive focus                        | `editor-react.test.tsx`                                                       |
 | SSR                       | Deterministic reader IDs/hydration, independent instances, editor server rendering, rich source handling                                                         | `react.test.tsx`, `editor-react.test.tsx`, `rich.test.tsx`                    |
 
+### Local search and productivity
+
+| Area                        | Implemented contract                                                                                                                           | Evidence                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Metadata and views          | Safe own-data notes/flags/dates, completion separate from checkbox presence, tag inventory, canonical projection, explicit date-entry cap      | `outline-productivity.test.ts`                            |
+| Atomic sorting              | Exact sibling permutation, selected slots, stable ties, malformed/sparse/custom-array refusal, displaced subtree locks, one undo step          | `outline-reorder.test.ts`, `outline-productivity.test.ts` |
+| Bounded local search        | Literal query grammar, metadata/ancestor predicates, UTF-16 ranges, explicit unsupported operators and partial results, linear ancestor checks | `outline-search.test.ts`                                  |
+| Search reader               | Context/flat modes, query-local extra child context, independent folds, canonical renderer identities, note/completion views, owned keys, SSR  | `outline-search-react.test.tsx`                           |
+| Productive host composition | Read-first local lab, explicit editing, atomic Save, retained host metadata, dirty-draft protection, sorting/history/locks and repeated resets | `outline-search-lab.test.tsx`                             |
+
+The optional local search surface has executable DOM/SSR coverage, not completed
+browser-layout, physical-device, IME or assistive-technology acceptance. It does
+not supply relative-date parsing, flat-result sorting, workspace persistence,
+remote search or collaboration. See [search contracts](OUTLINE_SEARCH.md) and
+[portable productivity tools](OUTLINE_PRODUCTIVITY.md) for exact boundaries.
+
 The checked-in `editor-invariants.test.ts` now exercises 5,600 deterministic mixed transitions per run, including scope changes, history, task edits, paste and structure changes. It verifies immutable prior roots, valid trees, visible caret/selection targets and unchanged content under the default reader gate.
 
 The prior independent reviewer additionally exercised 9,000 deterministic randomized editor transitions: previous roots remained unchanged, all resulting outlines validated, IDs remained unique, and replaying content intents in default reader mode retained the exact authoritative roots. This is invariant evidence, not proof of every user-visible transition.

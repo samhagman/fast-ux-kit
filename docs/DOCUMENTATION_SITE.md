@@ -123,3 +123,20 @@ and scenario changes restore reading mode. The closed guide remains available
 below the document; diagnostics, import/export and manual checks remain separate
 from the reading surface. The shared library skin, not a lab-only renderer, owns
 outline typography, row controls, indentation, hierarchy and interaction states.
+
+## Local outline search lab
+
+`#outline-search-lab` is an additional lazy route, not a replacement for the
+reader, structural editor, Machine View or component gallery. It composes the
+public local search and productivity APIs over an original synthetic outline.
+Context and flat results, explicit extra-child context, note display and
+completion visibility are view state only. Tag buttons seed a query. Reveal
+navigates to the canonical selected item, never a pruned replacement document.
+
+Editing starts disabled. The separate details form preserves unknown host data
+and saves title/note/completion/checkbox changes as one authorized transaction.
+Dirty drafts must be saved or discarded before switching items or using history.
+Root sorting demonstrates stable order, undo and refusal when a protected row
+would be displaced. Reset starts a fresh local trial. There is no browser storage,
+network persistence, global index or service success claim. Its DOM/SSR checks
+are separate from pending browser/device acceptance.
