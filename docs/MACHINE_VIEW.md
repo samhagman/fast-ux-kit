@@ -56,6 +56,12 @@ Hide details expands the canvas without clearing selection or changing the machi
 
 Canvas nodes and transitions have labeled buttons. The expandable state list provides structural navigation without dragging. State positions, parents and transition endpoints can be changed through labeled inspector controls. Replay supports Arrow keys, Home, End and Escape; returning to latest restores the unchanged live snapshot and replay trigger focus.
 
+### Find across graphs
+
+The **Find** inspector panel searches state and transition IDs, display names/events, descriptions, tags and named actions/guards across every graph. The state list's existing search remains local to the current graph. Choose a result to open its graph, select the original element and focus it at a readable scale. Enter chooses the first result; Escape closes Find and restores its tab trigger. Finding never edits a document or dispatches an event. In Simulate mode, opening a different graph clears the current local simulation and replay, as ordinary graph navigation does; the Find panel warns before that action. Host observations are unchanged. The UI caps results at 50; refine a broad query. Observation payloads and context are not part of topology search.
+
+`searchMachineDocument(document, query, { maxResults })` is also available from the portable machine entry. Results retain `machineId`, `elementId`, `kind` and `label`; an empty query returns no results. The result count is bounded (100 by default, maximum 1,000), not the full document scan. Pass a validated, bounded document.
+
 ## Local simulation contract
 
 Portable helpers are exported from `@samhagman/fast-ux-kit/machine` (also available from the core entry):
@@ -108,6 +114,18 @@ Only label data `committed` when the producer has established that fact. The com
 Topology-only inspection is the default. `showDiagnostics` is an explicit opt-in for context/metadata and optional pending timers, effects, human tasks and actor messages. Redact before passing data to React; hiding a panel is not a secrecy boundary, because supplied data is still in browser memory. Bound values and labels. Do not pass credentials, tokens, private provider receipts or unrelated personal data.
 
 Pending effects may have `unknown` outcomes. Unknown is not equivalent to failed and is not permission to retry. Task labels are not approval forms and display is not authorization to answer. A due time is supplied observation data, not a running scheduler.
+
+### Recorded event detail and context comparison
+
+The observation timeline can be filtered by event type, frame ID or status. Filtering changes only the visible list: a selected historical observation remains pinned even when outside the filter. Replay controls still navigate **all retained observations**, not just matches. Appending data never silently moves a pinned selection. Clear the filter or return to latest deliberately; an evicted observation stays unavailable.
+
+With diagnostics enabled, Runtime shows the selected observation's supplied event payload and context. An omitted value is **unavailable**, not an empty object. Context comparison uses the previous retained observation for the same actor and machine; it shows both frame IDs and never reconstructs old values from a later snapshot or reruns callbacks. Frame differences do not prove which event caused a change. Source sequences can be nonconsecutive because another actor intervened or data is missing; a session gap remains explicit.
+
+The portable helper `compareMachineInspectionContexts(before, after, options)` returns `status`, `entries`, `truncated`, `warnings` and `continuity`. Each entry has an RFC 6901 JSON Pointer `path`, an added/removed/changed/unsupported `kind`, and bounded textual before/after previews. Missing context or mismatched actor/machine returns unavailable. Null is distinct from absent. The helper does not cross sessions: hosts must validate session/instance identity and start a new keyed view when a session changes.
+
+Defaults cap comparison depth at 8, inspected values across both contexts at 2,000, entries at 100 and combined path/value-preview characters at 16,000. Options may lower these limits or raise them to hard caps of depth 32, 10,000 inspected values, 1,000 entries and 100,000 output characters. Truncated or unsupported input never proves equality. Plain records/arrays and finite JSON primitives are supported; getters and functions are not invoked, and cycles/exotic values are marked unsupported. JavaScript own-key enumeration itself may allocate a full key list before bounded processing. Executable proxies are not a supported input or a sandbox boundary: normalize to ordinary bounded data in the host first.
+
+A useful debugging loop is to load the synthetic committed sample, enable diagnostic payloads, append an observation, and compare the coordinator's approval/attempt values. Switch to the child actor to see explicit missing context instead of fabricated history. Filter the timeline while a historical frame is selected, then append again: the selected evidence remains unchanged.
 
 ### Explicit dispatch
 
