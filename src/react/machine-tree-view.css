@@ -189,6 +189,21 @@
 .fux-machine-tree__kind-mark {
   color: var(--fux-muted, #777);
 }
+.fux-machine-tree__initial,
+.fux-machine-tree__reference-mark {
+  display: inline-flex;
+  flex: 0 0 14px;
+}
+.fux-machine-tree__row[data-kind="final"] > .fux-machine-tree__state-box {
+  outline: 1px solid var(--tree-line);
+  outline-offset: -5px;
+}
+.fux-machine-tree__row[data-kind="final"][data-active] > .fux-machine-tree__state-box {
+  outline-color: var(--fux-accent, #32604b);
+}
+.fux-machine-tree__row[data-kind="final"][data-selected] > .fux-machine-tree__state-box {
+  outline-color: var(--fux-focus, #245db0);
+}
 .fux-machine-tree__children {
   display: flex;
   flex-wrap: wrap;
@@ -216,7 +231,8 @@
 .fux-machine-tree__row[data-kind="machine"]
   > .fux-machine-tree__state-box
   > .fux-machine-tree__row-face {
-  padding: 0 44px 0 0;
+  padding: 0;
+  padding-inline-end: 44px;
   min-block-size: 32px;
   margin-block-end: 16px;
 }
@@ -500,6 +516,11 @@
   white-space: nowrap;
 }
 [dir="rtl"] .fux-machine-tree__disclosure span {
+  transform: scaleX(-1);
+}
+[dir="rtl"] .fux-machine-tree__initial svg,
+[dir="rtl"] .fux-machine-tree__arrow,
+[dir="rtl"] .fux-machine-tree__reference-mark {
   transform: scaleX(-1);
 }
 @container machine-tree (min-width: 48rem) {

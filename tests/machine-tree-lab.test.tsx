@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import { browserErrors } from "./components-dom.js";
-import { StrictMode } from "react";
+import { act, StrictMode } from "react";
 const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
 const { MachineTreeLab, MachineTreeGalleryPreview } =
   await import("../examples/docs/machine-tree-lab.js");
@@ -43,7 +43,9 @@ test("tree lab starts idle and can refuse selection without dispatch", () => {
 
 test("tree lab events are explicit, guarded and reset on example replacement", () => {
   const view = render(<MachineTreeLab />);
+  fireEvent.click(view.getByRole("button", { name: "Toggle workspace panel" }));
   fireEvent.click(view.getByRole("button", { name: "Begin local simulation" }));
+  fireEvent.click(view.getByText("Simulation controls and boundaries"));
   const runtime = view.getByRole("status", { name: "Tree lab runtime state" });
   const finish = view.getByRole("button", { name: "Send FINISH" }) as HTMLButtonElement;
   assert.equal(finish.disabled, true);
@@ -92,7 +94,8 @@ test("focused workspace starts with tools closed and panels can dismiss with foc
   assert.equal(view.queryByRole("complementary", { name: "Workspace panel" }), null);
   const toggle = view.getByRole("button", { name: "Toggle workspace panel" });
   fireEvent.click(toggle);
-  assert.ok(view.getByRole("tab", { name: "Details" }));
+  assert.equal(view.getByRole("tab", { name: "Code" }).getAttribute("aria-selected"), "true");
+  fireEvent.click(view.getByRole("tab", { name: "Details" }));
   fireEvent.keyDown(view.getByRole("tab", { name: "Details" }), { key: "Escape" });
   assert.equal(view.queryByRole("complementary", { name: "Workspace panel" }), null);
   assert.equal(document.activeElement, toggle);
@@ -103,11 +106,18 @@ test("focused workspace starts with tools closed and panels can dismiss with foc
 test("inline event controls are opt-in and do not dispatch through target navigation", () => {
   const view = render(<MachineTreeLab />);
   assert.equal(view.queryByRole("button", { name: /Send event CONNECTED from/ }), null);
+  fireEvent.click(view.getByRole("button", { name: "Toggle workspace panel" }));
   fireEvent.click(view.getByRole("button", { name: "Begin local simulation" }));
   assert.equal(view.getByRole("tab", { name: "Simulation" }).getAttribute("aria-selected"), "true");
   const runtime = view.getByRole("status", { name: "Tree lab runtime state" });
-  fireEvent.click(view.getByRole("button", { name: /Send event CONNECTED from/ }));
+  const route = view.getByRole("treeitem", { name: "Transition: CONNECTED" });
+  const eventButton = view.getByRole("button", { name: /Send event CONNECTED from/ });
+  act(() => eventButton.focus());
+  fireEvent.click(eventButton);
   assert.match(runtime.textContent!, /sequence 1/);
+  assert.equal(document.activeElement, route);
+  assert.equal(route.tabIndex, 0);
+  assert.equal((eventButton as HTMLButtonElement).disabled, true);
   const before = runtime.textContent;
   fireEvent.click(view.getByRole("button", { name: "Reveal target Connected" }));
   assert.equal(runtime.textContent, before);
@@ -117,6 +127,7 @@ test("details preserve containment path, declared initial metadata and hidden se
   const view = render(<MachineTreeLab />);
   fireEvent.click(view.getByRole("treeitem", { name: "Compound: Connection" }));
   fireEvent.click(view.getByRole("button", { name: "Toggle workspace panel" }));
+  fireEvent.click(view.getByRole("tab", { name: "Details" }));
   const path = view.getByRole("list", { name: "Selected item tree path" });
   assert.match(path.textContent!, /Parallel launch readiness launch/);
   assert.match(path.textContent!, /Connection launch-connection/);
@@ -166,4 +177,62 @@ test("details detect filtered transitions and reveal restores the required filte
     (view.getByRole("checkbox", { name: "Transitions" }) as HTMLInputElement).checked,
     true,
   );
+});
+
+test("simulation panel follows the starting pane state and stop returns an open pane to code", () => {
+  const view = render(<MachineTreeLab />);
+  const panel = () => view.queryByRole("complementary", { name: "Workspace panel" });
+  fireEvent.click(view.getByRole("button", { name: "Begin local simulation" }));
+  assert.equal(panel(), null);
+  assert.ok(view.getByRole("button", { name: "Restart local simulation" }));
+  fireEvent.click(view.getByRole("button", { name: "Restart local simulation" }));
+  assert.equal(panel(), null);
+  fireEvent.click(view.getByRole("button", { name: "Toggle workspace panel" }));
+  assert.equal(view.getByRole("tab", { name: "Code" }).getAttribute("aria-selected"), "true");
+  assert.ok(view.getByLabelText("Read-only machine document"));
+  assert.equal(view.queryByRole("textbox"), null);
+  fireEvent.click(view.getByRole("tab", { name: "Simulation" }));
+  fireEvent.click(view.getByRole("button", { name: "Stop local simulation" }));
+  assert.equal(view.getByRole("tab", { name: "Code" }).getAttribute("aria-selected"), "true");
+  fireEvent.click(view.getByRole("button", { name: "Begin local simulation" }));
+  assert.equal(view.getByRole("tab", { name: "Simulation" }).getAttribute("aria-selected"), "true");
+  fireEvent.click(view.getByRole("button", { name: "Toggle workspace panel" }));
+  fireEvent.click(view.getByRole("button", { name: "Stop local simulation" }));
+  assert.equal(panel(), null);
+  assert.equal(view.queryByRole("button", { name: "Restart local simulation" }), null);
+});
+
+test("event cards retain each context outcome and reset without view operations dispatching", () => {
+  const view = render(<MachineTreeLab />);
+  fireEvent.click(view.getByRole("button", { name: "Toggle workspace panel" }));
+  fireEvent.click(view.getByRole("button", { name: "Begin local simulation" }));
+  const history = () => view.getByRole("list", { name: "Local event history" });
+  assert.equal(within(history()).getAllByRole("listitem").length, 1);
+  fireEvent.click(view.getByRole("button", { name: /Send event CONNECTED from/ }));
+  fireEvent.click(view.getByRole("button", { name: /Send event CONFIGURED from/ }));
+  assert.equal(within(history()).getAllByRole("listitem").length, 3);
+  assert.equal(view.getByLabelText("Context after Initial state").textContent, "{}");
+  assert.deepEqual(JSON.parse(view.getByLabelText("Context after CONNECTED").textContent!), {
+    connected: true,
+  });
+  assert.deepEqual(JSON.parse(view.getByLabelText("Context after CONFIGURED").textContent!), {
+    connected: true,
+    configured: true,
+  });
+  const current = view.getByLabelText("Current simulation context").textContent;
+  fireEvent.click(view.getByRole("button", { name: "Reveal target Connected" }));
+  assert.equal(within(history()).getAllByRole("listitem").length, 3);
+  assert.equal(view.getByLabelText("Current simulation context").textContent, current);
+  fireEvent.click(view.getByRole("button", { name: "Restart local simulation" }));
+  assert.equal(within(history()).getAllByRole("listitem").length, 1);
+  assert.equal(view.getByLabelText("Current simulation context").textContent, "{}");
+  fireEvent.click(view.getByRole("button", { name: "Stop local simulation" }));
+  fireEvent.click(view.getByRole("tab", { name: "Simulation" }));
+  assert.equal(view.queryByRole("list", { name: "Local event history" }), null);
+  fireEvent.click(view.getByRole("button", { name: "Begin local simulation" }));
+  fireEvent.click(view.getByRole("button", { name: "Examples" }));
+  fireEvent.change(view.getByRole("combobox", { name: "Choose a machine tree example" }), {
+    target: { value: "support" },
+  });
+  assert.equal(view.queryByRole("list", { name: "Local event history" }), null);
 });

@@ -242,7 +242,7 @@
   flex-direction: column;
   block-size: 100dvh;
   min-block-size: 300px;
-  overflow: hidden;
+  overflow: clip;
   background: var(--tree-workspace-paper);
   color: var(--tree-workspace-ink);
   font-family: Arial, Helvetica, sans-serif;
@@ -525,6 +525,91 @@
   font-size: 12px;
 }
 .machine-tree-lab__path code {
+  font-size: 11px;
+  color: var(--fux-muted);
+}
+
+.machine-tree-lab .machine-tree-lab__simulation {
+  padding: 0;
+  font-size: 12px;
+}
+.machine-tree-lab .machine-tree-lab__simulation > h2 {
+  margin: 0;
+  padding: 14px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  border-block-end: 1px solid var(--tree-workspace-line);
+}
+.machine-tree-lab__current {
+  padding: 12px;
+}
+.machine-tree-lab .machine-tree-lab__section-label,
+.machine-tree-lab .machine-tree-lab__field-label {
+  margin: 0 0 8px;
+  color: var(--fux-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.machine-tree-lab__section-label {
+  display: flex;
+  justify-content: space-between;
+}
+.machine-tree-lab__section-label span {
+  text-transform: none;
+}
+.machine-tree-lab__current pre {
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--tree-workspace-line);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.machine-tree-lab__history {
+  list-style: none;
+  padding: 0 12px;
+  margin: 0;
+}
+.machine-tree-lab__history > li {
+  border: 1px solid var(--tree-workspace-line);
+  border-radius: 8px;
+  padding: 10px;
+  margin-block-end: 10px;
+  min-inline-size: 0;
+}
+.machine-tree-lab__history header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.machine-tree-lab__history strong {
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.machine-tree-lab__history header span,
+.machine-tree-lab__history p {
+  color: var(--fux-muted);
+  font-size: 11px;
+}
+.machine-tree-lab__history code {
+  overflow-wrap: anywhere;
+}
+.machine-tree-lab__history p {
+  margin: 6px 0 0;
+}
+.machine-tree-lab__simulation-tools {
+  margin: 12px;
+  border-block-start: 1px solid var(--tree-workspace-line);
+}
+.machine-tree-lab .machine-tree-lab__code {
+  padding: 12px;
+}
+.machine-tree-lab .machine-tree-lab__code h2 {
+  font-size: 12px;
+  font-weight: 400;
+  margin-block-end: 8px;
+}
+.machine-tree-lab__code > p {
   font-size: 11px;
   color: var(--fux-muted);
 }

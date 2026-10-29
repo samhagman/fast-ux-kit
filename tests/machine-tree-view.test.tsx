@@ -575,3 +575,16 @@ test("controlled kind filters stay proposals and cannot bypass a refused reveal"
   assert.ok(view.getByRole("treeitem", { name: "Transition: SUBMIT" }));
   assert.ok(view.getByRole("treeitem", { name: "Note: Keep a record" }));
 });
+
+test("declared initial markers render as decorative vectors without changing tree names", () => {
+  const view = render(<MachineTreeView value={doc} dir="rtl" />);
+  const draft = view.getByRole("treeitem", { name: "State: Draft" });
+  const marker = draft.querySelector(".fux-machine-tree__initial");
+  assert.equal(marker?.getAttribute("aria-hidden"), "true");
+  assert.equal(marker?.querySelector("svg")?.getAttribute("viewBox"), "0 0 14 14");
+  assert.ok(marker?.querySelector("path"));
+  assert.equal(
+    view.getByRole("treeitem", { name: "Final: Done" }).getAttribute("data-kind"),
+    "final",
+  );
+});

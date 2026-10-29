@@ -14,7 +14,6 @@ import {
   type MachineTreeActiveStates,
 } from "../../src/core/machine/index.js";
 import { machineLabCases } from "./machine-lab-data.js";
-import { Code } from "./ui.js";
 
 const cases = [machineLabCases[1]!, machineLabCases[3]!, machineLabCases[0]!, machineLabCases[2]!];
 const supplied: Readonly<Record<string, readonly MachineTreeActiveStates[]>> = {
@@ -23,15 +22,20 @@ const supplied: Readonly<Record<string, readonly MachineTreeActiveStates[]>> = {
   release: [{ machineId: "release", activeIds: ["release-review"] }],
   incident: [{ machineId: "incident", activeIds: ["incident-review"] }],
 };
-const exampleCode = `<MachineTreeView
-  value={document}
-  selectedId={selectedId}
-  onSelectionChange={setSelectedId}
-  activeStates={observedStates}
-  showToolbar={false}
-  showInspector={false}
-/>
-// View operations do not dispatch events.`;
+interface LocalHistoryEntry {
+  readonly event: string;
+  readonly sequence: number;
+  readonly state: string;
+  readonly context: string;
+}
+function captureLocalStep(snapshot: MachineSnapshot, event: string): LocalHistoryEntry {
+  return {
+    event,
+    sequence: snapshot.sequence,
+    state: JSON.stringify(snapshot.activeIds),
+    context: JSON.stringify(snapshot.context, null, 2),
+  };
+}
 
 /** A focused host workspace; execution remains an explicit trusted local example. */
 export function MachineTreeLab({
@@ -56,6 +60,7 @@ export function MachineTreeLab({
   const [acceptSelection, setAcceptSelection] = useState(true);
   const [showSupplied, setShowSupplied] = useState(false);
   const [snapshot, setSnapshot] = useState<MachineSnapshot | null>(null);
+  const [history, setHistory] = useState<readonly LocalHistoryEntry[]>([]);
   const [viewMessage, setViewMessage] = useState("No selection requests yet.");
   const [panel, setPanel] = useState<string | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -125,6 +130,7 @@ export function MachineTreeLab({
         .map((row) => row.id),
     );
     setSnapshot(null);
+    setHistory([]);
     setSelectedId(null);
     setAcceptSelection(true);
     setShowSupplied(false);
@@ -132,13 +138,26 @@ export function MachineTreeLab({
     setGeneration((value) => value + 1);
   }
   function begin() {
-    setSnapshot(
-      createMachineSnapshot(current.document, current.document.rootId, {}, current.options),
+    const next = createMachineSnapshot(
+      current.document,
+      current.document.rootId,
+      {},
+      current.options,
     );
-    setPanel("simulation");
+    setSnapshot(next);
+    setHistory([captureLocalStep(next, "Initial state")]);
+    setPanel((currentPanel) => (currentPanel === null ? null : "simulation"));
+  }
+  function stop() {
+    setSnapshot(null);
+    setHistory([]);
+    setPanel((currentPanel) => (currentPanel === null ? null : "integration"));
   }
   function send(event: MachineEvent) {
-    if (snapshot) setSnapshot(sendMachineEvent(current.document, snapshot, event, current.options));
+    if (!snapshot) return;
+    const next = sendMachineEvent(current.document, snapshot, event, current.options);
+    setSnapshot(next);
+    setHistory((entries) => [...entries, captureLocalStep(next, event.type)].slice(-100));
   }
   function closePanel() {
     setPanel(null);
@@ -262,8 +281,14 @@ export function MachineTreeLab({
                   className="machine-tree-lab__route-event"
                   aria-label={`Send event ${transition.event || row.label} from ${transition.sourceId}`}
                   isDisabled={!event}
-                  onPress={() => {
-                    if (event) send(event);
+                  onPress={(press) => {
+                    if (!event) return;
+                    // Sending may disable this control. Keep focus on its owning
+                    // treeitem; the existing tree onFocus updates the roving stop.
+                    press.target
+                      .closest<HTMLElement>('[role="treeitem"]')
+                      ?.focus({ preventScroll: true });
+                    send(event);
                   }}
                 >
                   {row.label}
@@ -285,9 +310,9 @@ export function MachineTreeLab({
             <Tabs selectedKey={panel} onSelectionChange={(key) => setPanel(String(key))}>
               <div className="machine-tree-lab__panel-header">
                 <TabList aria-label="Workspace panels">
-                  <Tab id="details">Details</Tab>
+                  <Tab id="integration">Code</Tab>
                   <Tab id="simulation">Simulation</Tab>
-                  <Tab id="integration">Integration</Tab>
+                  <Tab id="details">Details</Tab>
                   <Tab id="help">Help</Tab>
                 </TabList>
                 <AriaButton
@@ -379,19 +404,53 @@ export function MachineTreeLab({
                   </p>
                 )}
               </TabPanel>
-              <TabPanel id="simulation">
-                <h2>Local simulation</h2>
-                <p>Run the trusted example locally. No services, timers or backend are started.</p>
-                <div className="machine-tree-lab__panel-actions">
-                  <Button onPress={begin}>
-                    {snapshot ? "Restart local simulation" : "Begin local simulation"}
-                  </Button>
-                  <Button variant="quiet" isDisabled={!snapshot} onPress={() => setSnapshot(null)}>
-                    Stop local simulation
-                  </Button>
-                </div>
-                {snapshot && (
+              <TabPanel id="simulation" className="machine-tree-lab__simulation">
+                <h2>Simulation</h2>
+                {snapshot ? (
                   <>
+                    <div className="machine-tree-lab__current">
+                      <p className="machine-tree-lab__section-label">
+                        State / context <span>current</span>
+                      </p>
+                      <p className="machine-tree-lab__field-label">State</p>
+                      <pre aria-label="Current simulation state">
+                        {JSON.stringify(snapshot.activeIds)}
+                      </pre>
+                      <p className="machine-tree-lab__field-label">Context</p>
+                      <pre aria-label="Current simulation context">
+                        {JSON.stringify(snapshot.context, null, 2)}
+                      </pre>
+                    </div>
+                    <ol className="machine-tree-lab__history" aria-label="Local event history">
+                      {history.map((step, index) => (
+                        <li key={`${index}-${step.sequence}`}>
+                          <header>
+                            <strong>{step.event}</strong>
+                            <span>step {step.sequence}</span>
+                          </header>
+                          <p>
+                            State: <code>{step.state}</code>
+                          </p>
+                          <details>
+                            <summary>Context after event</summary>
+                            <pre aria-label={`Context after ${step.event}`}>{step.context}</pre>
+                          </details>
+                        </li>
+                      ))}
+                    </ol>
+                    {snapshot.error && <p role="alert">{snapshot.error}</p>}
+                  </>
+                ) : (
+                  <p>No local simulation running.</p>
+                )}
+                <details className="machine-tree-lab__simulation-tools">
+                  <summary>Simulation controls and boundaries</summary>
+                  <p>
+                    Trusted local examples only. No services, timers or backend are started. History
+                    retains the latest 100 event outcomes; automatic steps within an event are not
+                    separate context snapshots.
+                  </p>
+                  {snapshot && (
                     <div
                       className="machine-tree-lab__events"
                       role="group"
@@ -416,39 +475,18 @@ export function MachineTreeLab({
                         </Button>
                       ))}
                     </div>
-                    <details>
-                      <summary>Local context and event history</summary>
-                      <pre>
-                        {JSON.stringify(
-                          {
-                            context: snapshot.context,
-                            activeIds: snapshot.activeIds,
-                            events: snapshot.trace.map((step) => ({
-                              sequence: step.sequence,
-                              event: step.event,
-                              activeIds: step.activeIds,
-                            })),
-                          },
-                          null,
-                          2,
-                        )}
-                      </pre>
-                    </details>
-                    {snapshot.error && <p role="alert">{snapshot.error}</p>}
-                  </>
-                )}
+                  )}
+                </details>
               </TabPanel>
-              <TabPanel id="integration">
-                <h2>One document, independent views</h2>
+              <TabPanel id="integration" className="machine-tree-lab__code">
+                <h2>Document · read only</h2>
                 <p>
-                  Use the reusable read-only component with your own document and supplied activity.
-                  Controlled callbacks propose changes; the host decides whether to accept them.
+                  Inert topology data. This view is not an editor and does not execute imported
+                  code.
                 </p>
-                <Code>{exampleCode}</Code>
-                <p>
-                  Selection, search and folding never execute guards, actions or events. Imported
-                  data is text, not executable code.
-                </p>
+                <pre aria-label="Read-only machine document">
+                  <code>{JSON.stringify(current.document, null, 2)}</code>
+                </pre>
               </TabPanel>
               <TabPanel id="help">
                 <h2>Explore the hierarchy</h2>
@@ -492,10 +530,19 @@ export function MachineTreeLab({
         )}
       </div>
       <footer className="machine-tree-lab__bottom-bar">
+        {snapshot && (
+          <AriaButton
+            className="machine-tree-lab__icon-button"
+            aria-label="Restart local simulation"
+            onPress={begin}
+          >
+            <span aria-hidden="true">↶</span>
+          </AriaButton>
+        )}
         <AriaButton
           className="machine-tree-lab__icon-button machine-tree-lab__play"
           aria-label={snapshot ? "Stop local simulation" : "Begin local simulation"}
-          onPress={() => (snapshot ? setSnapshot(null) : begin())}
+          onPress={snapshot ? stop : begin}
         >
           <span aria-hidden="true">{snapshot ? "■" : "▷"}</span>
         </AriaButton>
@@ -524,7 +571,7 @@ export function MachineTreeLab({
           className="machine-tree-lab__icon-button machine-tree-lab__panel-toggle"
           aria-label="Toggle workspace panel"
           aria-expanded={panel !== null}
-          onPress={() => setPanel(panel ? null : "details")}
+          onPress={() => setPanel(panel ? null : "integration")}
         >
           <span aria-hidden="true">‹›</span>
         </AriaButton>

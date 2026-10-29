@@ -72,14 +72,28 @@ const kinds: Record<string, string> = {
   note: "Note",
   transition: "Transition",
 };
-const marks: Record<string, string> = {
+function ReferenceMark() {
+  return (
+    <svg
+      className="fux-machine-tree__reference-mark"
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M3 11 11 3M4 3h7v7" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+const marks: Record<string, ReactNode> = {
   machine: "◇",
   atomic: "○",
   compound: "▣",
   parallel: "∥",
   initial: "●",
   final: "◎",
-  submachine: "↗",
+  submachine: <ReferenceMark />,
   note: "≡",
   transition: "↳",
 };
@@ -381,7 +395,14 @@ export function MachineTreeView({
           <div className="fux-machine-tree__row-face">
             {row.initial && (
               <span className="fux-machine-tree__initial" aria-hidden="true">
-                ↳
+                <svg width="14" height="14" viewBox="0 0 14 14" focusable="false">
+                  <path
+                    d="M3 2v6h8M8 5l3 3-3 3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                  />
+                </svg>
               </span>
             )}
             {!["machine", "atomic", "compound", "transition"].includes(rowKind(row)) && (
@@ -426,7 +447,7 @@ export function MachineTreeView({
                 aria-label={`Reveal reference ${destination.label}`}
                 onPress={() => reveal(destination)}
               >
-                ↗ {destination.label}
+                <ReferenceMark /> {destination.label}
               </Button>
             )}
             <span id={`${uid}-meta-${encodeURIComponent(row.id)}`} className="fux-machine-tree__sr">
