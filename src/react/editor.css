@@ -458,7 +458,7 @@
 }
 .fast-ux-editor__edit-actions {
   position: sticky;
-  inset-block-start: 0;
+  inset-block-start: var(--fux-outline-sticky-offset, 0px);
   z-index: 3;
 }
 .fast-ux-editor__done {
@@ -466,5 +466,5 @@
   border-color: var(--fux-accent, currentColor);
 }
 .fast-ux-editor__input[data-browse-input] {
-  scroll-margin-block-start: 7rem;
+  scroll-margin-block-start: calc(7rem + var(--fux-outline-sticky-offset, 0px));
 }

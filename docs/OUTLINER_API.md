@@ -336,6 +336,9 @@ expose root insertion; those rows remain protected and normal insertion policy
 still applies. Done on an empty session restores the reader region.
 
 The editing action bar provides **Done**, Undo and Redo, including at narrow widths.
+Hosts with sticky chrome can set `--fux-outline-sticky-offset` on the editor or its
+container (default `0px`). The bar and owned title scroll margins use this inset;
+the documentation shell sets `56px` so its header cannot cover Done after scrolling.
 Done or an unowned Escape (including on the session controls) returns to reading
 and restores a surviving row owned by that reader, not a nested embedded outline;
 accepted title/note changes and history remain. Updates are immediate canonical

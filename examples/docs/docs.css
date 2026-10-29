@@ -1176,6 +1176,9 @@ main {
 .playground-controls .fux-checkbox {
   font-size: 12px;
 }
+.page-content {
+  --fux-outline-sticky-offset: 56px;
+}
 .outline-playground .fast-ux-outliner {
   font-size: 16px;
 }

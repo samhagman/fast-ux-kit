@@ -402,6 +402,13 @@ test("browse scroll offsets stay off embedded direct editor inputs", async () =>
     false,
   );
   assert.match(css, /\.fast-ux-editor__input\[data-browse-input\]\s*\{/);
+  assert.match(css, /inset-block-start: var\(--fux-outline-sticky-offset, 0px\)/);
+  assert.match(
+    css,
+    /scroll-margin-block-start: calc\(7rem \+ var\(--fux-outline-sticky-offset, 0px\)\)/,
+  );
+  const docsCss = readFileSync(new URL("../examples/docs/docs.css", import.meta.url), "utf8");
+  assert.match(docsCss, /\.page-content\s*\{\s*--fux-outline-sticky-offset: 56px/);
   assert.doesNotMatch(css, /:has\(\.fast-ux-editor__edit-actions\)/);
 });
 
