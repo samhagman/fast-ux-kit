@@ -130,10 +130,14 @@ fixture described below; no deployment was used to substitute for local QA.
   covers the complete document while retaining the owner's cutout coordinates:
   native page-bottom coverage, target alignment, zoom-driven growth/shrink and
   closed teardown passed. Starting at 393 × 248 CSS px and completing the sequence
-  also passed. Changing zoom while a targeted step is already open may temporarily
-  move its tethered card outside the viewport; normal Tab navigation scrolls the
-  focused control back into view. This owner placement limitation is not hidden by
-  a second geometry or focus manager.
+  also passed. The docs demo now retains its already-focused control after a
+  viewport resize with at most two native scroll checks, without moving focus or
+  replacing owner geometry. Changing native zoom from 100% to 300% while a
+  targeted step was open kept Next wholly visible at 393 × 252 CSS px without
+  pressing Tab; finish, opener return, restart and dismissal passed. Six focused
+  regressions cover the bounded checks, visibility, outside focus, resize bursts,
+  cleanup and detached content. This demo mitigation is not a general replacement
+  for the owner's placement behavior across untested devices.
 
 For repeatable manual focus checks, run `node scripts/build-focus-navigation.mjs`
 after `npm run docs:build`, then open `/focus-navigation.html` through the same

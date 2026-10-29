@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNod
 import * as K from "../../../src/components/ark-advanced.js";
 import type { ComponentDemo } from "./aria-demos.js";
 import { Symbol } from "../ui.js";
+import { retainTourControlInViewport } from "./tour-viewport.js";
 const button = "fux-control";
 const demo = (
   name: string,
@@ -321,6 +322,10 @@ function TourDemo() {
     onStatusChange: (details) => setStatus(details.status),
     steps,
   });
+  useEffect(() => {
+    if (!tour.open || tour.step?.type !== "tooltip" || !content.current) return;
+    return retainTourControlInViewport(content.current);
+  }, [tour.open, tour.step?.id, tour.step?.type]);
   useEffect(() => {
     if (tour.open || !restoreOpener.current) return;
     restoreOpener.current = false;
