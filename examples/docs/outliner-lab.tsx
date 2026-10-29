@@ -144,6 +144,7 @@ function reviewAction(
 export function OutlinerLab() {
   const [scenarioId, setScenarioId] = useState("read");
   const [generation, setGeneration] = useState(0);
+  const [editing, setEditing] = useState(false);
   const scenario = labScenarios.find((item) => item.id === scenarioId)!;
   const selectorId = useId();
   return (
@@ -151,15 +152,18 @@ export function OutlinerLab() {
       <PageHeading
         category="Outliner"
         title="Outliner lab"
-        description="Read it. Change it deliberately. See what actually happened. A hands-on, resettable workspace for the public React outliner—not a simulated editor."
+        description="A real, resettable outliner. Read first; edit deliberately."
       />
       <div className="lab-scenario-bar">
-        <label htmlFor={selectorId}>
+        <label className="lab-scenario-picker" htmlFor={selectorId}>
           Choose a scenario
           <select
             id={selectorId}
             value={scenarioId}
-            onChange={(event) => setScenarioId(event.currentTarget.value)}
+            onChange={(event) => {
+              setEditing(false);
+              setScenarioId(event.currentTarget.value);
+            }}
           >
             {labScenarios.map((item, index) => (
               <option key={item.id} value={item.id}>
@@ -168,22 +172,28 @@ export function OutlinerLab() {
             ))}
           </select>
         </label>
-        <Button variant="quiet" onPress={() => setGeneration((value) => value + 1)}>
+        <Checkbox label="Enable editing" isSelected={editing} onChange={setEditing} />
+        <Button
+          variant="quiet"
+          onPress={() => {
+            setEditing(false);
+            setGeneration((value) => value + 1);
+          }}
+        >
           Reset this trial
         </Button>
         <p>
-          All fixtures are synthetic and stay in memory. Switching scenarios or resetting discards
-          edits, history and your observations, and turns editing off.
+          Local-only fixtures. Switching or resetting clears edits, history and observations, and
+          turns editing off.
         </p>
       </div>
-      <LabSession key={`${scenario.id}-${generation}`} scenario={scenario} />
+      <LabSession key={`${scenario.id}-${generation}`} scenario={scenario} editing={editing} />
     </div>
   );
 }
 
-function LabSession({ scenario }: { scenario: LabScenario }) {
+function LabSession({ scenario, editing }: { scenario: LabScenario; editing: boolean }) {
   const editor = useRef<OutlineEditorHandle<LabData>>(null);
-  const [editing, setEditing] = useState(false);
   const [protect, setProtect] = useState(scenario.id === "policy");
   const [rtl, setRtl] = useState(false);
   const [reversePlugins, setReversePlugins] = useState(false);
@@ -344,30 +354,7 @@ function LabSession({ scenario }: { scenario: LabScenario }) {
   const reviewedBy = findOutlineNode(state.nodes, "draft")?.node.data?.reviewedBy;
   return (
     <>
-      <section className="lab-guide" aria-label="Scenario guide">
-        <div>
-          <span className="lab-eyebrow">THE TRIAL</span>
-          <h2>{scenario.title}</h2>
-          <p>{scenario.summary}</p>
-        </div>
-        <ol>
-          {scenario.steps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </section>
       <section className="lab-workspace" aria-label="Live outliner workspace">
-        <div className="lab-mode">
-          <div>
-            <strong>{editing ? "Editing is on" : "Read first. Edit by choice."}</strong>
-            <p>
-              {editing
-                ? "Changes affect only this disposable local trial."
-                : "Body text is for reading and selection. No tap-to-edit keyboard."}
-            </p>
-          </div>
-          <Checkbox label="Enable editing" isSelected={editing} onChange={setEditing} />
-        </div>
         <div className="lab-controls" role="group" aria-label="Reader navigation">
           <Button variant="quiet" onPress={() => dispatch({ type: "expand-all", expanded: true })}>
             Expand all
@@ -410,43 +397,6 @@ function LabSession({ scenario }: { scenario: LabScenario }) {
             Reveal sample detail
           </Button>
         </div>
-        <div className="lab-policy" role="group" aria-label="Trial settings">
-          <Checkbox label="Protect reference" isSelected={protect} onChange={setProtect} />
-          <Checkbox label="RTL preview" isSelected={rtl} onChange={setRtl} />
-          <Button
-            variant="quiet"
-            isDisabled={!hasReference}
-            onPress={() => dispatch({ type: "task", id: "reference" })}
-          >
-            Probe write gate
-          </Button>
-          <p>
-            The probe attempts a real task change on the reference. Reading mode or protection
-            should refuse it. Client policy is not server authorization.
-          </p>
-        </div>
-        {scenario.id === "intelligence" && (
-          <div className="lab-extensions" role="group" aria-label="Extension trial">
-            <Checkbox
-              label="Fallback plugin first"
-              isSelected={reversePlugins}
-              onChange={setReversePlugins}
-            />
-            <Button
-              isDisabled={!editing}
-              onPress={() => {
-                const current = editor.current?.getState();
-                if (current) dispatch(reviewAction(current, "toolbar"));
-              }}
-            >
-              Run review transaction
-            </Button>
-            <p>
-              F2 order: {reversePlugins ? "fallback → primary" : "primary → fallback"}. {lastClaim}{" "}
-              Accepted reviewer: {reviewedBy ?? "none"}.
-            </p>
-          </div>
-        )}
         {editing && (
           <div className="lab-selection" role="group" aria-label="Selection and history actions">
             <span>{selected} selected</span>
@@ -508,7 +458,9 @@ function LabSession({ scenario }: { scenario: LabScenario }) {
         <div className="lab-document" dir={rtl ? "rtl" : "ltr"}>
           <div className="lab-document-heading">
             <span>SYNTHETIC FIELD NOTES</span>
-            <span>{editing ? "Editable trial" : "Read only"}</span>
+            <span>
+              {editing ? "Editing · local changes are undoable" : "Reading · select text freely"}
+            </span>
           </div>
           <OutlineEditor<LabData>
             ref={editor}
@@ -543,7 +495,12 @@ function LabSession({ scenario }: { scenario: LabScenario }) {
                 : undefined
             }
             renderContent={(node) => (
-              <span ref={node.id === scenario.target ? revealTarget : undefined}>{node.text}</span>
+              <span
+                className="fast-ux-outliner__label"
+                ref={node.id === scenario.target ? revealTarget : undefined}
+              >
+                {node.text}
+              </span>
             )}
             renderBody={(node) =>
               node.data?.content ? (
@@ -561,10 +518,64 @@ function LabSession({ scenario }: { scenario: LabScenario }) {
             }
           />
         </div>
+        <div className="lab-policy" role="group" aria-label="Trial settings">
+          <Checkbox label="Protect reference" isSelected={protect} onChange={setProtect} />
+          <Checkbox label="RTL preview" isSelected={rtl} onChange={setRtl} />
+          <Button
+            variant="quiet"
+            isDisabled={!hasReference}
+            onPress={() => dispatch({ type: "task", id: "reference" })}
+          >
+            Probe write gate
+          </Button>
+          <p>
+            The probe attempts a real task change on the reference. Reading mode or protection
+            should refuse it. Client policy is not server authorization.
+          </p>
+        </div>
+        {scenario.id === "intelligence" && (
+          <div className="lab-extensions" role="group" aria-label="Extension trial">
+            <Checkbox
+              label="Fallback plugin first"
+              isSelected={reversePlugins}
+              onChange={setReversePlugins}
+            />
+            <Button
+              isDisabled={!editing}
+              onPress={() => {
+                const current = editor.current?.getState();
+                if (current) dispatch(reviewAction(current, "toolbar"));
+              }}
+            >
+              Run review transaction
+            </Button>
+            <p>
+              F2 order: {reversePlugins ? "fallback → primary" : "primary → fallback"}. {lastClaim}{" "}
+              Accepted reviewer: {reviewedBy ?? "none"}.
+            </p>
+          </div>
+        )}
         <p className="lab-live-status" role="status">
           {message}
         </p>
       </section>
+      <details className="lab-guide">
+        <summary>
+          Scenario guide <span>{scenario.title}</span>
+        </summary>
+        <div className="lab-guide-content" aria-label="Scenario guide">
+          <div>
+            <span className="lab-eyebrow">THE TRIAL</span>
+            <h2>{scenario.title}</h2>
+            <p>{scenario.summary}</p>
+          </div>
+          <ol>
+            {scenario.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      </details>
       <section className="lab-observatory" aria-label="Live diagnostics">
         <div className="lab-section-heading">
           <div>

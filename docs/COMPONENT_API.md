@@ -403,3 +403,18 @@ Exports: `useHotkey`, `useHotkeys`, `useHotkeyStore`, `useHotkeyRecorder`, `crea
 ## Verification
 
 See [COMPONENT_COVERAGE.md](COMPONENT_COVERAGE.md) for executable coverage and remaining browser/device gates. The inventory parity test checks all 144 public owner module entries against the installed packages, including aliases, leaf parts and infrastructure. Counts do not imply each raw export has its own styled recipe.
+
+## Compact neutral baseline
+
+The optional shared styles use 15px reading text, 16px minimum editable text,
+4px control corners and 6px overlay corners. This is a visual-density baseline,
+not a smaller-target mode: interactive controls keep non-overlapping 44px minimum
+targets. `--fux-input-font-size` is distinct from the body scale; editor inputs and
+their decoration layer use the same typography. `--fux-border-subtle` is a
+non-interactive divider role, not a replacement for control-boundary contrast.
+
+`--fux-outline-indent` and `--fux-outline-padding` tune consistent reader/editor
+geometry through the semantic token layer. Apply theme overrides to portal roots
+as well as the document. Narrow layouts may wrap controls rather than reduce
+targets. Physical-device, IME and assistive-technology validation remain separate
+acceptance gates; compact styling alone does not certify them.

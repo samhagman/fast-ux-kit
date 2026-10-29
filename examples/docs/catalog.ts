@@ -1,5 +1,26 @@
 import { componentUtilities } from "../../src/components/manifest.js";
 
+export const componentId = (name: string) =>
+  name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+
+/** Shared order for the sidebar and the live gallery; every family stays individually named. */
+export const componentCategoryOrder = [
+  "Actions",
+  "Inputs",
+  "Selection",
+  "Color",
+  "Date and time",
+  "Collections",
+  "Navigation",
+  "Disclosure",
+  "Overlays",
+  "Feedback",
+  "Display",
+  "Files",
+  "Media",
+  "Layout",
+] as const;
+
 export const experiencePages = [
   {
     id: "outliner-lab",

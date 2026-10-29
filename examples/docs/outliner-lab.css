@@ -12,10 +12,11 @@
   min-block-size: 44px;
   border: 1px solid var(--fux-border);
   border-radius: var(--fux-radius);
-  padding: 0.6rem 0.75rem;
+  padding: 0.5rem 0.625rem;
   color: var(--ink);
   background: var(--paper);
   font: inherit;
+  font-size: var(--fux-input-font-size, 1rem);
 }
 .outliner-lab select:focus-visible,
 .outliner-lab summary:focus-visible,
@@ -25,40 +26,57 @@
 }
 .lab-scenario-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
-  gap: 1rem;
-  padding-block: 0.5rem 1.5rem;
+  gap: 0.375rem 0.75rem;
+  padding-block: 0 0.75rem;
 }
-.lab-scenario-bar label,
+.lab-scenario-picker,
 .lab-import-format {
   display: grid;
-  gap: 0.4rem;
-  font-weight: 650;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 550;
+}
+.lab-scenario-picker {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
 }
 .lab-scenario-bar p {
   grid-column: 1 / -1;
   margin: 0;
   color: var(--subtle);
-  font-size: 0.875rem;
+  font-size: 0.75rem;
 }
 .lab-guide {
+  border-block-end: 1px solid var(--line);
+  margin-block-end: 1.25rem;
+}
+.lab-guide > summary {
+  display: list-item;
+  font-size: 0.8125rem;
+}
+.lab-guide > summary > span {
+  margin-inline-start: 0.75rem;
+  font-weight: 400;
+  color: var(--subtle);
+}
+.lab-guide-content {
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  gap: 2rem;
-  padding: 1.5rem;
-  border-block: 1px solid var(--line);
-  background: var(--soft);
+  gap: 1.5rem;
+  padding: 0.5rem 0 1rem;
 }
 .lab-eyebrow {
   font-size: 0.7rem;
   font-weight: 750;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   color: var(--green);
 }
 .outliner-lab h2 {
   margin: 0.4rem 0 0.5rem;
-  font-size: clamp(1.2rem, 3vw, 1.65rem);
+  font-size: 1.125rem;
   line-height: 1.3;
   letter-spacing: -0.025em;
 }
@@ -71,7 +89,7 @@
 }
 .lab-guide li {
   padding-inline-start: 0.35rem;
-  margin-block-end: 0.75rem;
+  margin-block-end: 0.5rem;
 }
 .lab-guide li:last-child {
   margin-block-end: 0;
@@ -79,27 +97,15 @@
 .lab-workspace {
   border: 1px solid var(--line);
   background: var(--paper);
-  margin-block: 1.5rem 2rem;
+  margin-block: 0 0.5rem;
+  border-radius: var(--fux-radius);
 }
-.lab-mode,
 .lab-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-}
-.lab-mode {
-  padding: 1.25rem 1.5rem;
-  border-block-end: 1px solid var(--line);
-}
-.lab-mode strong {
-  font-size: 1.1rem;
-}
-.lab-mode p {
-  color: var(--subtle);
-  font-size: 0.875rem;
-  margin: 0.2rem 0 0;
 }
 .lab-controls,
 .lab-policy,
@@ -108,19 +114,23 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  gap: 0.125rem;
+  padding: 0.125rem 0.5rem;
   border-block-end: 1px solid var(--line);
 }
 .lab-policy,
 .lab-extensions {
-  gap: 0.5rem 1.25rem;
+  gap: 0.25rem 1rem;
+  padding: 0.375rem 0.875rem;
+  border-block-start: 1px solid var(--line);
+  border-block-end: 0;
+  background: var(--page);
 }
 .lab-policy p,
 .lab-extensions p {
   flex-basis: 100%;
   margin: 0;
-  font-size: 0.825rem;
+  font-size: 0.75rem;
   color: var(--subtle);
 }
 .lab-selection {
@@ -136,10 +146,10 @@
   margin-inline-end: 0.5rem;
 }
 .lab-document {
-  padding: 1.5rem;
+  padding: 0.875rem 1rem 1.125rem;
   min-inline-size: 0;
   overflow-wrap: anywhere;
-  --fux-font-size: 1.0625rem;
+  --fux-font-size: 0.9375rem;
 }
 .lab-document-heading {
   display: flex;
@@ -148,13 +158,13 @@
   gap: 0.5rem;
   color: var(--subtle);
   font-size: 0.7rem;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   font-weight: 700;
-  margin-block-end: 1rem;
+  margin-block-end: 0.375rem;
 }
 .lab-document .fast-ux-outliner,
 .lab-document .fast-ux-editor {
-  font-size: 1.0625rem;
+  font-size: 0.9375rem;
 }
 .lab-protected {
   font-size: 0.7rem;
@@ -166,10 +176,10 @@
 }
 .lab-live-status {
   margin: 0;
-  padding: 0.8rem 1.5rem;
+  padding: 0.5rem 0.875rem;
   border-block-start: 1px solid var(--line);
   color: var(--subtle);
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
 .lab-section-heading > span {
@@ -180,10 +190,10 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border-block: 1px solid var(--line);
-  margin-block: 1rem;
+  margin-block: 0.75rem;
 }
 .lab-metrics > div {
-  padding: 1rem 1rem 1rem 0;
+  padding: 0.75rem 0.75rem 0.75rem 0;
 }
 .lab-metrics dt,
 .lab-detail-metrics dt {
@@ -192,7 +202,7 @@
 }
 .lab-metrics dd {
   margin: 0.3rem 0 0;
-  font-size: 1.65rem;
+  font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
@@ -228,7 +238,7 @@
 .lab-evaluation,
 .lab-more,
 .lab-interchange {
-  margin-block-start: 2.5rem;
+  margin-block-start: 1.5rem;
 }
 .lab-checks {
   list-style: none;
@@ -240,11 +250,11 @@
   grid-template-columns: minmax(0, 1fr) 13.5rem;
   align-items: center;
   gap: 1rem;
-  padding-block: 0.9rem;
+  padding-block: 0.625rem;
   border-block-end: 1px solid var(--line);
 }
 .lab-checks label {
-  font-size: 0.925rem;
+  font-size: 0.875rem;
 }
 .lab-checks select {
   font-size: 0.875rem;
@@ -277,14 +287,14 @@
 }
 .lab-recipes p {
   margin: 0;
-  font-size: 0.925rem;
+  font-size: 0.875rem;
   color: var(--subtle);
 }
 .lab-more > div {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.25rem;
-  margin-block-start: 1rem;
+  gap: 1rem;
+  margin-block-start: 0.5rem;
 }
 .lab-more a {
   color: var(--green);
@@ -304,7 +314,7 @@
 }
 .lab-interchange {
   border-block-start: 1px solid var(--line);
-  padding-block: 1.5rem 1rem;
+  padding-block: 1rem;
 }
 .lab-interchange p {
   color: var(--subtle);
@@ -334,19 +344,18 @@
   font-size: 0.85rem;
 }
 @media (max-width: 700px) {
-  .lab-guide,
+  .lab-guide-content,
   .lab-more > div,
   .lab-checks li {
     grid-template-columns: minmax(0, 1fr);
   }
-  .lab-guide {
-    gap: 1rem;
-    padding: 1.1rem;
+  .lab-guide-content {
+    gap: 0.75rem;
+    padding: 0.5rem 0 0.875rem;
   }
   .lab-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .lab-mode,
   .lab-controls,
   .lab-policy,
   .lab-selection,
@@ -355,19 +364,21 @@
     padding-inline: 0.75rem;
   }
   .lab-document {
-    padding: 1rem 0.5rem;
+    padding: 0.75rem 0.5rem;
   }
   .lab-more > div {
     gap: 0.5rem;
   }
 }
 @media (max-width: 430px) {
-  .lab-scenario-bar,
+  .lab-scenario-picker,
   .lab-detail-metrics {
     grid-template-columns: minmax(0, 1fr);
   }
   .lab-scenario-bar > button {
-    justify-self: start;
+    align-self: end;
+    padding-inline: 0.375rem;
+    font-size: 0.75rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -387,5 +398,72 @@
   }
   .lab-more a {
     color: LinkText;
+  }
+}
+
+/* The document is the primary surface. Controls keep their 44px targets while
+   compact type, grouping and secondary placement remove unused chrome. */
+.lab-controls .fux-control,
+.lab-selection .fux-control {
+  font-size: 0.8125rem;
+  padding-inline: 0.625rem;
+}
+.lab-controls .fux-control:not(:last-child) {
+  margin-inline-end: 0.125rem;
+}
+@media (max-width: 700px) {
+  .lab-controls {
+    gap: 0;
+  }
+  .lab-controls .fux-control {
+    padding-inline: 0.5rem;
+  }
+}
+
+.outliner-lab .page-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.375rem 1rem;
+  margin-block-end: 1rem;
+}
+.outliner-lab .page-breadcrumb {
+  grid-column: 1 / -1;
+  margin-block-end: 0.5rem;
+}
+.outliner-lab .heading-title {
+  margin: 0;
+}
+.outliner-lab .page-heading > p {
+  font-size: 0.8125rem;
+}
+.lab-scenario-bar > .fux-checkbox {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+@media (max-width: 1050px) {
+  .lab-scenario-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .outliner-lab .page-heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.375rem;
+  }
+  .lab-scenario-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .lab-scenario-picker {
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .lab-scenario-bar > .fux-checkbox {
+    justify-self: start;
+  }
+}
+@media (max-width: 430px) {
+  .lab-scenario-picker {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

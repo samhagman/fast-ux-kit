@@ -97,3 +97,21 @@ Android/iOS, IME or assistive-technology acceptance. The live composition remain
 read-first; source code is not the default showcase view. All new navigation
 links retain 44px minimum targets, logical layout and semantic theme colors; the
 pathway and capability map stack on narrow screens without animation.
+
+## Compact component workbench
+
+`#components` is one horizontally scrollable live-preview ribbon containing all
+86 canonical families, not 86 inline documentation pages. Category buttons and
+a grouped component selector jump without filtering families out. Every tile
+links to its own complete documentation. Arrow keys and Home/End work when the
+gallery region itself is focused; nested components retain their own keys.
+Direction-aware scrolling and route-return position are maintained. Only nearby
+previews and the last interacted preview remain mounted; distant preview state
+resets. A local Reset action recovers each tile independently.
+
+The lab puts its actual document before optional instructions and policy probes.
+Scenario selection and deliberate edit activation share one control band. Reset
+and scenario changes restore reading mode. The closed guide remains available
+below the document; diagnostics, import/export and manual checks remain separate
+from the reading surface. The shared library skin, not a lab-only renderer, owns
+outline typography, row controls, indentation, hierarchy and interaction states.

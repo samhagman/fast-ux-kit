@@ -3,17 +3,18 @@
 :root {
   --fux-space-xs: 0.25rem;
   --fux-space-sm: 0.5rem;
-  --fux-space-md: 0.75rem;
-  --fux-space-lg: 1rem;
-  --fux-space-xl: 1.5rem;
+  --fux-space-md: 0.625rem;
+  --fux-space-lg: 0.875rem;
+  --fux-space-xl: 1.25rem;
   --fux-target: 44px;
-  --fux-radius: 0.5rem;
-  --fux-font-size: 1rem;
+  --fux-radius: 0.25rem;
+  --fux-font-size: 0.9375rem;
   --fux-line-height: 1.5;
   --fux-surface: #fff;
   --fux-text: #202124;
   --fux-muted: #52565c;
   --fux-border: #737980;
+  --fux-border-subtle: #e1e5ea;
   --fux-accent: #213d6b;
   --fux-on-accent: #fff;
   --fux-danger: #a31528;
@@ -26,19 +27,21 @@
   --fux-highlight: color-mix(in srgb, var(--fux-accent) 15%, transparent);
   --fux-selected: color-mix(in srgb, var(--fux-accent) 12%, transparent);
   --fux-z-popover: 20;
-  --fux-shadow-overlay: 0 6px 24px rgb(0 0 0 / 0.15);
+  --fux-shadow-overlay: 0 8px 28px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08);
 }
 /* Optional semantic roles for products with distinct fields, controls and surfaces. */
 :root {
-  --fux-input-font-size: var(--fux-font-size);
+  --fux-input-font-size: max(1rem, var(--fux-font-size));
   --fux-error-text: var(--fux-danger);
   --fux-input-surface: var(--fux-surface);
   --fux-control-surface: var(--fux-surface);
   --fux-control-weight: 550;
+  --fux-outline-indent: 1rem;
+  --fux-outline-padding: 0.625rem;
   --fux-danger-surface: var(--fux-danger);
   --fux-quiet-text: var(--fux-text);
-  --fux-label-size: var(--fux-font-size);
-  --fux-label-weight: 600;
+  --fux-label-size: 0.8125rem;
+  --fux-label-weight: 550;
   --fux-focus-offset: 2px;
   --fux-panel-radius: var(--fux-radius);
   --fux-raised: var(--fux-surface);
@@ -49,8 +52,8 @@
 /* Components inherit semantic roles; both owner systems use the same scale. */
 :root {
   color-scheme: light;
-  --fux-radius-sm: 0.25rem;
-  --fux-radius-lg: 0.75rem;
+  --fux-radius-sm: 0.1875rem;
+  --fux-radius-lg: 0.375rem;
   --fux-surface-subtle: #f5f6f8;
   --fux-surface-hover: #eceff3;
   --fux-raised: #fff;
@@ -72,6 +75,7 @@
     --fux-text: #f3f5f7;
     --fux-muted: #b8c0cb;
     --fux-border: #7e8998;
+    --fux-border-subtle: #363d47;
     --fux-accent: #b5ceff;
     --fux-on-accent: #102340;
     --fux-danger: #ffafb9;
@@ -92,6 +96,7 @@
   --fux-text: #f3f5f7;
   --fux-muted: #b8c0cb;
   --fux-border: #7e8998;
+  --fux-border-subtle: #363d47;
   --fux-accent: #b5ceff;
   --fux-on-accent: #102340;
   --fux-danger: #ffafb9;
@@ -119,6 +124,7 @@
     --fux-text: CanvasText;
     --fux-muted: CanvasText;
     --fux-border: ButtonText;
+    --fux-border-subtle: CanvasText;
     --fux-accent: Highlight;
     --fux-on-accent: HighlightText;
     --fux-focus: Highlight;
@@ -134,6 +140,7 @@
   --fux-text: #202124;
   --fux-muted: #52565c;
   --fux-border: #737980;
+  --fux-border-subtle: #e1e5ea;
   --fux-accent: #213d6b;
   --fux-on-accent: #fff;
   --fux-danger: #a31528;
@@ -163,6 +170,7 @@
     --fux-text: CanvasText;
     --fux-muted: CanvasText;
     --fux-border: ButtonText;
+    --fux-border-subtle: CanvasText;
     --fux-accent: Highlight;
     --fux-on-accent: HighlightText;
     --fux-focus: Highlight;

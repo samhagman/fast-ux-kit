@@ -21,6 +21,7 @@ import {
 } from "../core/index.js";
 import { RichContent, type RichContentProps } from "./RichContent.js";
 import type { RichDocument } from "../rich/index.js";
+import { OutlineBullet, OutlineCheck, OutlineChevron, OutlineFocus } from "./OutlineGlyph.js";
 
 export interface OutlineRenderContext {
   /** Zero-based nesting level. */
@@ -262,6 +263,36 @@ export function Outliner<T = unknown>({
             const childListId = `${instanceId}-children-${childPath.join("-")}`;
             const context = { depth, hasChildren, isExpanded, hoist: () => navigate(node.id) };
             const richDocument = getRichContent?.(node);
+            const body = renderBody?.(node);
+            const taskMark =
+              node.checked !== undefined ? (
+                <span
+                  className="fast-ux-outliner__task-mark"
+                  role="img"
+                  aria-label={node.checked ? "Completed task" : "Incomplete task"}
+                  data-checked={node.checked}
+                >
+                  <OutlineCheck checked={node.checked} />
+                </span>
+              ) : null;
+            const disclosure = hasChildren ? (
+              <Button
+                type="button"
+                className="fux-control fast-ux-outliner__toggle"
+                data-disclosure-id={node.id}
+                aria-label={
+                  getDisclosureLabel?.(node, isExpanded) ??
+                  `${isExpanded ? "Collapse" : "Expand"} ${node.text}`
+                }
+                aria-expanded={isExpanded}
+                aria-controls={childListId}
+                onPress={(event) => toggle(node.id, event.altKey)}
+              >
+                <span className="fast-ux-outliner__chevron" aria-hidden="true">
+                  <OutlineChevron />
+                </span>
+              </Button>
+            ) : null;
             return (
               <li
                 key={node.id}
@@ -270,40 +301,21 @@ export function Outliner<T = unknown>({
                 data-depth={depth}
                 data-has-children={hasChildren}
                 data-expanded={isExpanded}
+                data-checked={node.checked}
               >
                 <div className="fast-ux-outliner__row">
-                  {hasChildren ? (
-                    <Button
-                      type="button"
-                      className="fux-control fast-ux-outliner__toggle"
-                      data-disclosure-id={node.id}
-                      aria-label={
-                        getDisclosureLabel?.(node, isExpanded) ??
-                        `${isExpanded ? "Collapse" : "Expand"} ${node.text}`
-                      }
-                      aria-expanded={isExpanded}
-                      aria-controls={childListId}
-                      onPress={(event) => toggle(node.id, event.altKey)}
-                    >
-                      <span className="fast-ux-outliner__marker" aria-hidden="true">
-                        ▸
-                      </span>
-                    </Button>
-                  ) : (
-                    <span className="fast-ux-outliner__marker" aria-hidden="true">
-                      •
-                    </span>
-                  )}
-                  <div className="fast-ux-outliner__content">
-                    {renderStatus?.(node)}
-                    {node.checked !== undefined && (
-                      <span
-                        role="img"
-                        aria-label={node.checked ? "Completed task" : "Incomplete task"}
-                      >
-                        {node.checked ? "☑ " : "☐ "}
+                  <div className="fast-ux-outliner__gutter">
+                    {disclosurePosition === "start" && hasChildren ? (
+                      disclosure
+                    ) : (
+                      <span className="fast-ux-outliner__marker">
+                        {taskMark ?? <OutlineBullet collapsed={hasChildren && !isExpanded} />}
                       </span>
                     )}
+                  </div>
+                  <div className="fast-ux-outliner__content">
+                    {renderStatus?.(node)}
+                    {disclosurePosition === "start" && hasChildren && taskMark}
                     {renderContent ? (
                       renderContent(node, context)
                     ) : richDocument ? (
@@ -313,10 +325,17 @@ export function Outliner<T = unknown>({
                         allowMedia={allowMedia}
                       />
                     ) : (
-                      node.text
+                      <span className="fast-ux-outliner__label">{node.text}</span>
                     )}
                     {renderSuffix?.(node)}
-                    {renderBody?.(node)}
+                    {hasChildren && !isExpanded && (
+                      <span className="fast-ux-outliner__count" aria-hidden="true">
+                        {node.children!.length}
+                      </span>
+                    )}
+                    {body != null && typeof body !== "boolean" && (
+                      <div className="fast-ux-outliner__body">{body}</div>
+                    )}
                     {hasChildren && !isExpanded && renderCollapsed && (
                       <div className="fast-ux-outliner__summary">{renderCollapsed(node)}</div>
                     )}
@@ -330,21 +349,10 @@ export function Outliner<T = unknown>({
                       aria-label={getHoistLabel?.(node) ?? `Focus on ${node.text}`}
                       onPress={() => navigate(node.id)}
                     >
-                      <svg
-                        aria-hidden="true"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M4 9V4h5m6 0h5v5m0 6v5h-5M9 20H4v-5" />
-                      </svg>
+                      <OutlineFocus />
                     </Button>
                   )}
+                  {disclosurePosition === "end" && disclosure}
                 </div>
                 {hasChildren &&
                   (depth >= MAX_RENDER_DEPTH && isExpanded ? (

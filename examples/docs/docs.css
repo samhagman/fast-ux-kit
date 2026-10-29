@@ -1,73 +1,76 @@
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
-  --page: #f8f9f6;
+  --page: #fafbfc;
   --paper: #ffffff;
-  --ink: #223329;
-  --subtle: #647168;
-  --line: #dde4dc;
+  --ink: #20252c;
+  --subtle: #5d6672;
+  --line: #e2e6eb;
   --green: #2f654b;
-  --soft: #eef3e8;
-  --lime: #dfedbc;
-  --code: #17271e;
-  --code-text: #e6eee2;
+  --soft: #f1f4f7;
+  --lime: #e0ebe7;
+  --code: #18202b;
+  --code-text: #e6ebf3;
   --fux-surface: #ffffff;
-  --fux-text: #223329;
-  --fux-muted: #5c6c61;
-  --fux-border: #829086;
+  --fux-text: #20252c;
+  --fux-muted: #596572;
+  --fux-border: #7b8793;
   --fux-accent: #2f654b;
   --fux-on-accent: #ffffff;
   --fux-focus: #347854;
   --fux-danger: #aa3544;
   --fux-on-danger: #ffffff;
-  --fux-radius: 0.625rem;
-  --fux-surface-subtle: #f1f4ed;
-  --fux-surface-hover: #e7eee3;
+  --fux-radius: 0.25rem;
+  --fux-radius-lg: 0.375rem;
+  --fux-border-subtle: #e2e6eb;
+  --fux-surface-subtle: #f4f6f8;
+  --fux-surface-hover: #e9eef2;
   --fux-raised: #fff;
-  --fux-tint: #edf3e7;
-  --fux-track: #d4ded1;
-  --fux-font-size: 1rem;
+  --fux-tint: #edf2f4;
+  --fux-track: #d7dfe7;
+  --fux-font-size: 0.875rem;
   --fux-label-size: 0.875rem;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #121c16;
-  --paper: #19271e;
-  --ink: #e7efe4;
-  --subtle: #a9bbad;
-  --line: #34473a;
-  --green: #b9d797;
-  --soft: #203425;
-  --lime: #2c4329;
-  --code: #0e1912;
-  --code-text: #e6eee2;
-  --fux-surface: #19271e;
-  --fux-text: #e7efe4;
-  --fux-muted: #a9bbad;
-  --fux-border: #7a9281;
-  --fux-accent: #b9d797;
-  --fux-on-accent: #19291a;
-  --fux-focus: #c6e1aa;
+  --page: #11151b;
+  --paper: #181e26;
+  --ink: #edf0f5;
+  --subtle: #acb7c5;
+  --line: #303a48;
+  --green: #9ad5be;
+  --soft: #202934;
+  --lime: #293c38;
+  --code: #0d1219;
+  --code-text: #e6ebf3;
+  --fux-surface: #181e26;
+  --fux-text: #edf0f5;
+  --fux-muted: #acb7c5;
+  --fux-border: #8192a5;
+  --fux-accent: #9ad5be;
+  --fux-on-accent: #102c23;
+  --fux-focus: #b4e4d1;
   --fux-danger: #ffadb5;
   --fux-on-danger: #3e1117;
-  --fux-surface-subtle: #213326;
-  --fux-surface-hover: #2b4232;
-  --fux-raised: #203126;
-  --fux-tint: #253a29;
-  --fux-track: #405846;
+  --fux-surface-subtle: #202a36;
+  --fux-surface-hover: #2b3745;
+  --fux-raised: #202a35;
+  --fux-tint: #23322f;
+  --fux-track: #3d4c5e;
+  --fux-border-subtle: #303a48;
 }
 * {
   box-sizing: border-box;
 }
 html {
-  scroll-padding-block-start: 96px;
+  scroll-padding-block-start: 72px;
 }
 body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
   font:
-    15px/1.65 ui-sans-serif,
+    14px/1.5 ui-sans-serif,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
@@ -103,7 +106,7 @@ h3 {
   line-height: 1.2;
 }
 h1 {
-  font-size: clamp(32px, 3.3vw, 45px);
+  font-size: clamp(26px, 2.4vw, 32px);
   font-weight: 600;
   letter-spacing: -0.045em;
   margin: 0;
@@ -113,7 +116,7 @@ main:focus {
   outline: none;
 }
 h2 {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.025em;
   margin: 0 0 16px;
@@ -161,17 +164,17 @@ svg {
   padding: 12px 20px;
   background: var(--paper);
   border: 1px solid var(--green);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
 }
 .skip-link:focus {
   top: 12px;
 }
 .site-header {
-  block-size: 72px;
+  block-size: 56px;
   display: flex;
   align-items: center;
-  padding-inline: 28px;
-  gap: 28px;
+  padding-inline: 20px;
+  gap: 20px;
   border-block-end: 1px solid var(--line);
   position: sticky;
   inset-block-start: 0;
@@ -184,7 +187,7 @@ svg {
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.8px;
   white-space: nowrap;
@@ -192,13 +195,13 @@ svg {
 .brand-mark {
   display: inline-grid;
   place-items: center;
-  inline-size: 33px;
-  block-size: 33px;
+  inline-size: 28px;
+  block-size: 28px;
   padding-block-end: 5px;
   background: var(--green);
   color: var(--page);
-  border-radius: 9px;
-  font-size: 30px;
+  border-radius: 4px;
+  font-size: 26px;
   line-height: 1;
 }
 .brand-light {
@@ -209,7 +212,7 @@ svg {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-inline-start: 78px;
+  margin-inline-start: 28px;
   color: var(--subtle);
   font-size: 13px;
 }
@@ -252,7 +255,7 @@ svg {
 }
 .docs-layout {
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr);
+  grid-template-columns: 216px minmax(0, 1fr);
   max-inline-size: 1600px;
   margin-inline: auto;
 }
@@ -262,11 +265,11 @@ svg {
 }
 .docs-navigation {
   position: sticky;
-  inset-block-start: 72px;
-  block-size: calc(100dvh - 72px);
+  inset-block-start: 56px;
+  block-size: calc(100dvh - 56px);
   display: flex;
   flex-direction: column;
-  padding: 26px 16px 0 24px;
+  padding: 16px 12px 0;
   min-inline-size: 0;
 }
 .nav-search {
@@ -275,7 +278,7 @@ svg {
   align-items: center;
   gap: 8px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--fux-radius);
   background: var(--paper);
   padding-inline: 10px;
   color: var(--subtle);
@@ -319,12 +322,12 @@ svg {
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
-  margin-block-start: 20px;
-  padding-inline-end: 8px;
+  margin-block-start: 12px;
+  padding-inline-end: 4px;
   padding-block-end: 24px;
 }
 .nav-group {
-  margin-block-end: 20px;
+  margin-block-end: 12px;
 }
 .nav-group h2 {
   font-size: 10px;
@@ -341,8 +344,8 @@ svg {
   justify-content: space-between;
   min-block-size: 44px;
   text-decoration: none;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 3px;
   font-size: 13px;
   color: var(--subtle);
   gap: 8px;
@@ -399,7 +402,7 @@ main {
 .page-content {
   max-inline-size: 1130px;
   margin-inline: auto;
-  padding: 36px clamp(24px, 4.3vw, 68px) 0;
+  padding: 20px clamp(20px, 2.4vw, 36px) 0;
 }
 .page-breadcrumb {
   display: flex;
@@ -408,26 +411,26 @@ main {
   gap: 10px;
   color: var(--subtle);
   font-size: 11px;
-  margin-block-end: 32px;
+  margin-block-end: 18px;
 }
 .page-breadcrumb span:last-child {
   color: var(--ink);
 }
 .page-heading {
-  margin-block-end: 32px;
+  margin-block-end: 18px;
 }
 .heading-title {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 18px;
-  margin-block-end: 14px;
+  gap: 12px;
+  margin-block-end: 8px;
 }
 .page-heading > p {
   color: var(--subtle);
   max-inline-size: 720px;
-  font-size: 16px;
-  line-height: 1.75;
+  font-size: 14px;
+  line-height: 1.5;
   margin: 0;
 }
 .owner-badge {
@@ -491,7 +494,7 @@ main {
   padding: 12px 18px;
   background: var(--green);
   color: var(--page);
-  border-radius: 7px;
+  border-radius: var(--fux-radius);
 }
 .secondary-link {
   color: var(--ink);
@@ -515,7 +518,7 @@ main {
   padding: clamp(20px, 3vw, 32px);
   margin-block: 0 24px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--fux-radius);
   background: var(--soft);
 }
 .lab-path-intro,
@@ -644,7 +647,7 @@ main {
   display: grid;
   grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.3fr);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--fux-radius);
   background: var(--paper);
   box-shadow: 0 6px 28px rgb(20 40 25 / 0.035);
   overflow: hidden;
@@ -747,7 +750,7 @@ main {
   padding: 21px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--fux-radius);
   text-decoration: none;
   position: relative;
   transition:
@@ -764,7 +767,7 @@ main {
   inline-size: 34px;
   block-size: 34px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   color: var(--green);
   background: var(--soft);
   font-size: 22px;
@@ -791,7 +794,7 @@ main {
   background: var(--soft);
   border: 1px solid var(--line);
   border-inline-start: 3px solid var(--green);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   font-size: 13px;
   line-height: 1.75;
   margin-block: 28px;
@@ -809,7 +812,7 @@ main {
 }
 .demo-frame {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--fux-radius);
   background: var(--paper);
   min-inline-size: 0;
 }
@@ -899,7 +902,7 @@ main {
   max-inline-size: 32rem;
   padding: 20px;
   border: 1px solid var(--fux-danger);
-  border-radius: 7px;
+  border-radius: var(--fux-radius);
 }
 .demo-error p {
   margin-block-start: 8px;
@@ -915,7 +918,7 @@ main {
 }
 .code-block {
   border: 1px solid #ffffff10;
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   background: var(--code);
   color: var(--code-text);
   margin-block: 20px;
@@ -934,8 +937,8 @@ main {
   color: #c1cfbc;
 }
 .code-toolbar .fux-control {
-  --fux-text: #e6eee2;
-  --fux-quiet-text: #e6eee2;
+  --fux-text: #e6ebf3;
+  --fux-quiet-text: #e6ebf3;
   --fux-focus: #bfdfa5;
   --fux-surface-hover: #2c4031;
   font-size: 11px;
@@ -1021,7 +1024,7 @@ main {
   flex-direction: column;
   text-decoration: none;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   background: var(--paper);
   padding: 18px;
 }
@@ -1083,7 +1086,7 @@ main {
 }
 .token-card {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   overflow: hidden;
   background: var(--paper);
 }
@@ -1102,7 +1105,7 @@ main {
   padding: 24px;
   border: 1px solid var(--line);
   background: var(--paper);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
 }
 .space-scale > div {
   display: flex;
@@ -1139,7 +1142,7 @@ main {
   grid-template-columns: 1fr 1.2fr 1fr;
   border: 1px solid var(--line);
   background: var(--paper);
-  border-radius: 9px;
+  border-radius: var(--fux-radius);
   overflow: hidden;
 }
 .owner-diagram > div {
@@ -1292,7 +1295,7 @@ main {
 }
 .rich-sample .fast-ux-rich img,
 .rich-sample .fast-ux-rich video {
-  border-radius: 7px;
+  border-radius: var(--fux-radius);
   max-block-size: 400px;
 }
 .rich-sample .fast-ux-rich audio {
@@ -1310,7 +1313,7 @@ main {
   padding: 20px 12px;
   text-align: center;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   background: var(--soft);
   font-size: 12px;
 }
@@ -1332,7 +1335,7 @@ main {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   background: var(--soft);
   margin-block-end: 20px;
 }
@@ -1433,7 +1436,7 @@ main {
     margin-inline-start: 45px;
   }
   .docs-layout {
-    grid-template-columns: 232px minmax(0, 1fr);
+    grid-template-columns: 208px minmax(0, 1fr);
   }
   .docs-navigation {
     padding-inline: 16px;
@@ -1473,7 +1476,7 @@ main {
 }
 @media (max-width: 800px) {
   .site-header {
-    block-size: 64px;
+    block-size: 56px;
     padding-inline: 18px;
     gap: 14px;
   }
@@ -1512,10 +1515,10 @@ main {
     display: none;
   }
   .page-content {
-    padding: 26px 22px 0;
+    padding: 16px 16px 0;
   }
   .page-breadcrumb {
-    margin-block-end: 24px;
+    margin-block-end: 14px;
   }
   .overview-heading .eyebrow {
     margin-block-start: 30px;
@@ -1530,7 +1533,7 @@ main {
     gap: 10px 20px;
   }
   .page-heading > p {
-    font-size: 15px;
+    font-size: 14px;
   }
   .demo-stage {
     padding: 24px;
@@ -1737,7 +1740,7 @@ main {
   padding: 1rem;
   background: var(--page);
   border: 1px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--fux-radius);
 }
 .shared-demo-lane > span {
   display: block;
@@ -1747,7 +1750,7 @@ main {
 }
 .shared-demo-item {
   padding: 0.75rem;
-  border-radius: 8px;
+  border-radius: var(--fux-radius);
   background: var(--fux-accent);
   color: var(--fux-on-accent);
   transition:
@@ -1757,7 +1760,7 @@ main {
 .locale-example {
   padding: 1.25rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--fux-radius);
 }
 .color-value-list {
   display: grid;
@@ -1799,7 +1802,7 @@ main {
   gap: 0.5rem;
   padding: 1rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--fux-radius);
   background: var(--soft);
 }
 .selection-actions > span {
@@ -1812,13 +1815,13 @@ main {
   gap: 0.75rem;
   padding: 1rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--fux-radius);
 }
 .coverage-table-wrap {
   overflow-x: auto;
   margin-block: 1.25rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--fux-radius);
 }
 .coverage-table {
   border-collapse: collapse;

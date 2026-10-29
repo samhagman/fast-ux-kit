@@ -21,7 +21,8 @@ import {
   Slider,
 } from "../../src/components/aria.js";
 import { componentManifest, ownerFamilyCoverage } from "../../src/components/manifest.js";
-import { experiencePages, utilityPages } from "./catalog.js";
+import { componentCategoryOrder, componentId, experiencePages, utilityPages } from "./catalog.js";
+import { ComponentGallery, type GalleryPosition } from "./component-gallery.js";
 import { ReaderDemo } from "./reader-demo.js";
 import { useFamilyDemo } from "./demo-loader.js";
 import { Code, DemoFrame, Notice, PageBoundary, PageHeading, PageReady, Symbol } from "./ui.js";
@@ -35,8 +36,7 @@ const UtilityPage = lazy(() =>
   import("./utilities.js").then((module) => ({ default: module.UtilityPage })),
 );
 
-export const componentId = (name: string) =>
-  name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+export { componentId } from "./catalog.js";
 export const foundationPages = [
   {
     id: "overview",
@@ -98,20 +98,7 @@ const groupOrder = [
   "Get started",
   "Foundations",
   "Outliner",
-  "Actions",
-  "Inputs",
-  "Selection",
-  "Color",
-  "Date and time",
-  "Collections",
-  "Navigation",
-  "Disclosure",
-  "Overlays",
-  "Feedback",
-  "Display",
-  "Files",
-  "Media",
-  "Layout",
+  ...componentCategoryOrder,
   "Utilities",
   "Component aliases",
 ];
@@ -514,41 +501,6 @@ function OverviewCoverage() {
         </a>
       </div>
     </section>
-  );
-}
-function ComponentCatalog() {
-  const categories = [...new Set(componentManifest.map((item) => item.category))];
-  return (
-    <>
-      <PageHeading
-        category="Get started"
-        title="All components"
-        description="Every styled family in one place. Each has its own live example, copyable usage and named composition parts."
-      />
-      <div className="catalog-summary">
-        <strong>{componentManifest.length} component families</strong>
-        <span>Shared tokens · Typed APIs · Explicit interaction ownership</span>
-      </div>
-      {categories.map((category) => (
-        <section key={category} className="catalog-section">
-          <h2>{category}</h2>
-          <div className="catalog-grid">
-            {componentManifest
-              .filter((entry) => entry.category === category)
-              .map((entry) => (
-                <a href={`#${componentId(entry.name)}`} key={entry.name} className="catalog-card">
-                  <div>
-                    <strong>{entry.name}</strong>
-                    <Symbol name="arrow" size={15} />
-                  </div>
-                  <p>{entry.description}</p>
-                  <span className="catalog-owner">{ownerNames[entry.owner]}</span>
-                </a>
-              ))}
-          </div>
-        </section>
-      ))}
-    </>
   );
 }
 function Installation() {
@@ -981,7 +933,11 @@ export function DocsApp() {
     [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null),
     mainRef = useRef<HTMLElement>(null),
-    previousRoute = useRef(active);
+    previousRoute = useRef(active),
+    galleryPosition = useRef<GalleryPosition | undefined>(undefined);
+  const rememberGalleryPosition = useCallback((position: GalleryPosition) => {
+    galleryPosition.current = position;
+  }, []);
   const page = allPages.find((item) => item.id === active)!,
     pageIndex = allPages.findIndex((item) => item.id === active),
     nextPage = allPages[pageIndex + 1],
@@ -1032,7 +988,10 @@ export function DocsApp() {
     active === "overview" ? (
       <Overview />
     ) : active === "components" ? (
-      <ComponentCatalog />
+      <ComponentGallery
+        initialPosition={galleryPosition.current}
+        onPositionChange={rememberGalleryPosition}
+      />
     ) : active === "installation" ? (
       <Installation />
     ) : active === "tokens" ? (

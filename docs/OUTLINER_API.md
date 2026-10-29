@@ -31,6 +31,22 @@ const notes: readonly OutlineNode<RichOutlineData>[] = [
 
 `Outliner` renders nested disclosure lists, not an ARIA tree. Links, media, selection and interactive React children own their interactions. Disclosures default to the inline-end side, have 44px targets with the optional stylesheet, and share the same semantic tokens as other controls. `disclosurePosition="start"` is available. Expansion/hoisting never mutate nodes or authorize editing.
 
+### Default visual contract
+
+The optional skin presents one continuous document, not a card per node. Branches,
+leaves and read-only task marks share a leading gutter, so sibling titles align.
+Subtle logical-direction rails show ancestry; folding replaces an expanded branch
+dot with a ring and adds a small decorative direct-child count. The disclosure's
+accessible expanded state remains authoritative, and `renderCollapsed` supplies
+any meaningful application summary. Rich bodies and summaries stay aligned with
+their owning text rather than with the outer document edge.
+
+Glyphs are deliberately smaller than their non-overlapping 44px controls. Focus
+and disclosure controls remain visible and reachable without hover; keyboard
+focus has an explicit ring. The shared semantic tokens provide light, dark and
+forced-color states. `--fux-outline-indent` and `--fux-outline-padding` control the
+document rhythm without shrinking the interaction-target floor.
+
 - `expandedIds` / `onExpandedChange` are controlled view state; `defaultExpandedIds` initializes local state. Initial branches expand by default.
 - `enableHoist`, `hoistedId`, `defaultHoistedId`, `onHoistChange` and accessible breadcrumbs expose subtree navigation.
 - `renderContent(node, context)` replaces the readable title/body; `context` contains depth, child/expansion state and `hoist()`.
@@ -64,6 +80,15 @@ const editor = createRef<OutlineEditorHandle>();
 ```
 
 `OutlineEditor` defaults to `readOnly={true}`. In that mode it renders the reader, retaining expansion, hoist, rich-content mapping and noneditable slots. It does not mount textareas, add buttons or task mutations. `readOnly={false}` is the explicit authoring boundary. UI policy is not server authorization.
+
+Editable rows reserve one leading target: a focus dot for prose, or a task checkbox
+for tasks. Task rows retain a separate named focus action after the text. Selection
+and reorder controls follow the text, avoiding multiple empty leading columns.
+Controls can wrap when space is constrained; their targets never overlap. The
+textarea itself includes the row's vertical padding and a 44px minimum target;
+text decorations use matching padding and typography. Selection tint belongs to
+the row and is not replaced by hover/focus paint. These presentation choices do
+not change editing, selection, task, hoist, policy or undo semantics.
 
 ### State ownership and persistence
 

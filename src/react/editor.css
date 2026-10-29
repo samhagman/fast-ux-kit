@@ -1,16 +1,20 @@
 /* Optional editor skin. Every control shares the library's semantic design tokens. */
 .fast-ux-editor {
-  --outline-indent: 1.25rem;
+  --outline-indent: var(--fux-outline-indent, 1rem);
   --outline-target: max(44px, var(--fux-target, 44px));
+  --outline-content-offset: calc(var(--outline-target) + var(--outline-gap, 0.25rem) + 0.25rem);
   position: relative;
+  color: var(--fux-text, inherit);
+  font-size: var(--fux-font-size, 0.9375rem);
+  line-height: var(--fux-line-height, 1.5);
 }
 .fast-ux-editor__toolbar,
 .fast-ux-editor__breadcrumbs {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--fux-space-sm, 0.5rem);
-  margin-block-end: var(--fux-space-md, 0.75rem);
+  gap: var(--fux-space-xs, 0.25rem);
+  margin-block-end: var(--fux-space-sm, 0.5rem);
 }
 .fast-ux-editor__rows {
   margin: 0;
@@ -20,7 +24,7 @@
 .fast-ux-editor__item {
   position: relative;
   padding-inline-start: calc(var(--outline-depth, 0) * var(--outline-indent));
-  border-radius: var(--fux-radius, 0.25rem);
+  border-radius: var(--fux-radius-sm, 0.1875rem);
 }
 .fast-ux-editor__item[data-selected] {
   background: var(--fux-selected, color-mix(in srgb, currentColor 10%, transparent));
@@ -65,11 +69,14 @@
 }
 .fast-ux-editor__row {
   align-items: start;
-  gap: 0.125rem;
+  flex-wrap: wrap;
+  gap: var(--outline-gap, 0.25rem);
 }
 .fast-ux-editor__bullet,
+.fast-ux-editor__focus,
 .fast-ux-editor__select,
-.fast-ux-editor__drag {
+.fast-ux-editor__drag,
+.fast-ux-editor__info {
   flex: 0 0 auto;
   min-inline-size: var(--outline-target);
   min-block-size: var(--outline-target);
@@ -79,9 +86,6 @@
   color: inherit;
   font: inherit;
   touch-action: manipulation;
-}
-.fast-ux-editor__bullet {
-  font-size: 1.4em;
 }
 .fast-ux-editor__drag {
   cursor: grab;
@@ -99,15 +103,15 @@
   color: var(--fux-accent, currentColor);
 }
 .fast-ux-editor__text-container {
-  flex: 1;
-  min-inline-size: 0;
+  flex: 1 1 12ch;
+  min-inline-size: min(12ch, 100%);
   position: relative;
-  padding-block: 0.625rem;
 }
 .fast-ux-editor__input,
 .fast-ux-editor__decoration {
   box-sizing: border-box;
   font: inherit;
+  font-size: var(--fux-input-font-size, 1rem);
   line-height: 1.5;
   letter-spacing: inherit;
   white-space: pre-wrap;
@@ -117,8 +121,8 @@
 .fast-ux-editor__input {
   display: block;
   inline-size: 100%;
-  min-block-size: 1.5em;
-  padding: 0;
+  min-block-size: var(--outline-target);
+  padding: var(--fux-outline-padding, 0.625rem) 0.25rem;
   border: 0;
   background: transparent;
   color: inherit;
@@ -129,17 +133,19 @@
 }
 .fast-ux-editor__input:focus-visible {
   outline: 2px solid var(--fux-focus, currentColor);
-  outline-offset: 3px;
-  border-radius: var(--fux-radius, 0.25rem);
+  outline-offset: -2px;
+  border-radius: var(--fux-radius-sm, 0.1875rem);
 }
 .fast-ux-editor__input[readonly] {
   cursor: text;
-  opacity: 0.85;
+  color: var(--fux-muted, currentColor);
 }
 .fast-ux-editor__decoration {
   position: absolute;
-  inset-block-start: 0.625rem;
+  inset-block-start: 0;
   inset-inline: 0;
+  padding-block: var(--fux-outline-padding, 0.625rem);
+  padding-inline: 0.25rem;
   pointer-events: none;
   color: transparent;
 }
@@ -149,6 +155,7 @@
 }
 .fast-ux-editor__task {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   min-inline-size: var(--outline-target);
@@ -156,19 +163,34 @@
   cursor: pointer;
 }
 .fast-ux-editor__task > input {
-  inline-size: 1.25rem;
-  block-size: 1.25rem;
+  inline-size: 1rem;
+  block-size: 1rem;
   margin: 0;
   accent-color: var(--fux-accent, currentColor);
 }
+.fast-ux-editor__item[data-has-children="true"]
+  > .fast-ux-editor__row
+  > .fast-ux-editor__text-container
+  > .fast-ux-editor__input,
+.fast-ux-editor__item[data-has-children="true"]
+  > .fast-ux-editor__row
+  > .fast-ux-editor__text-container
+  > .fast-ux-editor__decoration {
+  font-weight: 550;
+}
 .fast-ux-editor__body,
 .fast-ux-editor__summary {
-  margin-inline-start: var(--outline-target);
-  padding-block: 0.5rem;
+  margin-inline-start: var(--outline-content-offset);
+  padding-block: 0 0.5rem;
 }
 .fast-ux-editor__summary {
-  border-inline-start: 2px solid var(--fux-border, currentColor);
-  padding-inline-start: 0.75rem;
+  border-inline-start: 2px solid var(--fux-border-subtle, currentColor);
+  padding-inline-start: 0.625rem;
+  color: var(--fux-muted, currentColor);
+  font-size: 0.875em;
+}
+.fast-ux-editor__body:empty {
+  display: none;
 }
 .fast-ux-editor__diagnostics {
   list-style: none;
@@ -208,7 +230,11 @@
   opacity: 0.7;
 }
 .fast-ux-editor__add {
-  margin-block-start: 0.5rem;
+  margin-block-start: 0.25rem;
+  margin-inline-start: var(--outline-content-offset);
+  border-color: transparent;
+  background: transparent;
+  color: var(--fux-muted, currentColor);
 }
 .fast-ux-editor__placeholder-row {
   display: flex;
@@ -225,10 +251,11 @@
   max-inline-size: 100%;
   padding: 0.625rem 0.75rem;
   border: 1px dashed var(--fux-border, #999);
-  border-radius: var(--fux-radius, 0.25rem);
+  border-radius: var(--fux-radius-sm, 0.1875rem);
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: var(--fux-input-font-size, 1rem);
   line-height: 1.5;
   resize: vertical;
 }
@@ -285,4 +312,106 @@
 .fast-ux-editor__information > button {
   display: block;
   margin-block-start: var(--fux-space-sm, 0.5rem);
+}
+
+/* Guides follow the visible ancestry without adding a border around every item. */
+.fast-ux-editor__guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fast-ux-editor__guides > span {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(
+    var(--outline-guide) * var(--outline-indent) + var(--outline-target) / 2
+  );
+  border-inline-start: 1px solid var(--fux-border-subtle, transparent);
+}
+.fast-ux-editor__row {
+  position: relative;
+  min-block-size: var(--outline-target);
+}
+.fast-ux-editor__bullet,
+.fast-ux-editor__focus,
+.fast-ux-editor__drag,
+.fast-ux-editor__select,
+.fast-ux-editor__info {
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+  color: var(--fux-muted, currentColor);
+}
+.fast-ux-editor__info {
+  font-size: 0.8125rem;
+}
+.fast-ux-editor__item:not([data-selected]):focus-within > .fast-ux-editor__row {
+  background: var(--fux-surface-subtle, transparent);
+}
+.fast-ux-editor__item[data-selected] > .fast-ux-editor__row {
+  background: transparent;
+}
+.fast-ux-editor__item[data-selected] > .fast-ux-editor__row > .fast-ux-editor__select {
+  color: var(--fux-accent, currentColor);
+  background: var(--fux-selected, transparent);
+}
+.fast-ux-editor__item[data-dragging] {
+  outline: 1px dashed var(--fux-accent, currentColor);
+  outline-offset: -1px;
+}
+.fast-ux-editor__bullet:hover,
+.fast-ux-editor__focus:hover,
+.fast-ux-editor__drag:hover,
+.fast-ux-editor__select:hover,
+.fast-ux-editor__info:hover {
+  background: var(--fux-surface-hover, transparent);
+  color: var(--fux-text, currentColor);
+}
+.fast-ux-editor__row > .fux-control:focus-visible,
+.fast-ux-editor__row > .fux-control[data-focus-visible] {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+}
+.fast-ux-editor__task:focus-within {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+}
+.fast-ux-editor__body > :first-child,
+.fast-ux-editor__summary > :first-child {
+  margin-block-start: 0;
+}
+.fast-ux-editor__body > :last-child,
+.fast-ux-editor__summary > :last-child {
+  margin-block-end: 0;
+}
+.fast-ux-editor__summary:focus-visible {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: 2px;
+}
+.fast-ux-editor__toolbar {
+  padding-block-end: 0.25rem;
+  border-block-end: 1px solid var(--fux-border-subtle, transparent);
+}
+.fast-ux-editor__toolbar > .fux-control,
+.fast-ux-editor__breadcrumbs > .fux-control {
+  border-color: transparent;
+  background: transparent;
+  color: var(--fux-muted, currentColor);
+  font-size: 0.8125rem;
+}
+.fast-ux-editor__breadcrumbs > [aria-current] {
+  color: var(--fux-text, currentColor);
+}
+@media (hover: hover) {
+  .fast-ux-editor__item:not([data-selected]) > .fast-ux-editor__row:hover {
+    background: var(--fux-surface-subtle, transparent);
+  }
+}
+@media (forced-colors: active) {
+  .fast-ux-editor__item[data-selected] {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
+  .fast-ux-editor__guides > span {
+    border-color: CanvasText;
+  }
 }

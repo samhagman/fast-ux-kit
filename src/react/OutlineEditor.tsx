@@ -52,6 +52,13 @@ import { useTextCompletion } from "./useTextCompletion.js";
 import { useTextHover } from "./useTextHover.js";
 import { TextPopup } from "./TextPopup.js";
 import {
+  OutlineBullet,
+  OutlineCheck,
+  OutlineChevron,
+  OutlineFocus,
+  OutlineGrip,
+} from "./OutlineGlyph.js";
+import {
   OutlinePlaceholderInput,
   type OutlinePlaceholderDraft,
 } from "./OutlinePlaceholderInput.js";
@@ -1214,11 +1221,32 @@ export function OutlineEditor<T = unknown>({
             diagnosticsId = `${rootId}-diagnostics-${index}`;
           const analysis = currentTextAnalysis(getTextAnalysis?.(node), node.text);
           const richDocument = getRichContent?.(node);
+          const body = renderBody?.(node);
+          const hasBody = renderBody
+            ? body != null && typeof body !== "boolean" && body !== ""
+            : !!richDocument;
           const activeCompletion =
             completion.session?.context.rowId === node.id ? completion.session : null;
           const popupId = `${rootId}-completions`,
             activeOption = activeCompletion ? `${popupId}-${activeCompletion.active}` : undefined;
           const hiddenSummary = row.hasChildren && !expanded ? renderCollapsed?.(node) : null;
+          const hasTask = showTasks && node.checked !== undefined;
+          const focusButton = (
+            <Button
+              className={`${hasTask ? "fast-ux-editor__focus" : "fast-ux-editor__bullet"} fux-control`}
+              aria-label={`Focus on ${node.text || "empty item"}`}
+              onPress={() => {
+                completion.dismiss();
+                dispatch({ type: "hoist", id: node.id });
+              }}
+            >
+              {hasTask ? (
+                <OutlineFocus />
+              ) : (
+                <OutlineBullet collapsed={row.hasChildren && !expanded} />
+              )}
+            </Button>
+          );
           return (
             <li
               key={node.id}
@@ -1229,6 +1257,11 @@ export function OutlineEditor<T = unknown>({
               className="fast-ux-editor__item"
               data-node-id={node.id}
               data-depth={row.depth}
+              data-has-children={row.hasChildren}
+              data-expanded={row.hasChildren && expanded}
+              data-checked={node.checked}
+              data-locked={locked || undefined}
+              data-dragging={(drag?.active && drag.ids.includes(node.id)) || undefined}
               data-selected={selected || undefined}
               data-tone={getRowTone?.(node)}
               data-drop-before={
@@ -1268,42 +1301,16 @@ export function OutlineEditor<T = unknown>({
                 }
               }}
             >
+              {row.depth > 0 && (
+                <span className="fast-ux-editor__guides" aria-hidden="true">
+                  {Array.from({ length: Math.min(row.depth, 12) }, (_, level) => (
+                    <span key={level} style={{ "--outline-guide": level } as CSSProperties} />
+                  ))}
+                </span>
+              )}
               <div className="fast-ux-outliner__row fast-ux-editor__row">
-                <Button
-                  className="fast-ux-editor__bullet fux-control"
-                  aria-label={`Focus on ${node.text || "empty item"}`}
-                  onPress={() => {
-                    completion.dismiss();
-                    dispatch({ type: "hoist", id: node.id });
-                  }}
-                >
-                  •
-                </Button>
-                <Button
-                  className="fast-ux-editor__select fux-control"
-                  aria-label={`Select ${node.text || "empty item"}`}
-                  aria-pressed={selected}
-                  onPress={(event) =>
-                    selectRow(node.id, event.shiftKey, event.metaKey || event.ctrlKey)
-                  }
-                >
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    width="18"
-                    height="18"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="2.5" y="2.5" width="15" height="15" rx="3" />
-                    {selected && <path d="m6 10 2.5 2.5L14 7" />}
-                  </svg>
-                </Button>
-                {showTasks && node.checked !== undefined && (
+                {!hasTask && focusButton}
+                {hasTask && (
                   <label className="fast-ux-editor__task">
                     <input
                       type="checkbox"
@@ -1496,6 +1503,17 @@ export function OutlineEditor<T = unknown>({
                     </TextPopup>
                   )}
                 </div>
+                {hasTask && focusButton}
+                <Button
+                  className="fast-ux-editor__select fux-control"
+                  aria-label={`Select ${node.text || "empty item"}`}
+                  aria-pressed={selected}
+                  onPress={(event) =>
+                    selectRow(node.id, event.shiftKey, event.metaKey || event.ctrlKey)
+                  }
+                >
+                  <OutlineCheck checked={selected} />
+                </Button>
                 {hoverProviders.length > 0 && (
                   <Button
                     className="fast-ux-editor__info fux-control"
@@ -1587,12 +1605,12 @@ export function OutlineEditor<T = unknown>({
                       event.currentTarget.setPointerCapture?.(event.pointerId);
                     }}
                   >
-                    ⠿
+                    <OutlineGrip />
                   </Button>
                 )}
                 {row.hasChildren && (
                   <Button
-                    className="fast-ux-outliner__toggle"
+                    className="fast-ux-outliner__toggle fux-control"
                     aria-label={`${expanded ? "Collapse" : "Expand"} ${node.text || "item"}`}
                     aria-expanded={expanded}
                     onPress={(event) =>
@@ -1603,14 +1621,21 @@ export function OutlineEditor<T = unknown>({
                       )
                     }
                   >
-                    <span aria-hidden="true">▸</span>
+                    <span className="fast-ux-outliner__chevron" aria-hidden="true">
+                      <OutlineChevron />
+                    </span>
+                    {!expanded && (
+                      <span className="fast-ux-outliner__count" aria-hidden="true">
+                        {node.children!.length}
+                      </span>
+                    )}
                   </Button>
                 )}
               </div>
-              {(renderBody || richDocument) && (
+              {hasBody && (
                 <div className="fast-ux-editor__body">
                   {renderBody ? (
-                    renderBody(node)
+                    body
                   ) : (
                     <RichContent
                       document={richDocument!}

@@ -61,6 +61,12 @@ test("six independently authored fixtures have stable unique IDs, valid rich dat
 
 test("lab starts read-only and view actions do not add content history or self-report passes", async () => {
   const view = render(<OutlinerLab />);
+  assert.ok(
+    view
+      .getByText("A small field notebook", { selector: "span" })
+      .classList.contains("fast-ux-outliner__label"),
+    "custom reveal targets retain the shared reader hierarchy label",
+  );
   assert.equal(
     within(view.getByRole("region", { name: "Live outliner workspace" })).queryByRole("textbox") ===
       null,
@@ -471,4 +477,21 @@ test("local @ suggestions are accepted explicitly and can be undone", async () =
   await waitFor(() => assert.match(input.value, /^Ask @\w+/));
   await click(view.getByRole("button", { name: "Undo" }));
   assert.equal(input.value, "Ask @");
+});
+
+test("task-first lab puts its live document before optional guidance and trial policy chrome", () => {
+  const view = render(<OutlinerLab />);
+  const document = view.getByRole("region", { name: "Outliner lab document" });
+  const policy = view.getByRole("group", { name: "Trial settings" });
+  const guide = view.container.querySelector<HTMLDetailsElement>(".lab-guide")!;
+  assert.equal(guide.open, false);
+  assert.match(guide.querySelector("summary")!.textContent!, /Scenario guide/);
+  assert.ok(document.compareDocumentPosition(policy) & Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(document.compareDocumentPosition(guide) & Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(view.getByRole("button", { name: "Expand all" }));
+  assert.ok(view.getByRole("button", { name: "Reveal sample detail" }));
+  assert.equal(
+    (view.getByRole("checkbox", { name: "Enable editing" }) as HTMLInputElement).checked,
+    false,
+  );
 });
