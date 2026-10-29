@@ -44,6 +44,16 @@
 .fast-ux-outliner__item > .fast-ux-outliner__row:focus-within {
   background: var(--fux-surface-subtle, transparent);
 }
+.fast-ux-outliner[data-read-only="true"] .fast-ux-outliner__item:focus-visible {
+  outline: none;
+}
+.fast-ux-outliner[data-read-only="true"]
+  .fast-ux-outliner__item:focus-visible
+  > .fast-ux-outliner__row {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+  background: var(--fux-surface-subtle, transparent);
+}
 @media (hover: hover) {
   .fast-ux-outliner__item > .fast-ux-outliner__row:hover {
     background: color-mix(in srgb, var(--fux-surface-subtle) 65%, transparent);

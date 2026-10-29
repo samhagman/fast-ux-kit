@@ -120,6 +120,7 @@ function readerFocusVisible(element: HTMLElement, section: HTMLElement): boolean
 /**
  * Read-first nested disclosure lists, deliberately NOT an ARIA tree or an editor.
  * Tab visits disclosures and embedded links normally; Enter/Space toggle the focused button.
+ * Unmodified Up/Down on the reader or its own row controls navigates visible rows.
  * Folding is local reader state and never mutates document nodes or implies edit permission.
  *
  * No theme is injected. Style the fast-ux-outliner* classes/data attributes, including an
@@ -297,6 +298,7 @@ export function Outliner<T = unknown>({
               <li
                 key={node.id}
                 className="fast-ux-outliner__item"
+                tabIndex={-1}
                 data-node-id={node.id}
                 data-depth={depth}
                 data-has-children={hasChildren}
@@ -378,7 +380,55 @@ export function Outliner<T = unknown>({
     <section
       {...sectionProps}
       ref={sectionRef}
-      tabIndex={sectionProps.tabIndex ?? -1}
+      tabIndex={sectionProps.tabIndex ?? (visibleRoots.length ? 0 : -1)}
+      onKeyDown={(event) => {
+        sectionProps.onKeyDown?.(event);
+        if (
+          event.defaultPrevented ||
+          event.nativeEvent.isComposing ||
+          event.keyCode === 229 ||
+          event.altKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.shiftKey ||
+          (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+        )
+          return;
+        const section = event.currentTarget;
+        const target = event.target as HTMLElement;
+        // Embedded inputs, media, rich-content widgets and nested outlines retain
+        // their own keys. Only our section, rows and explicit row controls opt in.
+        if (target.closest(".fast-ux-outliner") !== section) return;
+        const ownControl =
+          target.hasAttribute("data-disclosure-id") || target.hasAttribute("data-hoist-id");
+        if (
+          target !== section &&
+          !target.classList.contains("fast-ux-outliner__item") &&
+          !ownControl
+        )
+          return;
+        const rows = [...section.querySelectorAll<HTMLElement>(".fast-ux-outliner__item")].filter(
+          (row) => row.closest(".fast-ux-outliner") === section && readerFocusVisible(row, section),
+        );
+        if (!rows.length) return;
+        // Cancel even at the first/last row, so a boundary never leaks a page scroll.
+        event.preventDefault();
+        event.stopPropagation();
+        const current = target.closest<HTMLElement>(".fast-ux-outliner__item");
+        const index = current ? rows.indexOf(current) : -1;
+        const next =
+          index < 0
+            ? rows[event.key === "ArrowDown" ? 0 : rows.length - 1]
+            : rows[index + (event.key === "ArrowDown" ? 1 : -1)];
+        if (!next) return;
+        next.focus({ preventScroll: true });
+        // A branch item includes its entire subtree; reveal just its own row.
+        next.querySelector<HTMLElement>(":scope > .fast-ux-outliner__row")?.scrollIntoView?.({
+          block: "nearest",
+          inline: "nearest",
+          behavior: "instant",
+        });
+      }}
       onFocusCapture={(event) => {
         focusedNode.current =
           (event.target as Element).closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? null;
