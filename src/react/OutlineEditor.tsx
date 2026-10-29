@@ -154,6 +154,8 @@ export interface OutlineEditorProps<T = unknown> extends OutlineEditorOptions<T>
   readonly getRefusalMessage?: (reason: string) => string;
   /** Opt in to Shift+Enter title/note switching; omitted preserves title keys. */
   readonly noteKeyboardProfile?: "toggle";
+  /** Browse first: row folding and bullet navigation, with explicit permitted edit sessions. */
+  readonly interactionMode?: "direct" | "browse";
   readonly spellCheck?: boolean;
   readonly showToolbar?: boolean;
   readonly showBreadcrumbs?: boolean;
@@ -248,6 +250,7 @@ export function OutlineEditor<T = unknown>({
   getRefusalMessage,
   noteKeyboardProfile,
   noteAdapter,
+  interactionMode = "direct",
   spellCheck = true,
   showToolbar = true,
   showBreadcrumbs = true,
@@ -272,6 +275,17 @@ export function OutlineEditor<T = unknown>({
     external = useRef(nodes),
     proposed = useRef(new WeakSet<readonly OutlineNode<T>[]>());
   const externalReset = useRef(resetKey);
+  const [browseEditing, setBrowseEditing] = useState(false);
+  const readerRoot = useRef<HTMLDivElement>(null);
+  const readerActiveId = useRef<string | null>(null);
+  const [readerFocusedId, setReaderFocusedId] = useState<string | null>(null);
+  const readerReturnId = useRef<string | null>(null);
+  const readerReturnPending = useRef(false);
+  const insertionEntryPending = useRef(false);
+  const readerReturnPath = useRef<readonly string[]>([]);
+  const editorHadFocus = useRef(false);
+  const titleCompositionEpoch = useRef(0);
+  const browsing = interactionMode === "browse" && !browseEditing;
   const [rowMode, setRowMode] = useState(false),
     rowModeRef = useRef(false);
   const root = useRef<HTMLElement>(null),
@@ -356,6 +370,7 @@ export function OutlineEditor<T = unknown>({
     }
     config.onStateChange?.(next, action);
     for (const plugin of config.plugins) plugin.afterAction?.(action, previous, next);
+    return { action, previous, next };
   }, []);
   const getContext = useCallback((): TextRequestContext | null => {
     const rowId = focused.current,
@@ -515,6 +530,13 @@ export function OutlineEditor<T = unknown>({
     }
     // An unrelated host replacement wins and clears stale user history/completion.
     proposed.current = new WeakSet();
+    if (interactionMode === "browse") {
+      if (editorHadFocus.current) rememberReaderReturn();
+      composing.current = false;
+      titleCompositionEpoch.current++;
+      insertionEntryPending.current = false;
+      setBrowseEditing(false);
+    }
     completionRef.current.dismiss();
     const reconciled = reconcileOutlineEditorState(model.current, nodes, callbacks.current);
     const next = {
@@ -524,7 +546,7 @@ export function OutlineEditor<T = unknown>({
     };
     model.current = next;
     setState(next);
-  }, [nodes, resetKey]);
+  }, [nodes, resetKey, interactionMode]);
   useLayoutEffect(() => {
     const adapterChanged = previousNoteAdapter.current !== noteAdapter;
     previousNoteAdapter.current = noteAdapter;
@@ -579,7 +601,7 @@ export function OutlineEditor<T = unknown>({
       root.current?.focus({ preventScroll: true });
       noteHadFocus.current = false;
     }
-    if (!caret || readOnly || composing.current || noteComposing.current) {
+    if (!caret || readOnly || browsing || composing.current || noteComposing.current) {
       pendingFocus.current = false;
       return;
     }
@@ -602,7 +624,7 @@ export function OutlineEditor<T = unknown>({
     selectedCaret.current = { start: caret.start, end: caret.end };
     pendingFocus.current = false;
     textarea.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
-  }, [state.focusVersion, readOnly]);
+  }, [state.focusVersion, readOnly, browsing]);
   const resizeTextareas = useCallback((targets?: Iterable<HTMLTextAreaElement>) => {
     // Batch the writes and reads: one width notification must not force a fresh
     // layout for every row. Height-only notifications are filtered below.
@@ -627,6 +649,7 @@ export function OutlineEditor<T = unknown>({
     state.expandedIds,
     state.hoistedId,
     readOnly,
+    browsing,
     showTasks,
     enableDrag,
     hoverProviders.length,
@@ -637,7 +660,7 @@ export function OutlineEditor<T = unknown>({
     resizeTextareas,
   ]);
   useLayoutEffect(() => {
-    if (readOnly || !root.current) return;
+    if (readOnly || browsing || !root.current) return;
     const element = root.current;
     const widths = observedWidths.current;
     const observer =
@@ -672,7 +695,7 @@ export function OutlineEditor<T = unknown>({
       widths.clear();
       window.removeEventListener("resize", resizeAll);
     };
-  }, [readOnly, resizeTextareas]);
+  }, [readOnly, browsing, resizeTextareas]);
   useLayoutEffect(() => {
     const observer = textareaSizeObserver.current;
     if (!observer) return;
@@ -803,6 +826,10 @@ export function OutlineEditor<T = unknown>({
     } else if (!command && !event.altKey && event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
+      if (interactionMode === "browse") {
+        finishBrowseEdit(rowId);
+        return;
+      }
       const previous = model.current;
       dispatch({ type: "select", id: rowId });
       if (
@@ -996,6 +1023,18 @@ export function OutlineEditor<T = unknown>({
         if (mapped) dispatch(mapped);
         return;
       }
+    }
+    if (
+      interactionMode === "browse" &&
+      event.key === "Escape" &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      finishBrowseEdit(rowId);
+      return;
     }
     if (
       mode === "text" &&
@@ -1270,10 +1309,94 @@ export function OutlineEditor<T = unknown>({
     cancelDrag();
   }, [state.nodes, state.hoistedId, readOnly, cancelDrag]);
 
-  if (readOnly)
-    return (
+  const canEditRow = (node: OutlineNode<T>) =>
+    !callbacks.current.readOnly &&
+    !getOutlinePath(model.current.nodes, node.id).some((item) =>
+      callbacks.current.isLocked?.(item),
+    );
+  function beginBrowseEdit(node: OutlineNode<T>) {
+    const current = findOutlineNode(model.current.nodes, node.id)?.node;
+    if (!current || !canEditRow(current)) return;
+    updateMode(false);
+    const outcome = dispatch({ type: "focus", id: current.id, start: current.text.length });
+    if (
+      !outcome ||
+      outcome.action.type !== "focus" ||
+      outcome.action.id !== current.id ||
+      outcome.action.field === "note" ||
+      outcome.next === outcome.previous ||
+      model.current.refusal ||
+      model.current.caret?.id !== current.id
+    )
+      return;
+    readerActiveId.current = current.id;
+    setBrowseEditing(true);
+  }
+  function rememberReaderReturn(rowId = model.current.caret?.id ?? focused.current) {
+    readerReturnPending.current = true;
+    readerReturnId.current = rowId;
+    readerReturnPath.current = rowId
+      ? getOutlinePath(model.current.nodes, rowId)
+          .map((node) => node.id)
+          .reverse()
+      : [];
+  }
+  function finishBrowseEdit(rowId = model.current.caret?.id ?? null) {
+    // Do not tear down an active native composition. Accepted changes already
+    // belong to the canonical document; Done does not promise remote persistence.
+    if (composing.current || noteComposing.current) return;
+    completion.dismiss();
+    dismissHover();
+    cancelDrag();
+    rememberReaderReturn(rowId);
+    insertionEntryPending.current = false;
+    titleCompositionEpoch.current++;
+    noteCompositionEpoch.current++;
+    updateMode(false);
+    setBrowseEditing(false);
+  }
+  useLayoutEffect(() => {
+    if (readOnly) {
+      if (editorHadFocus.current) rememberReaderReturn();
+      composing.current = false;
+      noteComposing.current = false;
+      titleCompositionEpoch.current++;
+      noteCompositionEpoch.current++;
+      insertionEntryPending.current = false;
+      setBrowseEditing(false);
+    }
+  }, [readOnly]);
+  useLayoutEffect(() => {
+    if (!browsing || !readerReturnPending.current) return;
+    const reader = readerRoot.current?.querySelector<HTMLElement>(".fast-ux-outliner");
+    if (!reader) return;
+    const rows = [
+      ...reader.querySelectorAll<HTMLElement>(".fast-ux-outliner__item[data-node-id]"),
+    ].filter((element) => element.closest(".fast-ux-outliner") === reader);
+    const target = [readerReturnId.current, ...readerReturnPath.current]
+      .map((id) => rows.find((element) => element.dataset.nodeId === id))
+      .find(Boolean);
+    readerReturnPending.current = false;
+    readerReturnId.current = null;
+    readerReturnPath.current = [];
+    editorHadFocus.current = false;
+    (target ?? reader).focus({ preventScroll: true });
+  }, [browsing, readOnly]);
+
+  useLayoutEffect(() => {
+    if (browsing || readOnly || !insertionEntryPending.current) return;
+    insertionEntryPending.current = false;
+    if (!root.current) return;
+    [...root.current.querySelectorAll<HTMLElement>(".fast-ux-editor__add")]
+      .find((element) => element.closest(".fast-ux-editor") === root.current)
+      ?.focus({ preventScroll: true });
+  }, [browsing, readOnly]);
+
+  if (readOnly || browsing) {
+    const reader = (
       <Outliner
         nodes={state.nodes}
+        id={rootId}
         className={className}
         aria-label={label}
         expandedIds={state.expandedIds}
@@ -1284,17 +1407,65 @@ export function OutlineEditor<T = unknown>({
         richRegistry={richRegistry}
         allowMedia={allowMedia}
         renderContent={renderContent}
-        renderBody={renderBody}
+        renderBody={
+          renderBody ??
+          (interactionMode === "browse" && noteAdapter
+            ? (node) => {
+                const note = readNote(node);
+                return note ? <div className="fast-ux-editor__note-preview">{note}</div> : null;
+              }
+            : undefined)
+        }
         renderAccessory={renderAccessory}
         renderCollapsed={renderCollapsed}
         renderStatus={renderStatus}
         renderSuffix={renderSuffix}
+        interactionMode={interactionMode === "browse" ? "row" : undefined}
+        onEditRequest={!readOnly && interactionMode === "browse" ? beginBrowseEdit : undefined}
+        canEdit={canEditRow}
+        onFocusCapture={(event) => {
+          const row = (event.target as Element).closest<HTMLElement>("[data-node-id]");
+          if (row && row.closest(".fast-ux-outliner") === event.currentTarget) {
+            readerActiveId.current = row.dataset.nodeId ?? null;
+            setReaderFocusedId(readerActiveId.current);
+          }
+        }}
         enableHoist={showBreadcrumbs}
         hoistedId={state.hoistedId}
         onHoistChange={(id) => dispatch({ type: "hoist", id })}
       />
     );
+    if (interactionMode !== "browse") return reader;
+    const editTarget =
+      visible.find((row) => row.node.id === readerFocusedId)?.node ??
+      visible.find((row) => canEditRow(row.node))?.node;
+    const insertionOnly = !state.hoistedId && !visible.some((row) => canEditRow(row.node));
+    return (
+      <div className="fast-ux-editor__session" ref={readerRoot}>
+        {!readOnly && (
+          <div className="fast-ux-editor__browse-actions" role="group" aria-label="Outline editing">
+            <p>Tap a row to fold. Tap its bullet to focus. Hold a row or use Edit to write.</p>
+            <Button
+              className="fux-control"
+              isDisabled={!insertionOnly && (!editTarget || !canEditRow(editTarget))}
+              onPress={() => {
+                if (insertionOnly) {
+                  updateMode(false);
+                  insertionEntryPending.current = true;
+                  setBrowseEditing(true);
+                } else if (editTarget) beginBrowseEdit(editTarget);
+              }}
+            >
+              Edit outline
+            </Button>
+          </div>
+        )}
+        {reader}
+      </div>
+    );
+  }
 
+  const activeBranch = state.caret ? findOutlineNode(state.nodes, state.caret.id)?.node : undefined;
   const breadcrumbs = state.hoistedId ? getOutlinePath(state.nodes, state.hoistedId) : [];
   const renderPlaceholder = (placeholder: OutlinePlaceholder, parentId: string | null) => {
     const insert = (draft?: OutlinePlaceholderDraft) => {
@@ -1337,8 +1508,39 @@ export function OutlineEditor<T = unknown>({
       aria-label={label}
       tabIndex={-1}
       data-read-only="false"
+      onFocusCapture={() => {
+        editorHadFocus.current = true;
+      }}
+      onBlurCapture={(event) => {
+        const outside = event.relatedTarget && !event.currentTarget.contains(event.relatedTarget);
+        const deliberateBlur = !event.relatedTarget && (event.target as HTMLElement).isConnected;
+        if (outside || deliberateBlur) editorHadFocus.current = false;
+      }}
       onKeyDown={(event) => {
         const container = event.currentTarget;
+        const target = event.target as Element;
+        const ownedSessionControl = target.closest(
+          ".fast-ux-editor__edit-actions, .fast-ux-editor__add",
+        );
+        if (
+          interactionMode === "browse" &&
+          event.key === "Escape" &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey &&
+          !event.shiftKey &&
+          !event.defaultPrevented &&
+          !event.nativeEvent.defaultPrevented &&
+          !event.nativeEvent.isComposing &&
+          event.keyCode !== 229 &&
+          (target === container ||
+            (ownedSessionControl && target.closest(".fast-ux-editor") === container))
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          finishBrowseEdit();
+          return;
+        }
         if (
           event.target !== container ||
           container.ownerDocument.activeElement !== container ||
@@ -1413,7 +1615,50 @@ export function OutlineEditor<T = unknown>({
       <span ref={exitStart} className="fast-ux-sr-only" tabIndex={-1}>
         Start of {label}
       </span>
-      {showToolbar && (
+      {interactionMode === "browse" && (
+        <div
+          className="fast-ux-editor__edit-actions"
+          role="group"
+          aria-label="Finish outline editing"
+        >
+          <span>Editing · changes are kept in this document</span>
+          <Button
+            className="fux-control"
+            isDisabled={!state.history.past.length}
+            onPress={() => dispatch({ type: "undo" })}
+          >
+            Undo
+          </Button>
+          <Button
+            className="fux-control"
+            isDisabled={!state.history.future.length}
+            onPress={() => dispatch({ type: "redo" })}
+          >
+            Redo
+          </Button>
+          {activeBranch?.children?.length ? (
+            <Button
+              className="fux-control"
+              aria-label={
+                state.expandedIds.has(activeBranch.id) ? "Collapse active row" : "Expand active row"
+              }
+              onPress={() => dispatch({ type: "toggle", id: activeBranch.id })}
+            >
+              {state.expandedIds.has(activeBranch.id) ? "Fold row" : "Unfold row"}
+            </Button>
+          ) : null}
+          <Button
+            className="fux-control fast-ux-editor__done"
+            onPointerDown={(event) => {
+              if (composing.current || noteComposing.current) event.preventDefault();
+            }}
+            onPress={() => finishBrowseEdit()}
+          >
+            Done
+          </Button>
+        </div>
+      )}
+      {showToolbar && interactionMode !== "browse" && (
         <div role="toolbar" aria-label="Outline actions" className="fast-ux-editor__toolbar">
           <Button
             className="fux-control"
@@ -1487,6 +1732,7 @@ export function OutlineEditor<T = unknown>({
           const body = renderBody?.(node);
           const note = readNote(node);
           const noteEpoch = noteCompositionEpoch.current;
+          const titleEpoch = titleCompositionEpoch.current;
           const editingNote =
             note !== undefined &&
             !locked &&
@@ -1504,14 +1750,14 @@ export function OutlineEditor<T = unknown>({
           const hasTask = showTasks && node.checked !== undefined;
           const focusButton = (
             <Button
-              className={`${hasTask ? "fast-ux-editor__focus" : "fast-ux-editor__bullet"} fux-control`}
+              className={`${hasTask && interactionMode !== "browse" ? "fast-ux-editor__focus" : "fast-ux-editor__bullet"} fux-control`}
               aria-label={`Focus on ${node.text || "empty item"}`}
               onPress={() => {
                 completion.dismiss();
                 dispatch({ type: "hoist", id: node.id });
               }}
             >
-              {hasTask ? (
+              {hasTask && interactionMode !== "browse" ? (
                 <OutlineFocus />
               ) : (
                 <OutlineBullet collapsed={row.hasChildren && !expanded} />
@@ -1580,7 +1826,7 @@ export function OutlineEditor<T = unknown>({
                 </span>
               )}
               <div className="fast-ux-outliner__row fast-ux-editor__row">
-                {!hasTask && focusButton}
+                {(!hasTask || interactionMode === "browse") && focusButton}
                 {hasTask && (
                   <label className="fast-ux-editor__task">
                     <input
@@ -1613,6 +1859,7 @@ export function OutlineEditor<T = unknown>({
                     </div>
                   ) : null}
                   <textarea
+                    key={titleEpoch}
                     ref={(element) => {
                       if (element) textareas.current.set(node.id, element);
                       else textareas.current.delete(node.id);
@@ -1638,6 +1885,7 @@ export function OutlineEditor<T = unknown>({
                     aria-controls={activeCompletion ? popupId : undefined}
                     aria-activedescendant={activeOption}
                     className="fast-ux-editor__input"
+                    data-browse-input={interactionMode === "browse" || undefined}
                     data-decorated={!!analysis?.classifications?.length || undefined}
                     onPointerMove={(event) => {
                       if (
@@ -1707,6 +1955,7 @@ export function OutlineEditor<T = unknown>({
                         dismissHover();
                     }}
                     onChange={(event) => {
+                      if (titleEpoch !== titleCompositionEpoch.current) return;
                       syncInput(event.currentTarget, node.id);
                       if (!composing.current) {
                         const context = getContext();
@@ -1714,11 +1963,14 @@ export function OutlineEditor<T = unknown>({
                       }
                     }}
                     onCompositionStart={() => {
+                      if (titleEpoch !== titleCompositionEpoch.current) return;
                       composing.current = true;
                       completion.dismiss();
                       dismissHover();
                     }}
                     onCompositionEnd={(event) => {
+                      if (titleEpoch !== titleCompositionEpoch.current || !composing.current)
+                        return;
                       composing.current = false;
                       syncInput(event.currentTarget, node.id);
                       const context = getContext();
@@ -1780,7 +2032,7 @@ export function OutlineEditor<T = unknown>({
                     </TextPopup>
                   )}
                 </div>
-                {hasTask && focusButton}
+                {hasTask && interactionMode !== "browse" && focusButton}
                 <Button
                   className="fast-ux-editor__select fux-control"
                   aria-label={`Select ${node.text || "empty item"}`}
@@ -1885,7 +2137,7 @@ export function OutlineEditor<T = unknown>({
                     <OutlineGrip />
                   </Button>
                 )}
-                {row.hasChildren && (
+                {row.hasChildren && interactionMode !== "browse" && (
                   <Button
                     className="fast-ux-outliner__toggle fux-control"
                     aria-label={`${expanded ? "Collapse" : "Expand"} ${node.text || "item"}`}
@@ -1923,6 +2175,7 @@ export function OutlineEditor<T = unknown>({
                         rows={1}
                         spellCheck={spellCheck}
                         className="fast-ux-editor__input fast-ux-editor__note-input"
+                        data-browse-input={interactionMode === "browse" || undefined}
                         aria-label={`Edit note for ${node.text || "empty item"}`}
                         aria-describedby={`${rootId}-note-help-${index}`}
                         onFocus={(event) => {

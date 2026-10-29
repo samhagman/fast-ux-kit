@@ -24,6 +24,7 @@ import {
 } from "../../src/core/index.js";
 import { validateRichDocument } from "../../src/rich/index.js";
 import { Code, PageHeading } from "./ui.js";
+import { OutlineInteractionDemo } from "./outline-interaction-demo.js";
 import { labScenarios, type LabData, type LabScenario } from "./outliner-lab-data.js";
 
 const canonicalJSON = createOutlineJSONCodec<LabData>();
@@ -154,6 +155,8 @@ export function OutlinerLab() {
         title="Outliner lab"
         description="A real, resettable outliner. Read first; edit deliberately."
       />
+      <OutlineInteractionDemo />
+      <h2>Advanced capability trials</h2>
       <div className="lab-scenario-bar">
         <label className="lab-scenario-picker" htmlFor={selectorId}>
           Choose a scenario

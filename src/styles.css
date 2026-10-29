@@ -374,3 +374,44 @@ button.fux-control.fux-highlight[data-focus-visible] {
 .fux-highlight--extra[data-focus-visible]::after {
   content: attr(aria-label);
 }
+
+/* Browse-first row surface: native title button, independent leading navigation. */
+.fast-ux-outliner[data-interaction-mode="row"] {
+  --outline-gutter: var(--outline-target);
+}
+.fast-ux-outliner__content[data-row-interaction] {
+  padding-block: 0;
+}
+.fast-ux-outliner__row-action {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: var(--outline-target);
+  border: 0;
+  padding: var(--fux-outline-padding, 0.625rem) 0.25rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  touch-action: manipulation;
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+}
+.fast-ux-outliner__row-action:focus-visible {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+}
+.fast-ux-outliner__row-action[aria-expanded] {
+  font-weight: 550;
+}
+.fast-ux-outliner__content[data-row-interaction] > .fast-ux-outliner__label {
+  display: inline-block;
+  padding-block: var(--fux-outline-padding, 0.625rem);
+}
+.fast-ux-outliner__content[data-row-interaction] > .fast-ux-outliner__body,
+.fast-ux-outliner__content[data-row-interaction] > .fast-ux-outliner__summary {
+  margin-block-start: 0;
+  padding-block-end: 0.375rem;
+}

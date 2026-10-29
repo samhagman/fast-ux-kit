@@ -111,6 +111,7 @@ export function ReaderDemo({ compact = false }: { compact?: boolean }) {
       </div>
       <Outliner
         nodes={readerNodes}
+        interactionMode={atStart ? "controls" : "row"}
         aria-label="Interactive documentation outline"
         expandedIds={expanded}
         onExpandedChange={setExpanded}

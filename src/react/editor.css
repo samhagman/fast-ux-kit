@@ -435,3 +435,36 @@
   min-block-size: var(--outline-target);
   min-inline-size: var(--outline-target);
 }
+
+/* Browse sessions separate navigation from editing without replacing history. */
+.fast-ux-editor__browse-actions,
+.fast-ux-editor__edit-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fux-space-xs, 0.25rem);
+  padding: var(--fux-space-sm, 0.5rem);
+  margin-block-end: var(--fux-space-sm, 0.5rem);
+  border-block-end: 1px solid var(--fux-border, currentColor);
+  color: var(--fux-text, CanvasText);
+  background: var(--fux-surface, Canvas);
+}
+.fast-ux-editor__browse-actions > p,
+.fast-ux-editor__edit-actions > span {
+  flex: 1 1 16rem;
+  margin: 0;
+  color: var(--fux-muted, currentColor);
+  font-size: 0.875em;
+}
+.fast-ux-editor__edit-actions {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+}
+.fast-ux-editor__done {
+  font-weight: 650;
+  border-color: var(--fux-accent, currentColor);
+}
+.fast-ux-editor__input[data-browse-input] {
+  scroll-margin-block-start: 7rem;
+}
