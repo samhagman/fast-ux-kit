@@ -2,6 +2,13 @@ import { componentUtilities } from "../../src/components/manifest.js";
 
 export const experiencePages = [
   {
+    id: "outliner-lab",
+    name: "Outliner lab",
+    description:
+      "A guided read-first tester for folding, editing, structure, policy, history, rich content, plugins and text intelligence.",
+    category: "Outliner",
+  },
+  {
     id: "outline",
     name: "Outline reader",
     description:

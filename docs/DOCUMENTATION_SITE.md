@@ -74,3 +74,26 @@ not browser, visual, mobile IME, screen reader or production acceptance. Run rea
 browser checks for responsive layout, light/dark contrast, focus restoration,
 Escape/Close, repeated actions, hash navigation, folding, editing, clipboard and
 reduced motion. Record any environment limits honestly.
+
+## Showcase entry points
+
+The Overview leads with **Open the outliner lab** and **Explore all components**.
+The Outliner navigation group sits near the foundations, before the component
+categories; no individually named component, color family, utility or alias route
+is removed. Search includes the lab's reader, structure, policy, history, rich
+content, plugin and intelligence description.
+
+`#outliner-lab` is a separately lazy-loaded page, not an `experienceDemos` entry.
+Its route branch precedes the generic experience-page branch. The existing focused
+reader, editor, extensions, rich-content, text-intelligence and highlight pages
+remain directly addressable. The Overview's capability map links these examples
+and makes the important boundaries visible: deliberate editing, reader-local
+folds, client policy versus authorization, codec limitations, trusted renderers
+and safe unknown-content fallbacks.
+
+The Overview's read → edit → inspect pathway is an invitation to exercise behavior,
+not a completion score. It does not claim full parity, release readiness, physical
+Android/iOS, IME or assistive-technology acceptance. The live composition remains
+read-first; source code is not the default showcase view. All new navigation
+links retain 44px minimum targets, logical layout and semantic theme colors; the
+pathway and capability map stack on narrow screens without animation.

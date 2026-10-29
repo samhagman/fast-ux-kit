@@ -28,6 +28,9 @@ import { Code, DemoFrame, Notice, PageBoundary, PageHeading, PageReady, Symbol }
 const ExperiencePage = lazy(() =>
   import("./experiences.js").then((module) => ({ default: module.ExperiencePage })),
 );
+const OutlinerLab = lazy(() =>
+  import("./outliner-lab.js").then((module) => ({ default: module.OutlinerLab })),
+);
 const UtilityPage = lazy(() =>
   import("./utilities.js").then((module) => ({ default: module.UtilityPage })),
 );
@@ -94,6 +97,7 @@ export const aliasPages = ownerFamilyCoverage
 const groupOrder = [
   "Get started",
   "Foundations",
+  "Outliner",
   "Actions",
   "Inputs",
   "Selection",
@@ -108,7 +112,6 @@ const groupOrder = [
   "Files",
   "Media",
   "Layout",
-  "Outliner",
   "Utilities",
   "Component aliases",
 ];
@@ -328,15 +331,15 @@ function Overview() {
           <span>Room for every detail.</span>
         </h1>
         <p className="overview-lede">
-          Thoughtful components, an expressive outliner, and a shared visual language. Built to work
-          together—and stay yours to shape.
+          Styled React Aria and Ark UI components. A direct React outliner that reads first and
+          edits deliberately. One token system, with room for your content and extensions.
         </p>
         <div className="overview-actions">
-          <a className="primary-link" href="#components">
-            Explore the components <Symbol name="arrow" />
+          <a className="primary-link" href="#outliner-lab">
+            Open the outliner lab <Symbol name="arrow" />
           </a>
-          <a className="secondary-link" href="#installation">
-            Start building <Symbol name="external" size={16} />
+          <a className="secondary-link" href="#components">
+            Explore all components <Symbol name="external" size={16} />
           </a>
         </div>
         <div className="overview-facts">
@@ -351,44 +354,166 @@ function Overview() {
           </span>
         </div>
       </div>
-      <OverviewComposition />
-      <section className="reference-section">
-        <div className="section-heading">
-          <div>
-            <p className="mini-eyebrow">A PLACE FOR EVERYTHING</p>
-            <h2>Find your building block.</h2>
-          </div>
-          <a className="text-icon-link" href="#components">
-            View all components <Symbol name="external" size={16} />
+      <section className="overview-lab-path" aria-labelledby="lab-path-title">
+        <div className="lab-path-intro">
+          <p className="mini-eyebrow">START WITH THE OUTLINER</p>
+          <h2 id="lab-path-title">A document, not a dashboard.</h2>
+          <p>
+            Try the interaction contract in one place. The lab starts in a familiar in-place
+            outline, with no editing keyboard or source pane in the way.
+          </p>
+          <a className="text-icon-link" href="#outliner-lab">
+            Try the guided tester <Symbol name="arrow" size={16} />
           </a>
         </div>
-        <div className="category-grid">
-          {(
-            [
-              ["color-picker", "Color", "A complete color vocabulary.", "color"],
-              ["date-picker", "Date & time", "Calendars, ranges and segmented entry.", "calendar"],
-              ["select", "Forms & choices", "Clear input, selection and feedback.", "form"],
-              ["modal-dialog", "Overlays", "Context without losing your place.", "layers"],
-              ["table", "Collections", "Make information easy to work with.", "table"],
-              ["outline", "Outliner", "Keep the thought. Fold the detail.", "outline"],
-            ] as const
-          ).map(([id, title, description, icon]) => (
-            <a href={`#${id}`} className="category-card" key={id}>
-              <span className="category-icon" aria-hidden="true">
-                <Symbol name={icon} size={22} />
-              </span>
-              <h3>{title}</h3>
-              <p>{description}</p>
-              <Symbol name="arrow" size={16} />
-            </a>
-          ))}
-        </div>
+        <ol className="lab-path-steps">
+          <li>
+            <span aria-hidden="true">01</span>
+            <div>
+              <h3>Read and find your place</h3>
+              <p>
+                Fold with the right-thumb option, explore a branch, then return. Reading is local.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span aria-hidden="true">02</span>
+            <div>
+              <h3>Choose to edit</h3>
+              <p>Split, nest and move rows. Compare selection, protected content and undo/redo.</p>
+            </div>
+          </li>
+          <li>
+            <span aria-hidden="true">03</span>
+            <div>
+              <h3>Inspect the boundaries</h3>
+              <p>
+                Try rich blocks, plugin commands and suggestions. Watch state, not just appearance.
+              </p>
+            </div>
+          </li>
+        </ol>
       </section>
+      <OverviewComposition />
+      <OverviewCoverage />
       <Notice title="A private foundation, not an application platform">
         The kit owns presentation and interaction. Your application owns its palette, data,
         persistence and authorization. Examples use synthetic content and local state.
       </Notice>
     </>
+  );
+}
+/** A route map, not an assertion of production or hardware acceptance. */
+function OverviewCoverage() {
+  return (
+    <section className="reference-section overview-coverage" aria-labelledby="coverage-title">
+      <div className="section-heading">
+        <div>
+          <p className="mini-eyebrow">CAPABILITY MAP</p>
+          <h2 id="coverage-title">Follow a feature all the way through.</h2>
+        </div>
+      </div>
+      <p className="coverage-intro">
+        Start in the lab, then use the focused examples for APIs, composition and edge cases. Every
+        styled family remains individually named in the navigation—including color controls.
+      </p>
+      <dl className="capability-map">
+        <div>
+          <dt>One styled component system</dt>
+          <dd>
+            <p>
+              {componentManifest.length} canonical families share semantic tokens. React Aria and
+              Ark UI have explicit owners; aliases, parts and utilities do not inflate the family
+              count.
+            </p>
+            <div className="capability-links">
+              <a href="#components">All components</a>
+              <a href="#system-coverage">Owner coverage</a>
+              <a href="#color-picker">Color controls</a>
+              <a href="#tokens">Design tokens</a>
+            </div>
+          </dd>
+        </div>
+        <div>
+          <dt>Read, fold and navigate</dt>
+          <dd>
+            <p>
+              Mobile-first, in-place hierarchy with reader-local folds, branch navigation and
+              disclosure placement. Editing is a deliberate choice, not a side effect of reading.
+            </p>
+            <div className="capability-links">
+              <a href="#outline">Outline reader</a>
+              <a href="#outliner-lab">Read-first lab</a>
+            </div>
+          </dd>
+        </div>
+        <div>
+          <dt>Edit, structure and history</dt>
+          <dd>
+            <p>
+              Try keyboard editing, split and merge, nesting, movement and multirow selection.
+              Inspect undo/redo separately from reader navigation.
+            </p>
+            <div className="capability-links">
+              <a href="#editor">Outline editor</a>
+              <a href="#outliner-lab">Test structural changes</a>
+            </div>
+          </dd>
+        </div>
+        <div>
+          <dt>Policy and interchange</dt>
+          <dd>
+            <p>
+              Exercise read-only and per-node protection, clipboard operations and explicit
+              import/export codecs. Client-side policy is not server authorization; outline text is
+              not a lossless arbitrary-Markdown codec.
+            </p>
+            <div className="capability-links">
+              <a href="#editor">Policy and import/export example</a>
+              <a href="#outliner-extensions">Custom codec example</a>
+            </div>
+          </dd>
+        </div>
+        <div>
+          <dt>Rich documents and embeds</dt>
+          <dd>
+            <p>
+              Read Markdown, tables, images, drawings, diagrams, audio, video and trusted React
+              blocks in the content flow. Unavailable media and unknown blocks have safe fallbacks;
+              imported data cannot execute code.
+            </p>
+            <div className="capability-links">
+              <a href="#rich-content">Mixed rich document</a>
+            </div>
+          </dd>
+        </div>
+        <div>
+          <dt>Plugins and text intelligence</dt>
+          <dd>
+            <p>
+              Explore ordered extensions, atomic commands, custom rendering and codecs. Try
+              references, highlights and async suggestions with explicit commits and policy checks.
+            </p>
+            <div className="capability-links">
+              <a href="#outliner-extensions">Extension APIs</a>
+              <a href="#text-intelligence">Text intelligence</a>
+              <a href="#highlight-text">Source-coordinate highlights</a>
+            </div>
+          </dd>
+        </div>
+      </dl>
+      <div className="coverage-boundary">
+        <strong>Demonstration coverage is not acceptance.</strong>
+        <p>
+          These examples expose behavior to try, not a claim of complete parity or release
+          readiness. Physical Android/iOS, IME and assistive-technology checks remain separate,
+          unverified gates for this showcase. Browser layout and DOM tests cannot replace them.
+        </p>
+        <a className="text-icon-link" href="#accessibility">
+          Review accessibility and verification boundaries <Symbol name="arrow" size={16} />
+        </a>
+      </div>
+    </section>
   );
 }
 function ComponentCatalog() {
@@ -918,6 +1043,8 @@ export function DocsApp() {
       <Composition />
     ) : active === "system-coverage" ? (
       <SystemCoverage />
+    ) : active === "outliner-lab" ? (
+      <OutlinerLab />
     ) : experiencePages.some((item) => item.id === active) ? (
       <ExperiencePage id={active} />
     ) : utilityPages.some((item) => item.id === active) ? (
