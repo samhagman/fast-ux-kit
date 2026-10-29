@@ -32,6 +32,12 @@ const ExperiencePage = lazy(() =>
 const OutlinerLab = lazy(() =>
   import("./outliner-lab.js").then((module) => ({ default: module.OutlinerLab })),
 );
+const MachineLab = lazy(() =>
+  import("./machine-lab.js").then((module) => ({ default: module.MachineLab })),
+);
+const MachineGalleryPreview = lazy(() =>
+  import("./machine-lab.js").then((module) => ({ default: module.MachineGalleryPreview })),
+);
 const UtilityPage = lazy(() =>
   import("./utilities.js").then((module) => ({ default: module.UtilityPage })),
 );
@@ -98,6 +104,7 @@ const groupOrder = [
   "Get started",
   "Foundations",
   "Outliner",
+  "State machines",
   ...componentCategoryOrder,
   "Utilities",
   "Component aliases",
@@ -991,6 +998,11 @@ export function DocsApp() {
       <ComponentGallery
         initialPosition={galleryPosition.current}
         onPositionChange={rememberGalleryPosition}
+        machinePreview={
+          <Suspense fallback={<p role="status">Loading Machine View preview…</p>}>
+            <MachineGalleryPreview />
+          </Suspense>
+        }
       />
     ) : active === "installation" ? (
       <Installation />
@@ -1004,6 +1016,8 @@ export function DocsApp() {
       <SystemCoverage />
     ) : active === "outliner-lab" ? (
       <OutlinerLab />
+    ) : active === "machine-view" ? (
+      <MachineLab />
     ) : experiencePages.some((item) => item.id === active) ? (
       <ExperiencePage id={active} />
     ) : utilityPages.some((item) => item.id === active) ? (

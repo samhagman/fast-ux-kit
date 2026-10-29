@@ -22,6 +22,8 @@ try {
   assert.ok(paths.includes("dist/components/index.d.ts"));
   assert.ok(paths.includes("dist/components/ark-specialized.css"));
   assert.ok(paths.includes("dist/components/ark-advanced.css"));
+  assert.ok(paths.includes("dist/core/machine/index.js"));
+  assert.ok(paths.includes("dist/react/machine-view.css"));
   assert.ok(
     paths.every((path) => /^(dist\/|docs\/|README\.md$|NOTICE\.md$|package\.json$)/.test(path)),
     `Unexpected package files: ${paths}`,
@@ -44,7 +46,8 @@ try {
     join(fixture, "without-ark.mjs"),
     `import assert from 'node:assert/strict';
 import {validateOutline} from '@samhagman/fast-ux-kit/core';
-import {Outliner} from '@samhagman/fast-ux-kit';
+import {Outliner, MachineView} from '@samhagman/fast-ux-kit';
+import {createMachineSnapshot} from '@samhagman/fast-ux-kit/machine';
 import {Button} from '@samhagman/fast-ux-kit/aria';
 import {Button as StyledButton, ColorPicker, DatePicker, Select, Primitives} from '@samhagman/fast-ux-kit/components/aria';
 import {createElement} from 'react';
@@ -54,6 +57,9 @@ assert.match(renderToString(createElement(ColorPicker, {label:'Accent',defaultVa
 assert.ok(DatePicker && Select && Primitives.Table);
 assert.deepEqual(validateOutline([{id:'one',text:'One'}]),[]);
 assert.equal(typeof Outliner,'function');assert.ok(Button);
+const machine={version:1,rootId:'main',machines:[{id:'main',label:'Consumer machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
+assert.deepEqual(createMachineSnapshot(machine).activeIds,['idle']);
+assert.match(renderToString(createElement(MachineView,{value:machine,readOnly:true})),/Consumer machine/);
 try { await import('@samhagman/fast-ux-kit/ark'); throw Error('Ark unexpectedly installed'); }
 catch(error) { assert.equal(error.code,'ERR_MODULE_NOT_FOUND'); }
 console.log('Core, React reader and RAC entry work with Ark absent.');`,
@@ -73,7 +79,7 @@ console.log('Core, React reader and RAC entry work with Ark absent.');`,
     join(fixture, "consumer.tsx"),
     `import {createElement, createRef} from 'react';
 import {renderToString} from 'react-dom/server';
-import {Outliner, OutlineEditor, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle} from '@samhagman/fast-ux-kit';
+import {Outliner, OutlineEditor, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle, MachineView, type MachineDocument, createMachineSnapshot} from '@samhagman/fast-ux-kit';
 import {Button, Field, Pagination, ColorPicker, DatePicker, Table, componentManifest} from '@samhagman/fast-ux-kit/components';
 import {Pagination as AdvancedPagination} from '@samhagman/fast-ux-kit/ark';
 const nodes: readonly OutlineNode[] = [{id:'root',text:'Root',children:[{id:'child',text:'Child'}]}];
@@ -89,7 +95,9 @@ state=reduceOutlineEditor(state,{type:'text',id:'root',text:'Updated'}, {readOnl
 if(state.nodes[0]?.text!=='Updated') throw Error('Consumer pure editor command failed');
 state=reduceOutlineEditor(state,{type:'transaction',commands:[{type:'update',id:'root',changes:{text:'Atomic'}}]}, {readOnly:false});
 if(state.nodes[0]?.text!=='Atomic') throw Error('Consumer atomic transaction failed');
-const app = <><Outliner nodes={nodes} aria-label="Consumer outline"/><OutlineEditor ref={editorRef} defaultNodes={nodes} readOnly={false} plugins={[plugin]} completionProviders={[provider]}/><RichContent document={document}/><Button variant="primary" onPress={publicExtensionAPI}>Save</Button><Field label="Name"/><Pagination label="Results" count={40}/><ColorPicker label="Accent" defaultValue="#225544"/><DatePicker label="Date"/><Table label="Rows" columns={[{id:'name',label:'Name',render:row=>row.name}]} rows={[{id:'one',name:'One'}]}/></>;
+const machine: MachineDocument={version:1,rootId:'main',machines:[{id:'main',label:'Typed machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
+if(createMachineSnapshot(machine).activeIds[0]!=='idle') throw Error('Machine core failed');
+const app = <><MachineView value={machine} readOnly/><Outliner nodes={nodes} aria-label="Consumer outline"/><OutlineEditor ref={editorRef} defaultNodes={nodes} readOnly={false} plugins={[plugin]} completionProviders={[provider]}/><RichContent document={document}/><Button variant="primary" onPress={publicExtensionAPI}>Save</Button><Field label="Name"/><Pagination label="Results" count={40}/><ColorPicker label="Accent" defaultValue="#225544"/><DatePicker label="Date"/><Table label="Rows" columns={[{id:'name',label:'Name',render:row=>row.name}]} rows={[{id:'one',name:'One'}]}/></>;
 if (!renderToString(app).includes('Consumer outline')) throw Error('SSR failed');
 if (!AdvancedPagination.Root) throw Error('Ark export failed');
 if (!componentManifest.some(item=>item.name==='ColorPicker')) throw Error('Component catalog incomplete');

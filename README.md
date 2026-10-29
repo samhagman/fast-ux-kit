@@ -1,10 +1,10 @@
 # fast-ux-kit
 
 A private React UX foundation: a portable outline model, a direct React outliner,
-and one coherent component layer combining React Aria and Ark UI with shared
+an editable state-machine workbench, and one coherent component layer combining React Aria and Ark UI with shared
 design tokens and styling. This is a library, not another app or theme engine.
 
-**Status:** alpha. No public npm release. No deployment. Full editor and extension parity is tracked by executable tests, not assumed. [Release gates](docs/RELEASE.md) remain explicit.
+**Status:** alpha. No public npm release. Hosting is a separately authorized operation. Full editor and extension parity is tracked by executable tests, not assumed. [Release gates](docs/RELEASE.md) remain explicit.
 
 ## Install and develop
 
@@ -70,6 +70,47 @@ Use controlled `expandedIds` plus `onExpandedChange` to persist reader-local
 folding separately from the document. Otherwise all parents start expanded, and
 `defaultExpandedIds` can choose initial folding. Stable node IDs are mandatory.
 See the exported types for complete renderer and callback contracts.
+
+## Machine View
+
+```tsx
+import { MachineView } from "@samhagman/fast-ux-kit/react";
+import type { MachineDocument } from "@samhagman/fast-ux-kit/machine";
+import "@samhagman/fast-ux-kit/tokens.css";
+import "@samhagman/fast-ux-kit/machine.css";
+
+const machine: MachineDocument = {
+  version: 1,
+  rootId: "workflow",
+  machines: [
+    {
+      id: "workflow",
+      label: "Review workflow",
+      initialId: "draft",
+      nodes: [
+        { id: "draft", label: "Draft", kind: "atomic" },
+        { id: "done", label: "Complete", kind: "final" },
+      ],
+      transitions: [{ id: "approve", sourceId: "draft", targetId: "done", event: "APPROVE" }],
+    },
+  ],
+};
+
+<MachineView defaultValue={machine} label="Review workflow" />;
+```
+
+Machine View separates graph editing, bounded deterministic local simulation and
+host-supplied runtime inspection. Nested/parallel graphs, validation, layout,
+keyboard alternatives, undo/redo and inspect-only trace scrubbing share one
+component. Named guards/actions require trusted pure callbacks; no source strings
+are evaluated. Runtime transport, timers, approvals and real side effects remain
+application-owned. Diagnostics are opt-in and external observations are not
+claimed to be a universal runtime adapter.
+
+See the [Machine View API and boundaries](docs/MACHINE_VIEW.md), and the hosted
+`#machine-view` lab for synthetic scenarios, observed transition coverage and
+committed-snapshot inspection. The portable `/machine` entry contains no React or
+DOM code. Importing `/styles.css` already includes the optional Machine View skin.
 
 ## Building other interfaces
 

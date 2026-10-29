@@ -1,5 +1,6 @@
 @import "./components.css";
 @import "./react/editor.css";
+@import "./react/machine-view.css";
 /* Optional skin: a continuous document with separate glyph and touch geometry. */
 .fast-ux-outliner {
   --outline-indent: var(--fux-outline-indent, 1rem);

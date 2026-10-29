@@ -46,7 +46,12 @@
     "./components/aria": {
       "types": "./dist/components/aria.d.ts",
       "import": "./dist/components/aria.js"
-    }
+    },
+    "./machine": {
+      "types": "./dist/core/machine/index.d.ts",
+      "import": "./dist/core/machine/index.js"
+    },
+    "./machine.css": "./dist/react/machine-view.css"
   },
   "sideEffects": [
     "**/*.css"

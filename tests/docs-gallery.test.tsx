@@ -25,7 +25,7 @@ async function gallery() {
   return view;
 }
 
-test("the gallery is one complete family row with direct documentation links, not full docs", async () => {
+test("the responsive catalog retains every family and direct documentation link, not full docs", async () => {
   const view = await gallery();
   const ribbon = view.container.querySelector(".gallery-ribbon")!;
   assert.equal(ribbon.children.length, componentManifest.length);
@@ -133,19 +133,19 @@ test("gallery keys navigate in logical direction only when the gallery itself is
   assert.equal(select.value, "Field", "the input retains its own arrow-key behavior");
 });
 
-test("native gallery scroll selects the nearest family and remembers physical RTL offsets", async () => {
-  const changes: { name: string; scrollLeft: number }[] = [];
+test("native vertical gallery scroll selects the nearest family and remembers its position in RTL", async () => {
+  const changes: { name: string; scrollLeft: number; scrollTop?: number }[] = [];
   const view = render(<ComponentGallery onPositionChange={(position) => changes.push(position)} />);
   const region = view.getByRole("region", { name: "Interactive component gallery" });
-  const rect = (left: number, right: number) => ({
-    x: left,
-    y: 0,
-    left,
-    right,
-    top: 0,
-    bottom: 400,
-    width: right - left,
-    height: 400,
+  const rect = (top: number, bottom: number) => ({
+    x: 0,
+    y: top,
+    left: 0,
+    right: 700,
+    top,
+    bottom,
+    width: 700,
+    height: bottom - top,
     toJSON() {},
   });
   region.style.direction = "rtl";
@@ -153,14 +153,14 @@ test("native gallery scroll selects the nearest family and remembers physical RT
   for (const [index, tile] of [
     ...view.container.querySelectorAll<HTMLElement>(".gallery-tile"),
   ].entries())
-    tile.getBoundingClientRect = () => rect(350 - (index - 4) * 350, 700 - (index - 4) * 350);
-  region.scrollLeft = -1400;
+    tile.getBoundingClientRect = () => rect((index - 4) * 400, (index - 4) * 400 + 400);
+  region.scrollTop = 1600;
   fireEvent.scroll(region);
   await waitFor(() => assert.equal(changes.at(-1)?.name, galleryEntries[4]!.name));
-  assert.equal(changes.at(-1)?.scrollLeft, -1400);
-  const next = view.getByRole("button", { name: "Next component" });
-  fireEvent.click(next);
-  assert.equal(region.scrollLeft, -1750, "jump follows native RTL negative offsets");
+  assert.equal(changes.at(-1)?.scrollTop, 1600);
+  assert.equal(changes.at(-1)?.scrollLeft, 0);
+  fireEvent.click(view.getByRole("button", { name: "Next component" }));
+  assert.equal(region.scrollTop, 2000, "vertical jump is direction-independent");
 });
 
 test("the last gallery location survives component documentation and back/forward routes", async () => {
@@ -172,7 +172,7 @@ test("the last gallery location survives component documentation and back/forwar
   const select = view.getByRole("combobox", { name: "Jump to component" });
   fireEvent.change(select, { target: { value: "ColorWheel" } });
   const region = view.getByRole("region", { name: "Interactive component gallery" });
-  region.scrollLeft = 2500;
+  region.scrollTop = 2500;
   act(() => view.getByRole("heading", { name: "ColorWheel", level: 2 }).focus());
   await act(async () => {
     dom.window.history.pushState(null, "", "/#color-wheel");
@@ -186,20 +186,17 @@ test("the last gallery location survives component documentation and back/forwar
     (view.getByRole("combobox", { name: "Jump to component" }) as HTMLSelectElement).value,
     "ColorWheel",
   );
-  assert.equal(
-    view.getByRole("region", { name: "Interactive component gallery" }).scrollLeft,
-    2500,
-  );
+  assert.equal(view.getByRole("region", { name: "Interactive component gallery" }).scrollTop, 2500);
   await act(async () => dom.window.history.forward());
   await waitFor(() => assert.ok(view.getByRole("heading", { name: "ColorWheel", level: 1 })));
   assert.equal(document.title, "ColorWheel — Fast UX Kit");
 });
 
-test("the gallery layout owns horizontal overflow, full targets, logical spacing and reduced motion", () => {
+test("the gallery layout uses a responsive vertical grid, full targets and reduced motion", () => {
   const css = readFileSync(new URL("../examples/docs/gallery.css", import.meta.url), "utf8");
-  assert.match(css, /\.gallery-ribbon\s*\{[^}]*display:\s*flex/s);
-  assert.doesNotMatch(css.match(/\.gallery-ribbon\s*\{([^}]+)\}/)?.[1] ?? "", /flex-wrap:\s*wrap/);
-  assert.match(css, /\.gallery-viewport\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(css, /\.gallery-ribbon\s*\{[^}]*display:\s*grid/s);
+  assert.match(css, /grid-template-columns:\s*repeat\(auto-fit/);
+  assert.match(css, /\.gallery-viewport\s*\{[^}]*overflow-y:\s*auto/s);
   assert.match(
     css,
     /\.gallery-preview\s*\{[^}]*position:\s*relative/s,
@@ -212,4 +209,115 @@ test("the gallery layout owns horizontal overflow, full targets, logical spacing
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
   assert.match(css, /@media\s*\(forced-colors:\s*active\)/);
   assert.doesNotMatch(css, /(?:margin|padding|border)-(?:left|right)\s*:/);
+});
+
+test("catalog search jumps to a match without filtering any family and reports no matches", async () => {
+  const view = await gallery();
+  const search = view.getByRole("searchbox", { name: "Find in catalog" });
+  fireEvent.change(search, { target: { value: "ColorWheel" } });
+  fireEvent.click(view.getByRole("button", { name: "Find component" }));
+  assert.equal(document.activeElement, view.getByRole("heading", { name: "ColorWheel", level: 2 }));
+  assert.equal(view.container.querySelectorAll(".gallery-tile").length, 86);
+  assert.match(
+    view.container.querySelector(".gallery-find-status")!.textContent!,
+    /1 matching family/,
+  );
+  fireEvent.change(search, { target: { value: "no-such-component-987" } });
+  assert.equal(
+    (view.getByRole("button", { name: "Find component" }) as HTMLButtonElement).disabled,
+    true,
+  );
+  assert.match(
+    view.container.querySelector(".gallery-find-status")!.textContent!,
+    /0 matching families/,
+  );
+  fireEvent.change(search, { target: { value: "" } });
+  assert.equal(
+    (view.getByRole("button", { name: "Find component" }) as HTMLButtonElement).disabled,
+    false,
+  );
+});
+
+test("application compositions include a live outliner and a consumer-owned Machine View slot", async () => {
+  const view = render(
+    <ComponentGallery machinePreview={<button type="button">Inspect sample machine</button>} />,
+  );
+  assert.ok(view.getByRole("heading", { name: "Outliner", level: 2 }));
+  assert.ok(view.getByRole("heading", { name: "Machine View", level: 2 }));
+  assert.equal(
+    view.getByRole("link", { name: "Open outliner lab" }).getAttribute("href"),
+    "#outliner-lab",
+  );
+  assert.equal(
+    view.getByRole("link", { name: "Open Machine View" }).getAttribute("href"),
+    "#machine-view",
+  );
+  assert.ok(view.getByRole("button", { name: "Inspect sample machine" }));
+  await waitFor(() =>
+    assert.ok(view.getByRole("region", { name: "Interactive documentation outline" })),
+  );
+});
+
+test("vertical catalog keys do not steal keys from preview controls", async () => {
+  const view = await gallery();
+  const region = view.getByRole("region", { name: "Interactive component gallery" });
+  const select = view.getByRole("combobox", { name: "Jump to component" }) as HTMLSelectElement;
+  fireEvent.keyDown(region, { key: "ArrowDown" });
+  assert.equal(select.value, galleryEntries[1]!.name);
+  fireEvent.keyDown(region, { key: "ArrowUp" });
+  assert.equal(select.value, galleryEntries[0]!.name);
+  fireEvent.keyDown(view.getByRole("button", { name: "Save changes" }), { key: "ArrowDown" });
+  assert.equal(select.value, galleryEntries[0]!.name);
+});
+
+test("finding multiple matches advances without removing unmatched cards", async () => {
+  const view = await gallery();
+  fireEvent.change(view.getByRole("searchbox", { name: "Find in catalog" }), {
+    target: { value: "color" },
+  });
+  fireEvent.click(view.getByRole("button", { name: "Find component" }));
+  const select = view.getByRole("combobox", { name: "Jump to component" }) as HTMLSelectElement;
+  const first = select.value;
+  fireEvent.click(view.getByRole("button", { name: "Next match" }));
+  assert.notEqual(select.value, first);
+  assert.equal(view.container.querySelectorAll(".gallery-tile").length, componentManifest.length);
+});
+
+test("vertical positions and search restore while legacy horizontal positions remain compatible", async () => {
+  const view = render(
+    <ComponentGallery
+      initialPosition={{ name: "ColorWheel", scrollLeft: 0, scrollTop: 1800, query: "color" }}
+    />,
+  );
+  assert.equal(view.getByRole("region", { name: "Interactive component gallery" }).scrollTop, 1800);
+  assert.equal(
+    (view.getByRole("searchbox", { name: "Find in catalog" }) as HTMLInputElement).value,
+    "color",
+  );
+  assert.equal(
+    (view.getByRole("combobox", { name: "Jump to component" }) as HTMLSelectElement).value,
+    "ColorWheel",
+  );
+  view.unmount();
+  const legacy = render(
+    <ComponentGallery initialPosition={{ name: "Button", scrollLeft: 1400 }} />,
+  );
+  assert.equal(legacy.getByRole("region", { name: "Interactive component gallery" }).scrollTop, 0);
+  assert.equal(
+    (legacy.getByRole("combobox", { name: "Jump to component" }) as HTMLSelectElement).value,
+    "Button",
+  );
+});
+
+test("scrolling a multi-column row does not replace its selected second family", async () => {
+  const view = await gallery();
+  const region = view.getByRole("region", { name: "Interactive component gallery" });
+  const select = view.getByRole("combobox", { name: "Jump to component" }) as HTMLSelectElement;
+  fireEvent.change(select, { target: { value: galleryEntries[1]!.name } });
+  // jsdom rectangles all share a top edge, like two cards on the same grid row.
+  fireEvent.scroll(region);
+  await act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+  assert.equal(select.value, galleryEntries[1]!.name);
 });

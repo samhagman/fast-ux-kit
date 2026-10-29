@@ -6,6 +6,7 @@ for (const file of [
   "components/ark-specialized.css",
   "components/ark-advanced.css",
   "react/editor.css",
+  "react/machine-view.css",
 ]) {
   await copyFile(
     new URL(`../src/${file}`, import.meta.url),

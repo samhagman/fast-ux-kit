@@ -30,3 +30,4 @@ export {
   type UseTextHoverOptions,
 } from "./useTextHover.js";
 export { HighlightText, type TextHighlight, type HighlightTextProps } from "./HighlightText.js";
+export * from "./machine-view.js";
