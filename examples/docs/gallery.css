@@ -1,0 +1,360 @@
+/* A single compact workbench, not a second set of component documentation pages. */
+.component-gallery {
+  min-inline-size: 0;
+  --gallery-tile-width: min(352px, calc(100% - 20px));
+}
+.component-gallery .page-heading {
+  margin-block-end: 16px;
+}
+.gallery-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-block: 0 12px;
+}
+.gallery-heading-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-inline-end: auto;
+  font-size: 13px;
+}
+.gallery-heading-meta strong {
+  font-weight: 600;
+}
+.gallery-heading-meta > span,
+.gallery-jump > span {
+  color: var(--subtle);
+}
+.gallery-jump {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: 0;
+  font-size: 13px;
+}
+.gallery-jump select {
+  min-block-size: 44px;
+  inline-size: 210px;
+  max-inline-size: 100%;
+  padding-inline: 10px 28px;
+  border: 1px solid var(--fux-border);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+}
+.gallery-step-controls {
+  display: flex;
+  gap: 2px;
+}
+.gallery-icon-action,
+.gallery-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.gallery-step-controls .gallery-icon-action {
+  border-color: var(--line);
+  background: var(--paper);
+}
+.gallery-action {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.gallery-icon-action:hover:not(:disabled),
+.gallery-action:hover {
+  background: var(--soft);
+}
+.gallery-icon-action:disabled {
+  color: var(--subtle);
+  cursor: default;
+  opacity: 0.45;
+}
+.gallery-previous svg {
+  transform: rotate(180deg);
+}
+.gallery-categories {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  padding-block-end: 8px;
+}
+.gallery-categories button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-block-size: 44px;
+  padding: 7px 10px;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--subtle);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.gallery-categories button[aria-pressed="true"] {
+  border-block-end-color: var(--fux-accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.gallery-categories button:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.gallery-categories button > span {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.gallery-viewport {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border-block: 1px solid var(--line);
+  background: var(--paper);
+  scroll-snap-type: inline proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--fux-border) var(--soft);
+}
+.gallery-ribbon {
+  display: flex;
+  align-items: stretch;
+  inline-size: 100%;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+/* Allow the last family to align at the start just like every other jump target. */
+.gallery-ribbon::after {
+  content: "";
+  flex: 0 0 max(0px, calc(100% - var(--gallery-tile-width)));
+}
+.gallery-tile {
+  flex: 0 0 var(--gallery-tile-width);
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  border-inline-end: 1px solid var(--line);
+  scroll-snap-align: start;
+}
+.gallery-tile-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 60px;
+  padding: 12px 16px;
+  border-block-start: 2px solid transparent;
+}
+.gallery-tile[data-selected] .gallery-tile-heading {
+  border-block-start-color: var(--fux-accent);
+}
+.gallery-number {
+  align-self: flex-start;
+  padding-block-start: 2px;
+  color: var(--subtle);
+  font:
+    11px/1.6 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+.gallery-category {
+  display: block;
+  color: var(--subtle);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.gallery-tile h2 {
+  inline-size: fit-content;
+  margin: 3px 0 0;
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.gallery-preview {
+  /* Keep absolutely positioned assistive text inside this horizontal scroll tile. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  block-size: 240px;
+  min-inline-size: 0;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-block: 1px solid var(--line);
+  background: var(--fux-surface-subtle);
+  scrollbar-width: thin;
+  font-size: 14px;
+}
+.gallery-preview > * {
+  flex-shrink: 0;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.gallery-preview-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-block-size: 100%;
+  margin: 0;
+  color: var(--subtle);
+  text-align: center;
+  font-size: 13px;
+}
+.gallery-preview-message p {
+  margin: 0;
+}
+.gallery-preview-outline {
+  display: grid;
+  place-items: center;
+  inline-size: 56px;
+  block-size: 56px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+.gallery-description {
+  min-block-size: 54px;
+  margin: 0;
+  padding: 12px 16px 6px;
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.gallery-tile-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block-start: auto;
+  padding-inline: 16px 6px;
+  min-block-size: 48px;
+}
+.gallery-tile-footer > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 44px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+.gallery-tile-footer > a:hover {
+  text-decoration: underline;
+}
+.gallery-owner {
+  margin-inline-start: auto;
+  color: var(--subtle);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.gallery-caption {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding-block: 12px;
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.gallery-caption p {
+  flex: 1 1 340px;
+  margin: 0;
+}
+.gallery-position {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.gallery-scope-note {
+  margin-block: 6px 0;
+  color: var(--subtle);
+  font-size: 12px;
+}
+.component-gallery :is(button, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--fux-focus);
+  outline-offset: -3px;
+}
+.gallery-tile h2:focus {
+  outline: 2px solid var(--fux-focus);
+  outline-offset: 3px;
+}
+.gallery-preview :is(button, input, textarea, select, [tabindex]):focus-visible {
+  outline-offset: 2px;
+}
+.component-gallery:dir(rtl) .gallery-previous svg {
+  transform: none;
+}
+.component-gallery:dir(rtl) :is(.gallery-next, .gallery-tile-footer > a) svg {
+  transform: rotate(180deg);
+}
+@media (max-width: 600px) {
+  .component-gallery .page-heading {
+    margin-block-end: 20px;
+  }
+  .gallery-heading-meta {
+    flex: 1 1 100%;
+  }
+  .gallery-jump {
+    flex: 1;
+  }
+  .gallery-jump > span {
+    display: none;
+  }
+  .gallery-jump select {
+    inline-size: 100%;
+  }
+  .gallery-controls {
+    gap: 8px;
+  }
+  .gallery-preview {
+    padding-inline: 12px;
+  }
+  .gallery-tile-heading,
+  .gallery-description {
+    padding-inline: 12px;
+  }
+  .gallery-tile-footer {
+    padding-inline-start: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gallery-viewport,
+  .gallery-categories,
+  .gallery-preview {
+    scroll-behavior: auto;
+    scroll-snap-type: none;
+  }
+}
+@media (forced-colors: active) {
+  .gallery-tile[data-selected] .gallery-tile-heading,
+  .gallery-categories button[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+}
