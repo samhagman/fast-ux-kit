@@ -53,6 +53,10 @@ Do not install a competing row focus manager through these hooks.
 - Selection: `selectedId`, `defaultSelectedId`, `onSelectionChange(id, row)`.
 - Folding: `expandedIds`, `defaultExpandedIds`, `onExpandedChange(ids)`.
 - Search: `query`, `defaultQuery`, `onQueryChange(query)`.
+- Kind filters: `showTransitions` / `onShowTransitionsChange` and
+  `showNotes` / `onShowNotesChange`. Omitting either controlled value uses its
+  `defaultShowTransitions` or `defaultShowNotes` initial value. Refused filter
+  proposals remain refused, including reveal requests.
 
 Selection and expansion use **row IDs**, not raw state IDs. Use
 `machineTreeRowId(kind, machineId, elementId)` or IDs returned by the projection.
@@ -77,10 +81,19 @@ the view does not bypass the refused filter or fabricate success.
 
 ## Keyboard and presentation
 
+The hierarchy uses nested state surfaces with wrapping sibling groups. Outgoing
+transition routes sit outside their source state border and include explicit
+inline destination buttons. Missing destinations remain inert text; self-target
+navigation is safe. Route controls keep non-overlapping 44px hit targets. The
+machine root title remains visible while generic header, keyboard instructions,
+idle counts and footer stay available to assistive technology without dominating
+the canvas. Search results and truncation remain visible.
+
 The tree uses one roving tab stop. Up/Down move visible rows; Home/End go to the
 boundaries; Right expands or enters and Left folds or moves to the parent (logical
 directions reverse in RTL). Enter/Space select, never dispatch. Typeahead moves
 focus by label. Search Enter selects/focuses its first match; Escape clears search.
+Inline destination and reference controls are separate native button stops.
 Nested controls, composition and modified navigation retain their own ownership.
 Owned keys prevent page jumps and focused rows scroll using nearest alignment.
 

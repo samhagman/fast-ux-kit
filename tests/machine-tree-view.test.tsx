@@ -374,7 +374,10 @@ test("external folding returns focus to the visible ancestor and requests minima
   focus(draft);
   const root = view.getByRole("treeitem", { name: "Machine: Review flow" });
   let options: ScrollIntoViewOptions | undefined;
-  Object.defineProperty(root, "scrollIntoView", {
+  const header = root.querySelector(
+    ":scope > .fux-machine-tree__state-box > .fux-machine-tree__row-face",
+  )!;
+  Object.defineProperty(header, "scrollIntoView", {
     configurable: true,
     value: (next: ScrollIntoViewOptions) => {
       options = next;
@@ -437,4 +440,138 @@ test("selection details show an ID-disambiguated tree path and declared initial 
   assert.equal(view.getByText("Declared initial child").nextElementSibling?.textContent, "work");
   fireEvent.click(view.getByRole("treeitem", { name: "State: Review" }));
   assert.equal(view.queryByText("Declared initial child"), null);
+});
+
+test("state containment is nested DOM while outgoing routes remain outside their state border", () => {
+  const view = render(<MachineTreeView value={doc} showToolbar={false} showInspector={false} />);
+  const working = view.getByRole("treeitem", { name: "Compound: Working" });
+  const draft = view.getByRole("treeitem", { name: "State: Draft" });
+  const route = view.getByRole("treeitem", { name: "Transition: SUBMIT" });
+  assert.ok(working.contains(draft));
+  assert.ok(draft.contains(route));
+  const box = draft.querySelector(":scope > .fux-machine-tree__state-box")!;
+  assert.equal(box.contains(route), false);
+  assert.ok(route.parentElement?.matches('[role="group"].fux-machine-tree__routes'));
+  assert.equal(view.queryByRole("complementary"), null);
+});
+
+test("inline target control reveals only its destination without selecting containing rows", () => {
+  const before = JSON.stringify(doc);
+  const selections: (string | null)[] = [];
+  const view = render(
+    <MachineTreeView value={doc} onSelectionChange={(value) => selections.push(value)} />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Reveal target Review" }));
+  assert.deepEqual(selections, [id("node", "review")]);
+  assert.equal(document.activeElement, view.getByRole("treeitem", { name: "State: Review" }));
+  assert.equal(JSON.stringify(doc), before);
+});
+
+test("nested state pointer and keyboard actions do not bubble into ancestor selection", () => {
+  const selections: (string | null)[] = [];
+  const view = render(
+    <MachineTreeView value={doc} onSelectionChange={(value) => selections.push(value)} />,
+  );
+  const draft = view.getByRole("treeitem", { name: "State: Draft" });
+  fireEvent.click(draft.querySelector(".fux-machine-tree__row-title")!);
+  assert.deepEqual(selections, [id("node", "draft")]);
+  key(draft, "Enter");
+  assert.deepEqual(selections, [id("node", "draft"), id("node", "draft")]);
+});
+
+test("inline routes retain missing targets inertly and self targets navigate safely", () => {
+  const document: MachineDocument = {
+    version: 1,
+    rootId: "single",
+    machines: [
+      {
+        id: "single",
+        label: "Single",
+        nodes: [{ id: "idle", label: "Idle", kind: "atomic" }],
+        transitions: [
+          { id: "again", sourceId: "idle", targetId: "idle", event: "AGAIN" },
+          { id: "gone", sourceId: "idle", targetId: "absent", event: "MISSING" },
+        ],
+      },
+    ],
+  };
+  const view = render(<MachineTreeView value={document} />);
+  const missing = view.getByRole("treeitem", { name: "Transition: MISSING" });
+  assert.equal(within(missing).queryByRole("button"), null);
+  assert.ok(within(missing).getByText("absent (unavailable)"));
+  fireEvent.click(view.getByRole("button", { name: "Reveal target Idle" }));
+  assert.equal(
+    view.getByRole("treeitem", { name: "State: Idle" }).getAttribute("aria-selected"),
+    "true",
+  );
+});
+
+test("trusted transition event controls and inline navigation have separate ownership", () => {
+  let events = 0;
+  const selections: (string | null)[] = [];
+  const view = render(
+    <MachineTreeView
+      value={doc}
+      onSelectionChange={(value) => selections.push(value)}
+      renderLabel={(row) =>
+        row.transition ? <button onClick={() => events++}>Send {row.label}</button> : row.label
+      }
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Send SUBMIT" }));
+  assert.equal(events, 1);
+  assert.equal(selections.length, 0);
+  fireEvent.click(view.getByRole("button", { name: "Reveal target Review" }));
+  assert.equal(events, 1);
+  assert.deepEqual(selections, [id("node", "review")]);
+});
+
+test("Home scrolls the machine header while focus remains on its nested treeitem", () => {
+  const view = render(<MachineTreeView value={doc} />);
+  const root = view.getByRole("treeitem", { name: "Machine: Review flow" });
+  const draft = view.getByRole("treeitem", { name: "State: Draft" });
+  const header = root.querySelector(
+    ":scope > .fux-machine-tree__state-box > .fux-machine-tree__row-face",
+  )!;
+  let headerScrolls = 0;
+  let subtreeScrolls = 0;
+  Object.defineProperty(header, "scrollIntoView", {
+    configurable: true,
+    value: () => headerScrolls++,
+  });
+  Object.defineProperty(root, "scrollIntoView", {
+    configurable: true,
+    value: () => subtreeScrolls++,
+  });
+  focus(draft);
+  key(draft, "Home");
+  assert.equal(document.activeElement, root);
+  assert.equal(headerScrolls, 1);
+  assert.equal(subtreeScrolls, 0);
+});
+
+test("controlled kind filters stay proposals and cannot bypass a refused reveal", () => {
+  const transitions: boolean[] = [];
+  const notes: boolean[] = [];
+  const props = {
+    value: doc,
+    showTransitions: false,
+    showNotes: false,
+    selectedId: id("transition", "send"),
+    onShowTransitionsChange: (show: boolean) => transitions.push(show),
+    onShowNotesChange: (show: boolean) => notes.push(show),
+  };
+  const view = render(<MachineTreeView {...props} />);
+  fireEvent.click(view.getByRole("checkbox", { name: "Transitions" }));
+  fireEvent.click(view.getByRole("checkbox", { name: "Notes" }));
+  assert.deepEqual(transitions, [true]);
+  assert.deepEqual(notes, [true]);
+  assert.equal(view.queryByRole("treeitem", { name: "Transition: SUBMIT" }), null);
+  assert.equal(view.queryByRole("treeitem", { name: "Note: Keep a record" }), null);
+  fireEvent.click(view.getByRole("button", { name: "Reveal selection" }));
+  assert.deepEqual(transitions, [true, true]);
+  assert.equal(view.queryByRole("treeitem", { name: "Transition: SUBMIT" }), null);
+  view.rerender(<MachineTreeView {...props} showTransitions showNotes />);
+  assert.ok(view.getByRole("treeitem", { name: "Transition: SUBMIT" }));
+  assert.ok(view.getByRole("treeitem", { name: "Note: Keep a record" }));
 });

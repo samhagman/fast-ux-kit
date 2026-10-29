@@ -48,6 +48,10 @@ export interface MachineTreeViewProps {
   readonly showInspector?: boolean;
   readonly defaultShowTransitions?: boolean;
   readonly defaultShowNotes?: boolean;
+  readonly showTransitions?: boolean;
+  readonly onShowTransitionsChange?: (show: boolean) => void;
+  readonly showNotes?: boolean;
+  readonly onShowNotesChange?: (show: boolean) => void;
   readonly maxItems?: number;
   readonly maxDepth?: number;
   readonly maxVisibleRows?: number;
@@ -104,6 +108,10 @@ export function MachineTreeView({
   showInspector = true,
   defaultShowTransitions = true,
   defaultShowNotes = true,
+  showTransitions: controlledTransitions,
+  onShowTransitionsChange,
+  showNotes: controlledNotes,
+  onShowNotesChange,
   maxItems,
   maxDepth,
   maxVisibleRows,
@@ -124,8 +132,10 @@ export function MachineTreeView({
       model.rows.filter((row) => row.childIds.length > 0).map((row) => row.id),
   );
   const [localQuery, setLocalQuery] = useState(defaultQuery);
-  const [showTransitions, setShowTransitions] = useState(defaultShowTransitions);
-  const [showNotes, setShowNotes] = useState(defaultShowNotes);
+  const [localTransitions, setLocalTransitions] = useState(defaultShowTransitions);
+  const [localNotes, setLocalNotes] = useState(defaultShowNotes);
+  const showTransitions = controlledTransitions ?? localTransitions;
+  const showNotes = controlledNotes ?? localNotes;
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const selectedId = controlledSelection === undefined ? localSelection : controlledSelection;
@@ -159,7 +169,12 @@ export function MachineTreeView({
     if (!element) return;
     setFocusedId(id);
     element.focus({ preventScroll: true });
-    element.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "auto" });
+    // The treeitem owns descendants; scroll its header, not the potentially
+    // viewport-tall subtree, so focused ancestors cannot remain offscreen.
+    const header = element.querySelector<HTMLElement>(
+      ":scope > .fux-machine-tree__state-box > .fux-machine-tree__row-face",
+    );
+    (header ?? element).scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "auto" });
   }
   useEffect(() => {
     const pending = pendingFocus;
@@ -192,6 +207,14 @@ export function MachineTreeView({
   function changeQuery(next: string) {
     if (controlledQuery === undefined) setLocalQuery(next);
     onQueryChange?.(next);
+  }
+  function setShowTransitions(next: boolean) {
+    if (controlledTransitions === undefined) setLocalTransitions(next);
+    onShowTransitionsChange?.(next);
+  }
+  function setShowNotes(next: boolean) {
+    if (controlledNotes === undefined) setLocalNotes(next);
+    onShowNotesChange?.(next);
   }
   function toggle(row: MachineTreeRow) {
     const next = new Set(expanded);
@@ -298,6 +321,169 @@ export function MachineTreeView({
   const declaredInitialId =
     selected?.kind === "machine" ? selected.graph.initialId : selected?.node?.initialId;
   const activeCount = model.rows.filter((row) => row.active).length;
+  const visibleChildren = new Map<string | undefined, (typeof visible)[number][]>();
+  for (const row of visible) {
+    const parent = row.parentId && visibleIds.has(row.parentId) ? row.parentId : undefined;
+    const siblings = visibleChildren.get(parent) ?? [];
+    siblings.push(row);
+    visibleChildren.set(parent, siblings);
+  }
+  function renderRow(row: (typeof visible)[number]): ReactNode {
+    const children = visibleChildren.get(row.id) ?? [];
+    const states = children.filter((child) => child.kind !== "transition");
+    const routes = children.filter((child) => child.kind === "transition");
+    const destination =
+      row.transition || row.node?.kind === "submachine"
+        ? resolveMachineTreeTarget(model, row.id)
+        : undefined;
+    return (
+      <div
+        key={row.id}
+        ref={(element) => {
+          if (element) rowElements.current.set(row.id, element);
+          else rowElements.current.delete(row.id);
+        }}
+        id={`${uid}-row-${encodeURIComponent(row.id)}`}
+        role="treeitem"
+        aria-label={rowName(row)}
+        aria-describedby={`${uid}-meta-${encodeURIComponent(row.id)} ${uid}-status-${encodeURIComponent(row.id)}`}
+        aria-level={row.level}
+        aria-posinset={row.posInSet}
+        aria-setsize={row.setSize}
+        aria-expanded={row.hasChildren ? row.expanded : undefined}
+        aria-selected={selectedId === row.id}
+        tabIndex={tabId === row.id ? 0 : -1}
+        className="fux-machine-tree__row"
+        data-kind={rowKind(row)}
+        data-active={row.active || undefined}
+        data-active-descendant={row.activeDescendant || undefined}
+        data-context={row.context || undefined}
+        data-selected={selectedId === row.id || undefined}
+        data-compound={states.length > 0 || undefined}
+        onFocus={(event) => {
+          if (event.target === event.currentTarget) setFocusedId(row.id);
+        }}
+        onKeyDown={(event) => keyDown(event, row)}
+        onClick={(event) => {
+          const target = event.target as Element;
+          if (
+            target.closest('[role="treeitem"]') !== event.currentTarget ||
+            target.closest(
+              'button, a, input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="link"]',
+            )
+          )
+            return;
+          select(row);
+          focusRow(row.id);
+        }}
+      >
+        <div className="fux-machine-tree__state-box">
+          <div className="fux-machine-tree__row-face">
+            {row.initial && (
+              <span className="fux-machine-tree__initial" aria-hidden="true">
+                ↳
+              </span>
+            )}
+            {!["machine", "atomic", "compound", "transition"].includes(rowKind(row)) && (
+              <span className="fux-machine-tree__kind-mark" aria-hidden="true">
+                {marks[rowKind(row)]}
+              </span>
+            )}
+            <span className="fux-machine-tree__row-title">
+              {renderLabel ? renderLabel(row, { selected: selectedId === row.id }) : row.label}
+            </span>
+            {row.transition && (
+              <>
+                {row.transition.guard && (
+                  <span className="fux-machine-tree__guard">[{row.transition.guard}]</span>
+                )}
+                <span aria-hidden="true" className="fux-machine-tree__arrow">
+                  →
+                </span>
+                {destination ? (
+                  <Button
+                    className="fux-machine-tree__target"
+                    aria-label={`Reveal target ${destination.label}`}
+                    onPress={() => reveal(destination)}
+                  >
+                    {destination.elementId}
+                  </Button>
+                ) : (
+                  <span className="fux-machine-tree__missing">
+                    {row.transition.targetId} (unavailable)
+                  </span>
+                )}
+                {!!row.transition.actions?.length && (
+                  <span className="fux-machine-tree__action">
+                    / {row.transition.actions.join(", ")}
+                  </span>
+                )}
+              </>
+            )}
+            {row.node?.kind === "submachine" && destination && (
+              <Button
+                className="fux-machine-tree__target"
+                aria-label={`Reveal reference ${destination.label}`}
+                onPress={() => reveal(destination)}
+              >
+                ↗ {destination.label}
+              </Button>
+            )}
+            <span id={`${uid}-meta-${encodeURIComponent(row.id)}`} className="fux-machine-tree__sr">
+              {kinds[rowKind(row)]}
+              {row.initial ? " · Initial" : ""}
+              {row.transition ? ` · Target ${row.transition.targetId}` : ""}
+              {row.node?.kind === "submachine"
+                ? ` · ${row.node.machineId ?? "Unresolved reference"}`
+                : ""}
+            </span>
+            <span
+              id={`${uid}-status-${encodeURIComponent(row.id)}`}
+              className="fux-machine-tree__badges"
+            >
+              {row.context && <span>Context</span>}
+              {row.active && <span className="fux-machine-tree__active-badge">Active</span>}
+              {!row.active && row.activeDescendant && <span>Active within</span>}
+              {row.recovered && <span>Recovered</span>}
+            </span>
+            {row.hasChildren && (
+              <Button
+                className="fux-machine-tree__disclosure"
+                aria-label={`${row.expanded ? "Collapse" : "Expand"} ${row.label}`}
+                excludeFromTabOrder
+                isDisabled={Boolean(query.trim())}
+                onPress={() => {
+                  toggle(row);
+                  focusRow(row.id);
+                }}
+              >
+                <span aria-hidden="true">{row.expanded ? "⌄" : "›"}</span>
+              </Button>
+            )}
+          </div>
+          {row.node?.description && (
+            <p className="fux-machine-tree__state-description">{row.node.description}</p>
+          )}
+          {!!(row.node?.entry?.length || row.node?.exit?.length) && (
+            <div className="fux-machine-tree__state-actions">
+              {!!row.node?.entry?.length && <span>entry / {row.node.entry.join(", ")}</span>}
+              {!!row.node?.exit?.length && <span>exit / {row.node.exit.join(", ")}</span>}
+            </div>
+          )}
+          {states.length > 0 && (
+            <div role="group" className="fux-machine-tree__children">
+              {states.map(renderRow)}
+            </div>
+          )}
+        </div>
+        {routes.length > 0 && (
+          <div role="group" className="fux-machine-tree__routes">
+            {routes.map(renderRow)}
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     <section className={`fux-machine-tree ${className}`} style={style} dir={dir} aria-label={label}>
       <header className="fux-machine-tree__header">
@@ -397,7 +583,10 @@ export function MachineTreeView({
           </div>
         </div>
       )}
-      <p className="fux-machine-tree__summary" role="status">
+      <p
+        className={`fux-machine-tree__summary${!query.trim() && !model.truncated && !projection.truncated ? " fux-machine-tree__sr" : ""}`}
+        role="status"
+      >
         {query.trim()
           ? `${projection.matchCount} matches. Ancestors are shown for context; search does not change saved folding.`
           : `${visible.length} visible items · ${activeCount} supplied active states.`}
@@ -435,107 +624,7 @@ export function MachineTreeView({
                 ownsFocus.current = false;
             }}
           >
-            {visible.map((row) => (
-              <div
-                key={row.id}
-                ref={(element) => {
-                  if (element) rowElements.current.set(row.id, element);
-                  else rowElements.current.delete(row.id);
-                }}
-                id={`${uid}-row-${encodeURIComponent(row.id)}`}
-                role="treeitem"
-                aria-label={rowName(row)}
-                aria-describedby={`${uid}-meta-${encodeURIComponent(row.id)} ${uid}-status-${encodeURIComponent(row.id)}`}
-                aria-level={row.level}
-                aria-posinset={row.posInSet}
-                aria-setsize={row.setSize}
-                aria-expanded={row.hasChildren ? row.expanded : undefined}
-                aria-selected={selectedId === row.id}
-                tabIndex={tabId === row.id ? 0 : -1}
-                className="fux-machine-tree__row"
-                data-kind={rowKind(row)}
-                data-active={row.active || undefined}
-                data-active-descendant={row.activeDescendant || undefined}
-                data-context={row.context || undefined}
-                data-selected={selectedId === row.id || undefined}
-                style={{ "--tree-depth": Math.min(row.level - 1, 8) } as CSSProperties}
-                onFocus={(event) => {
-                  if (event.target === event.currentTarget) setFocusedId(row.id);
-                }}
-                onKeyDown={(event) => keyDown(event, row)}
-                onClick={(event) => {
-                  if (
-                    (event.target as Element).closest(
-                      'button, a, input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="link"]',
-                    )
-                  )
-                    return;
-                  select(row);
-                  focusRow(row.id);
-                }}
-              >
-                <span className="fux-machine-tree__connector" aria-hidden="true" />
-                {row.hasChildren ? (
-                  <Button
-                    className="fux-machine-tree__disclosure"
-                    aria-label={`${row.expanded ? "Collapse" : "Expand"} ${row.label}`}
-                    excludeFromTabOrder
-                    isDisabled={Boolean(query.trim())}
-                    onPress={() => {
-                      toggle(row);
-                      focusRow(row.id);
-                    }}
-                  >
-                    <span aria-hidden="true">{row.expanded ? "⌄" : "›"}</span>
-                  </Button>
-                ) : (
-                  <span className="fux-machine-tree__disclosure-placeholder" aria-hidden="true" />
-                )}
-                <span className="fux-machine-tree__kind-mark" aria-hidden="true">
-                  {marks[rowKind(row)]}
-                </span>
-                <span className="fux-machine-tree__row-content">
-                  <span className="fux-machine-tree__row-title">
-                    {renderLabel
-                      ? renderLabel(row, { selected: selectedId === row.id })
-                      : row.label}
-                  </span>
-                  <span
-                    id={`${uid}-meta-${encodeURIComponent(row.id)}`}
-                    className="fux-machine-tree__row-meta"
-                  >
-                    {row.transition ? (
-                      <>
-                        <span>
-                          {row.transition.guard ? `[${row.transition.guard}] · ` : ""}→{" "}
-                          {row.transition.targetId}
-                        </span>
-                        {row.transition.actions?.length ? (
-                          <span> / {row.transition.actions.join(", ")}</span>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        {kinds[rowKind(row)]}
-                        {row.initial ? " · Initial" : ""}
-                        {row.node?.kind === "submachine"
-                          ? ` · ${row.node.machineId ?? "Unresolved reference"}`
-                          : ""}
-                      </>
-                    )}
-                  </span>
-                </span>
-                <span
-                  id={`${uid}-status-${encodeURIComponent(row.id)}`}
-                  className="fux-machine-tree__badges"
-                >
-                  {row.context && <span>Context</span>}
-                  {row.active && <span className="fux-machine-tree__active-badge">Active</span>}
-                  {!row.active && row.activeDescendant && <span>Active within</span>}
-                  {row.recovered && <span>Recovered</span>}
-                </span>
-              </div>
-            ))}
+            {(visibleChildren.get(undefined) ?? []).map(renderRow)}
           </div>
           {!visible.length && (
             <div className="fux-machine-tree__empty">

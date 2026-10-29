@@ -987,7 +987,7 @@ export function DocsApp() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        if (event.defaultPrevented) return;
+        if (event.defaultPrevented || active === "machine-tree-view") return;
         // Some owners hide siblings instead of adding aria-modal to their dialog.
         const modal = document.querySelector(
           '.fux-overlay [role="dialog"], .fux-sheet-overlay [role="dialog"], [aria-modal="true"], dialog[open], [data-scope="drawer"][data-part="content"][data-state="open"]',
@@ -1002,7 +1002,7 @@ export function DocsApp() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [active]);
   const content: ReactNode =
     active === "overview" ? (
       <Overview />
@@ -1038,7 +1038,7 @@ export function DocsApp() {
     ) : active === "outline-note-lab" ? (
       <OutlineNoteLab />
     ) : active === "machine-tree-view" ? (
-      <MachineTreeLab />
+      <MachineTreeLab dark={dark} onThemeChange={setDark} />
     ) : active === "machine-view" ? (
       <MachineLab />
     ) : experiencePages.some((item) => item.id === active) ? (
@@ -1050,6 +1050,23 @@ export function DocsApp() {
     ) : (
       <ComponentPage id={active} />
     );
+  if (active === "machine-tree-view") {
+    return (
+      <main
+        id="main"
+        className="tree-workspace-route"
+        ref={mainRef}
+        tabIndex={-1}
+        onClick={followLocalAnchor}
+      >
+        <PageBoundary key={active}>
+          <Suspense fallback={<p role="status">Loading Machine Tree View…</p>}>
+            <PageReady onReady={onPageReady}>{content}</PageReady>
+          </Suspense>
+        </PageBoundary>
+      </main>
+    );
+  }
   return (
     <>
       <a
