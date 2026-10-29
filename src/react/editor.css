@@ -415,3 +415,23 @@
     border-color: CanvasText;
   }
 }
+
+/* Notes are an explicit, additive surface; trusted rich bodies remain mounted. */
+.fast-ux-editor__note {
+  margin-inline-start: var(--outline-content-offset);
+  min-inline-size: 0;
+}
+.fast-ux-editor__note-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+.fast-ux-editor__note-help {
+  display: block;
+  color: var(--fux-muted, currentColor);
+  font-size: 0.8125rem;
+}
+.fast-ux-editor__note .fux-control {
+  min-block-size: var(--outline-target);
+  min-inline-size: var(--outline-target);
+}

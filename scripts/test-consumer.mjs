@@ -87,7 +87,7 @@ console.log('Core, React reader and RAC entry work with Ark absent.');`,
     join(fixture, "consumer.tsx"),
     `import {createElement, createRef} from 'react';
 import {renderToString} from 'react-dom/server';
-import {Outliner, OutlineEditor, OutlineSearch, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, searchOutline, outlineTagInventory, projectOutline, applyOutlineSort, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle, type OutlineItemDetails, MachineView, type MachineDocument, createMachineSnapshot, searchMachineDocument, compareMachineInspectionContexts, type MachineContextDiff} from '@samhagman/fast-ux-kit';
+import {Outliner, OutlineEditor, OutlineSearch, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, searchOutline, outlineTagInventory, projectOutline, applyOutlineSort, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle, type OutlineItemDetails, type OutlineNoteAdapter, type OutlineNoteKeyContext, MachineView, type MachineDocument, createMachineSnapshot, searchMachineDocument, compareMachineInspectionContexts, type MachineContextDiff} from '@samhagman/fast-ux-kit';
 import {Button, Field, Pagination, ColorPicker, DatePicker, Table, componentManifest} from '@samhagman/fast-ux-kit/components';
 import {Pagination as AdvancedPagination} from '@samhagman/fast-ux-kit/ark';
 const nodes: readonly OutlineNode[] = [{id:'root',text:'Root',children:[{id:'child',text:'Child'}]}];
@@ -98,6 +98,17 @@ if(projectOutline(detailed,{hideCompleted:true}).length!==1) throw Error('View p
 const reordered=applyOutlineSort(createOutlineEditorState(detailed),{parentId:null,by:'title'},{readOnly:false});
 if(reordered.nodes[0]?.id!=='a'||reordered.history.past.length!==1) throw Error('Atomic sort failed');
 if(!renderToString(<OutlineSearch nodes={detailed} defaultQuery="note"/>).includes('1 result')) throw Error('Search SSR failed');
+interface NoteData { readonly note: string; readonly reference: string; }
+const noteAdapter: OutlineNoteAdapter<NoteData>={read:node=>node.data?.note,prepareData:(node,note)=>node.data?{ok:true,data:{...node.data,note}}:{ok:false}};
+const noteNodes: readonly OutlineNode<NoteData>[]=[{id:'note',text:'Title',data:{note:'Before',reference:'kept'}}];
+const noteOptions={readOnly:false,noteAdapter};
+let noteState=reduceOutlineEditor(createOutlineEditorState(noteNodes),{type:'note',id:'note',text:'After',caret:5},noteOptions);
+if(noteState.nodes[0]?.data?.reference!=='kept'||noteState.caret?.field!=='note') throw Error('Note adapter failed');
+noteState=reduceOutlineEditor(noteState,{type:'undo'},noteOptions);
+noteState=reduceOutlineEditor(noteState,{type:'redo'},noteOptions);
+if(noteState.nodes[0]?.data?.note!=='After'||noteState.caret?.field!=='note') throw Error('Note history failed');
+const notePlugin: OutlinePlugin<NoteData>={id:'note-plugin',noteKeymap:(_event,context:OutlineNoteKeyContext<NoteData>)=>context.field==='note'?undefined:null};
+if(!renderToString(<OutlineEditor defaultNodes={noteNodes} readOnly={false} noteAdapter={noteAdapter} noteKeyboardProfile="toggle" plugins={[notePlugin]}/>).includes('Edit note')) throw Error('Note SSR failed');
 const plugin: OutlinePlugin = {id:'consumer-plugin',beforeAction:action=>action,keymap:(event,context)=>event.key==='F2'?{type:'transaction',commands:[{type:'update',id:context.rowId,changes:{text:'Updated by extension'}}]}:undefined};
 const codec: OutlineCodec = createOutlineJSONCodec();
 if(decodeOutline(encodeOutline(nodes,codec),codec)[0]?.id!=='root') throw Error('Codec roundtrip failed');

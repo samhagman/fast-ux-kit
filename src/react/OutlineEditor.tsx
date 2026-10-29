@@ -73,8 +73,18 @@ export interface OutlineKeyContext<T = unknown> {
   readonly mode: "text" | "row";
   readonly state: OutlineEditorState<T>;
 }
+export interface OutlineNoteKeyContext<T = unknown> {
+  readonly rowId: string;
+  readonly field: "note";
+  readonly state: OutlineEditorState<T>;
+}
 export interface OutlinePlugin<T = unknown> {
   readonly id: string;
+  /** Note-only keys; legacy title/row keymaps never receive note events. */
+  readonly noteKeymap?: (
+    event: OutlineKeyEvent,
+    context: OutlineNoteKeyContext<T>,
+  ) => OutlineAction<T> | null | undefined;
   /** First defined result wins: undefined delegates, null consumes, an action uses normal policy/history. */
   readonly keymap?: (
     event: OutlineKeyEvent,
@@ -142,6 +152,8 @@ export interface OutlineEditorProps<T = unknown> extends OutlineEditorOptions<T>
   readonly getRowTone?: (node: OutlineNode<T>) => string | undefined;
   readonly getPlaceholders?: (parent: OutlineNode<T> | null) => readonly OutlinePlaceholder[];
   readonly getRefusalMessage?: (reason: string) => string;
+  /** Opt in to Shift+Enter title/note switching; omitted preserves title keys. */
+  readonly noteKeyboardProfile?: "toggle";
   readonly spellCheck?: boolean;
   readonly showToolbar?: boolean;
   readonly showBreadcrumbs?: boolean;
@@ -234,6 +246,8 @@ export function OutlineEditor<T = unknown>({
   getRowTone,
   getPlaceholders,
   getRefusalMessage,
+  noteKeyboardProfile,
+  noteAdapter,
   spellCheck = true,
   showToolbar = true,
   showBreadcrumbs = true,
@@ -262,11 +276,16 @@ export function OutlineEditor<T = unknown>({
     rowModeRef = useRef(false);
   const root = useRef<HTMLElement>(null),
     textareas = useRef(new Map<string, HTMLTextAreaElement>()),
+    noteTextareas = useRef(new Map<string, HTMLTextAreaElement>()),
     rowElements = useRef(new Map<string, HTMLLIElement>());
   const exitStart = useRef<HTMLSpanElement>(null),
     exitEnd = useRef<HTMLSpanElement>(null);
   const exitTabTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFocus = useRef(false);
+  const noteComposing = useRef(false);
+  const noteCompositionEpoch = useRef(0);
+  const previousNoteAdapter = useRef(noteAdapter);
+  const noteHadFocus = useRef(false);
   const composing = useRef(false),
     focused = useRef<string | null>(null),
     selectedCaret = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
@@ -280,6 +299,7 @@ export function OutlineEditor<T = unknown>({
     mergeData,
     historyLimit,
     typingGroupMs,
+    noteAdapter,
   });
   callbacks.current = {
     onNodesChange,
@@ -291,6 +311,7 @@ export function OutlineEditor<T = unknown>({
     mergeData,
     historyLimit,
     typingGroupMs,
+    noteAdapter,
   };
   const [clipboardError, setClipboardError] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragSession | null>(null),
@@ -309,6 +330,22 @@ export function OutlineEditor<T = unknown>({
     }
     if (!action) return;
     const next = reduceOutlineEditor(previous, action, config);
+    if (
+      noteComposing.current &&
+      next.nodes !== previous.nodes &&
+      (action.type === "replace" || action.type === "undo" || action.type === "redo")
+    ) {
+      noteCompositionEpoch.current++;
+      noteComposing.current = false;
+    }
+    if (
+      next.focusVersion !== previous.focusVersion &&
+      !next.refusal &&
+      next.caret?.field === "note"
+    ) {
+      rowModeRef.current = false;
+      setRowMode(false);
+    }
     // Advance synchronously before React commits: fast keys never use an old row/tree.
     if (next.focusVersion !== previous.focusVersion) pendingFocus.current = true;
     model.current = next;
@@ -323,7 +360,14 @@ export function OutlineEditor<T = unknown>({
   const getContext = useCallback((): TextRequestContext | null => {
     const rowId = focused.current,
       node = rowId && findOutlineNode(model.current.nodes, rowId)?.node;
-    if (!rowId || !node || composing.current || rowModeRef.current) return null;
+    if (
+      !rowId ||
+      !node ||
+      composing.current ||
+      rowModeRef.current ||
+      model.current.caret?.field === "note"
+    )
+      return null;
     return {
       surfaceId: rootId,
       rowId,
@@ -414,7 +458,12 @@ export function OutlineEditor<T = unknown>({
   };
   const requestHover = (rowId: string, offset: number, origin: "pointer" | "keyboard") => {
     const node = findOutlineNode(model.current.nodes, rowId)?.node;
-    if (!node || composing.current) return;
+    if (
+      !node ||
+      composing.current ||
+      (model.current.caret?.field === "note" && !rowModeRef.current)
+    )
+      return;
     completion.dismiss();
     clearHoverTimer();
     const context: TextRequestContext = {
@@ -459,19 +508,78 @@ export function OutlineEditor<T = unknown>({
     externalReset.current = resetKey;
     if (nodes === undefined) return;
     if (!forced && proposed.current.has(nodes)) return;
+    const interruptedNote = noteComposing.current;
+    if (interruptedNote) {
+      noteCompositionEpoch.current++;
+      noteComposing.current = false;
+    }
     // An unrelated host replacement wins and clears stale user history/completion.
     proposed.current = new WeakSet();
     completionRef.current.dismiss();
-    const reconciled = reconcileOutlineEditorState(model.current, nodes);
-    const next = forced
-      ? { ...reconciled, history: { past: [], future: [], group: null } }
-      : reconciled;
+    const reconciled = reconcileOutlineEditorState(model.current, nodes, callbacks.current);
+    const next = {
+      ...reconciled,
+      ...(forced ? { history: { past: [], future: [], group: null } } : {}),
+      ...(interruptedNote ? { focusVersion: reconciled.focusVersion + 1 } : {}),
+    };
     model.current = next;
     setState(next);
   }, [nodes, resetKey]);
   useLayoutEffect(() => {
+    const adapterChanged = previousNoteAdapter.current !== noteAdapter;
+    previousNoteAdapter.current = noteAdapter;
+    if (adapterChanged && noteComposing.current) {
+      noteComposing.current = false;
+      noteCompositionEpoch.current++;
+      const next = { ...model.current, focusVersion: model.current.focusVersion + 1 };
+      model.current = next;
+      pendingFocus.current = true;
+      setState(next);
+      return;
+    }
+    const caret = model.current.caret;
+    if (caret?.field !== "note") {
+      noteComposing.current = false;
+      return;
+    }
+    const reconciled = reconcileOutlineEditorState(
+      model.current,
+      model.current.nodes,
+      callbacks.current,
+    );
+    if (reconciled !== model.current) {
+      model.current = reconciled;
+      pendingFocus.current = true;
+      setState(reconciled);
+      return;
+    }
+    const node = findOutlineNode(model.current.nodes, caret.id)?.node;
+    const locked =
+      !!node && getOutlinePath(model.current.nodes, caret.id).some((item) => isLocked?.(item));
+    if (readOnly || !node || locked || readNote(node) === undefined) {
+      noteComposing.current = false;
+      // Host capability changes reconcile interaction, not a user/plugin action.
+      const next = reduceOutlineEditor(
+        model.current,
+        { type: "focus", id: caret.id, start: 0 },
+        callbacks.current,
+      );
+      model.current = next;
+      pendingFocus.current = true;
+      setState(next);
+    }
+  });
+  useLayoutEffect(() => {
     const caret = state.caret;
-    if (!caret || readOnly || composing.current) {
+    if (
+      !caret &&
+      noteHadFocus.current &&
+      root.current?.ownerDocument.activeElement === root.current?.ownerDocument.body
+    ) {
+      root.current?.focus({ preventScroll: true });
+      noteHadFocus.current = false;
+    }
+    if (!caret || readOnly || composing.current || noteComposing.current) {
       pendingFocus.current = false;
       return;
     }
@@ -486,7 +594,7 @@ export function OutlineEditor<T = unknown>({
       pendingFocus.current = false;
       return;
     }
-    const textarea = textareas.current.get(caret.id);
+    const textarea = (caret.field === "note" ? noteTextareas : textareas).current.get(caret.id);
     if (!textarea) return;
     textarea.focus({ preventScroll: true });
     textarea.setSelectionRange(caret.start, caret.end);
@@ -498,7 +606,9 @@ export function OutlineEditor<T = unknown>({
   const resizeTextareas = useCallback((targets?: Iterable<HTMLTextAreaElement>) => {
     // Batch the writes and reads: one width notification must not force a fresh
     // layout for every row. Height-only notifications are filtered below.
-    const inputs = [...(targets ?? textareas.current.values())];
+    const inputs = [
+      ...(targets ?? [...textareas.current.values(), ...noteTextareas.current.values()]),
+    ];
     for (const textarea of inputs) textarea.style.height = "0px";
     const heights = inputs.map((textarea) => Math.max(24, textarea.scrollHeight));
     inputs.forEach((textarea, index) => {
@@ -511,6 +621,9 @@ export function OutlineEditor<T = unknown>({
     resizeTextareas();
   }, [
     state.nodes,
+    state.caret?.field,
+    state.caret?.id,
+    rowMode,
     state.expandedIds,
     state.hoistedId,
     readOnly,
@@ -565,7 +678,7 @@ export function OutlineEditor<T = unknown>({
     if (!observer) return;
     // DOM nodes survive ordinary text edits. Reconcile after commit rather than
     // observing in inline refs, which React detaches/reattaches on every render.
-    const inputs = new Set(textareas.current.values());
+    const inputs = new Set([...textareas.current.values(), ...noteTextareas.current.values()]);
     const widths = observedWidths.current;
     for (const element of widths.keys()) {
       if (element !== root.current && !inputs.has(element as HTMLTextAreaElement)) {
@@ -611,6 +724,125 @@ export function OutlineEditor<T = unknown>({
     () => editorVisibleRows(state),
     [state.nodes, state.expandedIds, state.hoistedId],
   );
+  function readNote(node: OutlineNode<T>): string | undefined {
+    if (!noteAdapter) return undefined;
+    try {
+      const value = noteAdapter.read(node);
+      return typeof value === "string" ? value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  const focusNote = (rowId: string) => {
+    const node = findOutlineNode(model.current.nodes, rowId)?.node;
+    const text = node && readNote(node);
+    if (text === undefined) return;
+    completion.dismiss();
+    dismissHover();
+    dispatch({ type: "focus", id: rowId, field: "note", start: text.length });
+  };
+  const syncNote = (input: HTMLTextAreaElement, rowId: string) => {
+    const node = findOutlineNode(model.current.nodes, rowId)?.node;
+    if (!node) return;
+    const text = readNote(node);
+    if (text === undefined) return;
+    if (text !== input.value)
+      dispatch({
+        type: "note",
+        id: rowId,
+        text: input.value,
+        caret: input.selectionStart,
+        time: Date.now(),
+      });
+    else
+      dispatch({
+        type: "caret",
+        id: rowId,
+        field: "note",
+        start: input.selectionStart,
+        end: input.selectionEnd,
+      });
+  };
+  const noteKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, rowId: string) => {
+    if (
+      event.defaultPrevented ||
+      event.nativeEvent.defaultPrevented ||
+      noteComposing.current ||
+      event.nativeEvent.isComposing ||
+      event.keyCode === 229
+    )
+      return;
+    for (const plugin of callbacks.current.plugins) {
+      const mapped = plugin.noteKeymap?.(
+        {
+          key: event.key,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+          isComposing: false,
+        },
+        { rowId, field: "note", state: model.current },
+      );
+      if (mapped !== undefined) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (mapped) dispatch(mapped);
+        return;
+      }
+    }
+    const command = event.ctrlKey || event.metaKey;
+    if (
+      command &&
+      !event.altKey &&
+      (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatch({ type: event.key.toLowerCase() === "y" || event.shiftKey ? "redo" : "undo" });
+    } else if (!command && !event.altKey && event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      const previous = model.current;
+      dispatch({ type: "select", id: rowId });
+      if (
+        model.current !== previous &&
+        !model.current.refusal &&
+        model.current.caret?.field !== "note" &&
+        model.current.selection.has(rowId)
+      ) {
+        updateMode(true);
+        rowElements.current.get(rowId)?.focus({ preventScroll: true });
+      }
+    } else if (
+      !command &&
+      !event.altKey &&
+      event.key === "Enter" &&
+      event.shiftKey &&
+      noteKeyboardProfile === "toggle"
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatch({
+        type: "focus",
+        id: rowId,
+        start: findOutlineNode(model.current.nodes, rowId)?.node.text.length ?? 0,
+      });
+    } else if (!command && !event.altKey && event.key === "Tab") {
+      if (event.shiftKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const input = event.currentTarget;
+      dispatch({
+        type: "note",
+        id: rowId,
+        text:
+          input.value.slice(0, input.selectionStart) + "\t" + input.value.slice(input.selectionEnd),
+        caret: input.selectionStart + 1,
+        time: Date.now(),
+      });
+    }
+  };
   const focusedRow = state.caret?.id;
   const dropDepth = drag?.target
     ? Math.max(
@@ -683,7 +915,14 @@ export function OutlineEditor<T = unknown>({
     }
   };
   const keyDown = (event: KeyboardEvent<HTMLElement>, rowId: string, mode: "text" | "row") => {
-    if (composing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (
+      event.defaultPrevented ||
+      event.nativeEvent.defaultPrevented ||
+      composing.current ||
+      event.nativeEvent.isComposing ||
+      event.keyCode === 229
+    )
+      return;
     const textarea = mode === "text" ? (event.currentTarget as HTMLTextAreaElement) : undefined;
     if (textarea) syncInput(textarea, rowId);
     if (event.key === "Escape" && mode === "text" && completionRef.current.status === "loading") {
@@ -755,6 +994,24 @@ export function OutlineEditor<T = unknown>({
         completion.dismiss();
         dismissHover();
         if (mapped) dispatch(mapped);
+        return;
+      }
+    }
+    if (
+      mode === "text" &&
+      noteKeyboardProfile === "toggle" &&
+      noteAdapter &&
+      event.key === "Enter" &&
+      event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      const node = findOutlineNode(model.current.nodes, rowId)?.node;
+      if (node && readNote(node) !== undefined) {
+        event.preventDefault();
+        event.stopPropagation();
+        focusNote(rowId);
         return;
       }
     }
@@ -1228,6 +1485,14 @@ export function OutlineEditor<T = unknown>({
           const analysis = currentTextAnalysis(getTextAnalysis?.(node), node.text);
           const richDocument = getRichContent?.(node);
           const body = renderBody?.(node);
+          const note = readNote(node);
+          const noteEpoch = noteCompositionEpoch.current;
+          const editingNote =
+            note !== undefined &&
+            !locked &&
+            !rowMode &&
+            state.caret?.id === node.id &&
+            state.caret.field === "note";
           const hasBody = renderBody
             ? body != null && typeof body !== "boolean" && body !== ""
             : !!richDocument;
@@ -1375,7 +1640,12 @@ export function OutlineEditor<T = unknown>({
                     className="fast-ux-editor__input"
                     data-decorated={!!analysis?.classifications?.length || undefined}
                     onPointerMove={(event) => {
-                      if (!hoverProviders.length || event.pointerType === "touch") return;
+                      if (
+                        !hoverProviders.length ||
+                        event.pointerType === "touch" ||
+                        model.current.caret?.field === "note"
+                      )
+                        return;
                       const input = event.currentTarget,
                         x = event.clientX,
                         y = event.clientY;
@@ -1394,6 +1664,7 @@ export function OutlineEditor<T = unknown>({
                     }}
                     onPointerLeave={scheduleHoverDismiss}
                     onFocus={(event) => {
+                      noteHadFocus.current = false;
                       updateMode(false);
                       focused.current = node.id;
                       selectedCaret.current = {
@@ -1638,6 +1909,118 @@ export function OutlineEditor<T = unknown>({
                   </Button>
                 )}
               </div>
+              {note !== undefined && (
+                <div className="fast-ux-editor__note">
+                  {editingNote ? (
+                    <>
+                      <textarea
+                        key={noteEpoch}
+                        ref={(element) => {
+                          if (element) noteTextareas.current.set(node.id, element);
+                          else noteTextareas.current.delete(node.id);
+                        }}
+                        value={note}
+                        rows={1}
+                        spellCheck={spellCheck}
+                        className="fast-ux-editor__input fast-ux-editor__note-input"
+                        aria-label={`Edit note for ${node.text || "empty item"}`}
+                        aria-describedby={`${rootId}-note-help-${index}`}
+                        onFocus={(event) => {
+                          noteHadFocus.current = true;
+                          completion.dismiss();
+                          dismissHover();
+                          if (!pendingFocus.current)
+                            dispatch({
+                              type: "caret",
+                              id: node.id,
+                              field: "note",
+                              start: event.currentTarget.selectionStart,
+                              end: event.currentTarget.selectionEnd,
+                            });
+                        }}
+                        onSelect={(event) => {
+                          if (
+                            pendingFocus.current ||
+                            event.currentTarget.ownerDocument.activeElement !== event.currentTarget
+                          )
+                            return;
+                          dispatch({
+                            type: "caret",
+                            id: node.id,
+                            field: "note",
+                            start: event.currentTarget.selectionStart,
+                            end: event.currentTarget.selectionEnd,
+                          });
+                        }}
+                        onBlur={() => {
+                          noteComposing.current = false;
+                        }}
+                        onChange={(event) => {
+                          if (noteEpoch === noteCompositionEpoch.current)
+                            syncNote(event.currentTarget, node.id);
+                        }}
+                        onCompositionStart={() => {
+                          if (noteEpoch === noteCompositionEpoch.current)
+                            noteComposing.current = true;
+                        }}
+                        onCompositionEnd={(event) => {
+                          if (noteEpoch !== noteCompositionEpoch.current || !noteComposing.current)
+                            return;
+                          noteComposing.current = false;
+                          syncNote(event.currentTarget, node.id);
+                        }}
+                        onKeyDown={(event) => noteKeyDown(event, node.id)}
+                        onPaste={(event) => {
+                          if (noteComposing.current) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const input = event.currentTarget;
+                          const text = event.clipboardData.getData("text/plain");
+                          dispatch({
+                            type: "note",
+                            id: node.id,
+                            text:
+                              input.value.slice(0, input.selectionStart) +
+                              text +
+                              input.value.slice(input.selectionEnd),
+                            caret: input.selectionStart + text.length,
+                            time: Date.now(),
+                          });
+                        }}
+                      />
+                      <span
+                        id={`${rootId}-note-help-${index}`}
+                        className="fast-ux-editor__note-help"
+                      >
+                        Tab inserts a tab. Shift+Tab moves focus back. Escape finishes editing
+                        without discarding changes.
+                      </span>
+                      <Button
+                        className="fux-control"
+                        onPress={() =>
+                          dispatch({ type: "focus", id: node.id, start: node.text.length })
+                        }
+                      >
+                        Return to title
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {!renderBody && note && (
+                        <div className="fast-ux-editor__note-preview">{note}</div>
+                      )}
+                      <Button
+                        className="fux-control"
+                        isDisabled={locked}
+                        aria-label={`Edit note for ${node.text || "empty item"}`}
+                        onPress={() => focusNote(node.id)}
+                      >
+                        Edit note
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
               {hasBody && (
                 <div className="fast-ux-editor__body">
                   {renderBody ? (

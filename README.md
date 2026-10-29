@@ -200,6 +200,11 @@ See [editor API](docs/OUTLINER_API.md) and [behavior coverage](docs/PARITY.md) f
 exact supported semantics, optimistic host synchronization, tests and remaining
 platform gaps. No source pane is enabled merely by viewing a document.
 
+Optional [note editing](docs/OUTLINE_NOTES.md) uses a trusted typed adapter and a
+separate plain-text field with canonical local updates and field-aware history.
+An explicit action opens the note; Shift+Enter switching is a separate opt-in.
+Existing title keys and the reader-first default remain unchanged.
+
 ## Optional local search and productivity
 
 `OutlineSearch` adds a read-only local search surface without activating an editor

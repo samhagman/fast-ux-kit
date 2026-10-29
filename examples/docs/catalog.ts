@@ -44,6 +44,13 @@ export const experiencePages = [
     category: "Outliner",
   },
   {
+    id: "outline-note-lab",
+    name: "Outline note lab",
+    description:
+      "Explicit local note editing, separate field focus, opt-in keyboard switching and canonical undo/redo history.",
+    category: "Outliner",
+  },
+  {
     id: "outline",
     name: "Outline reader",
     description:
