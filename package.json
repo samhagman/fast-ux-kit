@@ -51,7 +51,8 @@
       "types": "./dist/core/machine/index.d.ts",
       "import": "./dist/core/machine/index.js"
     },
-    "./machine.css": "./dist/react/machine-view.css"
+    "./machine.css": "./dist/react/machine-view.css",
+    "./machine-tree.css": "./dist/react/machine-tree-view.css"
   },
   "sideEffects": [
     "**/*.css"

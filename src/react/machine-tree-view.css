@@ -1,0 +1,573 @@
+.fux-machine-tree {
+  --tree-line: var(--fux-border-subtle, #dce2e7);
+  color: var(--fux-text, #202124);
+  background: var(--fux-surface, #fff);
+  border: 0;
+  border-radius: 0;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  font: inherit;
+  line-height: 1.5;
+  overflow: clip;
+  container: machine-tree / inline-size;
+}
+.fux-machine-tree *,
+.fux-machine-tree *::before,
+.fux-machine-tree *::after {
+  box-sizing: border-box;
+}
+.fux-machine-tree button,
+.fux-machine-tree input {
+  font: inherit;
+  color: inherit;
+}
+.fux-machine-tree :is(button, input, [tabindex], summary):focus-visible {
+  outline: 2px solid var(--fux-focus, #245db0);
+  outline-offset: -2px;
+}
+.fux-machine-tree__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-block-end: 1px solid var(--tree-line);
+}
+.fux-machine-tree__header > div {
+  min-inline-size: 0;
+}
+.fux-machine-tree__header strong {
+  font-size: 1rem;
+}
+.fux-machine-tree__header p {
+  margin: 2px 0 0;
+  color: var(--fux-muted, #60656c);
+  font-size: 0.8125rem;
+}
+.fux-machine-tree__emblem {
+  font-size: 1.5rem;
+  color: var(--fux-accent, #32604b);
+}
+.fux-machine-tree__readonly {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border: 1px solid var(--tree-line);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.fux-machine-tree__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.fux-machine-tree__search {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  font-size: 0.8125rem;
+}
+.fux-machine-tree__search input {
+  min-block-size: 44px;
+  inline-size: 100%;
+  min-inline-size: 44px;
+  border: 1px solid var(--fux-border, #9ba3ad);
+  border-radius: 4px;
+  background: var(--fux-input-surface, transparent);
+  padding-inline: 10px;
+  font-size: 1rem;
+}
+.fux-machine-tree__actions,
+.fux-machine-tree__options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.fux-machine-tree__options {
+  inline-size: 100%;
+  gap: 16px;
+}
+.fux-machine-tree__options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.fux-machine-tree__options input {
+  inline-size: 18px;
+  block-size: 18px;
+  accent-color: var(--fux-accent, #32604b);
+}
+.fux-machine-tree__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding: 7px 10px;
+  max-inline-size: 100%;
+  border: 1px solid var(--tree-line);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8125rem !important;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+.fux-machine-tree__button:hover {
+  background: var(--fux-surface-subtle, #f5f6f8);
+}
+.fux-machine-tree button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.fux-machine-tree__summary {
+  margin: 0;
+  padding: 0 16px 12px;
+  color: var(--fux-muted, #60656c);
+  font-size: 0.8125rem;
+}
+.fux-machine-tree__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.fux-machine-tree__outline {
+  min-inline-size: 0;
+}
+.fux-machine-tree__help {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 0.75rem;
+  color: var(--fux-muted, #60656c);
+  background: var(--fux-surface-subtle, #f5f6f8);
+}
+.fux-machine-tree__tree {
+  padding: 32px;
+  min-inline-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.fux-machine-tree__row {
+  position: relative;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  outline: none;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.fux-machine-tree__state-box {
+  border: 2px solid var(--tree-line);
+  border-radius: 8px;
+  background: var(--fux-surface, #fff);
+  box-shadow: 0 2px 1px rgb(0 0 0 / 6%);
+  min-inline-size: 0;
+}
+.fux-machine-tree__row-face {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-block-size: 44px;
+  padding: 0 10px;
+  padding-inline-end: 42px;
+  min-inline-size: 0;
+}
+.fux-machine-tree__row-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.fux-machine-tree__initial,
+.fux-machine-tree__kind-mark {
+  color: var(--fux-muted, #777);
+}
+.fux-machine-tree__initial,
+.fux-machine-tree__reference-mark {
+  display: inline-flex;
+  flex: 0 0 14px;
+}
+.fux-machine-tree__row[data-kind="final"] > .fux-machine-tree__state-box {
+  outline: 1px solid var(--tree-line);
+  outline-offset: -5px;
+}
+.fux-machine-tree__row[data-kind="final"][data-active] > .fux-machine-tree__state-box {
+  outline-color: var(--fux-accent, #32604b);
+}
+.fux-machine-tree__row[data-kind="final"][data-selected] > .fux-machine-tree__state-box {
+  outline-color: var(--fux-focus, #245db0);
+}
+.fux-machine-tree__children {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  border-block-start: 1px solid var(--tree-line);
+}
+.fux-machine-tree__children > .fux-machine-tree__row {
+  flex: 0 1 auto;
+  min-inline-size: min(100%, 12rem);
+}
+.fux-machine-tree__children > .fux-machine-tree__row[data-compound] {
+  flex-basis: 100%;
+}
+.fux-machine-tree__row[data-kind="machine"] {
+  margin-block-end: 28px;
+}
+.fux-machine-tree__row[data-kind="machine"] > .fux-machine-tree__state-box {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.fux-machine-tree__row[data-kind="machine"]
+  > .fux-machine-tree__state-box
+  > .fux-machine-tree__row-face {
+  padding: 0;
+  padding-inline-end: 44px;
+  min-block-size: 32px;
+  margin-block-end: 16px;
+}
+.fux-machine-tree__row[data-kind="machine"]
+  > .fux-machine-tree__state-box
+  > .fux-machine-tree__row-face
+  > .fux-machine-tree__row-title {
+  font-size: 24px;
+  letter-spacing: -0.035em;
+}
+.fux-machine-tree__row[data-kind="machine"]
+  > .fux-machine-tree__state-box
+  > .fux-machine-tree__children {
+  padding: 0;
+  border: 0;
+}
+.fux-machine-tree__routes {
+  padding-inline-start: 16px;
+}
+.fux-machine-tree__routes > .fux-machine-tree__row {
+  padding-inline-start: 16px;
+}
+.fux-machine-tree__routes > .fux-machine-tree__row::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0;
+  inline-size: 14px;
+  block-size: 22px;
+  border-inline-start: 2px solid var(--tree-line);
+  border-block-end: 2px solid var(--tree-line);
+  border-end-start-radius: 8px;
+  pointer-events: none;
+}
+.fux-machine-tree__routes > .fux-machine-tree__row:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block: 0;
+  border-inline-start: 2px solid var(--tree-line);
+  pointer-events: none;
+}
+.fux-machine-tree__row[data-kind="transition"] > .fux-machine-tree__state-box {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border-block-end: 1px dashed var(--tree-line);
+}
+.fux-machine-tree__row[data-kind="transition"] .fux-machine-tree__row-face {
+  min-block-size: 44px;
+  padding: 0 8px;
+  gap: 8px;
+  font:
+    12px/1.4 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+}
+.fux-machine-tree__row[data-kind="transition"] .fux-machine-tree__row-title {
+  font: inherit;
+  font-weight: 600;
+}
+.fux-machine-tree__target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: start;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  max-inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fux-focus, #647ba8) !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: start;
+  font: inherit;
+}
+.fux-machine-tree__target:hover {
+  text-decoration-thickness: 2px;
+}
+.fux-machine-tree__arrow,
+.fux-machine-tree__guard,
+.fux-machine-tree__action {
+  color: var(--fux-muted, #777);
+}
+.fux-machine-tree__disclosure {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: 0;
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--fux-muted, #777);
+  cursor: pointer;
+  opacity: 0.3;
+}
+.fux-machine-tree__row:hover
+  > .fux-machine-tree__state-box
+  > .fux-machine-tree__row-face
+  > .fux-machine-tree__disclosure,
+.fux-machine-tree__disclosure:focus-visible {
+  opacity: 1;
+}
+.fux-machine-tree__row:focus-visible > .fux-machine-tree__state-box > .fux-machine-tree__row-face {
+  outline: 2px solid var(--fux-focus, #245db0);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.fux-machine-tree__row[data-selected] > .fux-machine-tree__state-box {
+  border-color: var(--fux-focus, #245db0);
+}
+.fux-machine-tree__row[data-selected] > .fux-machine-tree__state-box > .fux-machine-tree__row-face {
+  background: var(--fux-selected, #edf4ef);
+}
+.fux-machine-tree__row[data-active] > .fux-machine-tree__state-box {
+  border-color: var(--fux-accent, #32604b);
+}
+.fux-machine-tree__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--fux-muted, #60656c);
+  font:
+    10px/1.4 system-ui,
+    sans-serif;
+}
+.fux-machine-tree__badges:empty {
+  display: none;
+}
+.fux-machine-tree__badges > span {
+  padding: 1px 4px;
+  border: 1px solid var(--tree-line);
+  border-radius: 3px;
+}
+.fux-machine-tree__active-badge {
+  color: var(--fux-accent, #32604b);
+}
+.fux-machine-tree__state-description {
+  margin: 0;
+  padding: 0 10px 8px;
+  font-size: 13px;
+  color: var(--fux-muted, #60656c);
+  white-space: pre-wrap;
+}
+.fux-machine-tree__state-actions {
+  display: grid;
+  gap: 4px;
+  padding: 0 10px 8px;
+  font:
+    12px/1.4 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  color: var(--fux-muted, #60656c);
+}
+.fux-machine-tree__inspector {
+  padding: 18px;
+  min-inline-size: 0;
+  border-block-start: 1px solid var(--tree-line);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.fux-machine-tree__inspector h3 {
+  margin: 2px 0 16px;
+  font-size: 1.125rem;
+}
+.fux-machine-tree__inspector h4 {
+  font-size: 0.75rem;
+  margin-block-end: 4px;
+}
+.fux-machine-tree__path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+}
+.fux-machine-tree__path li {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.fux-machine-tree__path li + li::before {
+  content: "/";
+  margin-inline-end: 8px;
+  color: var(--fux-muted, #60656c);
+}
+.fux-machine-tree__path code {
+  color: var(--fux-muted, #60656c);
+  font: inherit;
+}
+.fux-machine-tree__inspector dl {
+  display: grid;
+  grid-template-columns: minmax(4rem, 0.4fr) minmax(0, 1fr);
+  gap: 8px 12px;
+}
+.fux-machine-tree__inspector dt {
+  color: var(--fux-muted, #60656c);
+}
+.fux-machine-tree__inspector dd {
+  margin: 0;
+  min-inline-size: 0;
+}
+.fux-machine-tree__eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.625rem;
+  color: var(--fux-muted, #60656c);
+}
+.fux-machine-tree__description {
+  white-space: pre-wrap;
+}
+.fux-machine-tree__route {
+  display: grid;
+  gap: 8px;
+  margin-block: 16px;
+}
+.fux-machine-tree__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.fux-machine-tree__tags span {
+  padding: 2px 6px;
+  border: 1px solid var(--tree-line);
+  border-radius: 3px;
+}
+.fux-machine-tree__boundary {
+  border-block-start: 1px solid var(--tree-line);
+  padding-block-start: 16px;
+  margin-block-start: 24px;
+  color: var(--fux-muted, #60656c);
+  font-size: 0.75rem;
+}
+.fux-machine-tree__notice {
+  padding: 10px;
+  background: var(--fux-surface-subtle, #f5f6f8);
+  border-inline-start: 2px solid var(--fux-accent, #32604b);
+}
+.fux-machine-tree__issues {
+  margin: 0 16px 12px;
+  padding: 8px;
+  border: 1px solid var(--tree-line);
+  font-size: 0.8125rem;
+}
+.fux-machine-tree__issues summary {
+  min-block-size: 44px;
+  display: list-item;
+  align-content: center;
+  cursor: pointer;
+}
+.fux-machine-tree__empty {
+  padding: 24px;
+  color: var(--fux-muted, #60656c);
+}
+.fux-machine-tree__footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  border-block-start: 1px solid var(--tree-line);
+  font-size: 0.6875rem;
+  color: var(--fux-muted, #60656c);
+}
+.fux-machine-tree__sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+[dir="rtl"] .fux-machine-tree__disclosure span {
+  transform: scaleX(-1);
+}
+[dir="rtl"] .fux-machine-tree__initial svg,
+[dir="rtl"] .fux-machine-tree__arrow,
+[dir="rtl"] .fux-machine-tree__reference-mark {
+  transform: scaleX(-1);
+}
+@container machine-tree (min-width: 48rem) {
+  .fux-machine-tree__workspace:not(.fux-machine-tree__workspace--tree-only) {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 30%);
+  }
+  .fux-machine-tree__inspector {
+    border-block-start: 0;
+    border-inline-start: 1px solid var(--tree-line);
+    max-block-size: 43rem;
+    overflow: auto;
+  }
+}
+@container machine-tree (max-width: 28rem) {
+  .fux-machine-tree__tree {
+    padding: 16px;
+  }
+  .fux-machine-tree__children > .fux-machine-tree__row {
+    flex-basis: 100%;
+  }
+  .fux-machine-tree__row-face {
+    overflow-wrap: anywhere;
+  }
+}
+@media (forced-colors: active) {
+  .fux-machine-tree__row[data-selected] {
+    border: 2px solid Highlight;
+  }
+  .fux-machine-tree__row[data-active] {
+    border-inline-end: 3px solid Highlight;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fux-machine-tree * {
+    scroll-behavior: auto !important;
+  }
+}
+
+.fux-machine-tree__header,
+.fux-machine-tree__help,
+.fux-machine-tree__footer {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

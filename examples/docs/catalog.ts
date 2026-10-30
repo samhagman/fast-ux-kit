@@ -23,6 +23,13 @@ export const componentCategoryOrder = [
 
 export const experiencePages = [
   {
+    id: "machine-tree-view",
+    name: "Machine Tree View",
+    description:
+      "A hierarchy-first machine reader with state containment, transition routes, search, folding and supplied active-state evidence.",
+    category: "State machines",
+  },
+  {
     id: "machine-view",
     name: "Machine View",
     description:

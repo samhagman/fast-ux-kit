@@ -10,6 +10,12 @@
 | Complete unstyled APIs and infrastructure                           | `aria`, `ark`                    | Explicit escape hatches; not counted as completed styled UI     |
 | Theme, product state, storage and transport                         | application                      | Never baked into the reusable kit                               |
 
+The separate `MachineTreeView` uses portable `/machine` containment projection
+and one React-owned tree keyboard/focus manager. Its disclosure/actions use the
+default press owner; selection and folding are view state, never machine events.
+This is distinct from both the nested-list outliner and the spatial Machine View.
+See [Machine Tree View](MACHINE_TREE_VIEW.md) for the projection and input limits.
+
 The default owner handles overlapping component families. The optional owner adds
 specialized families rather than a second competing implementation of each input.
 For example, Accordion maps to DisclosureGroup, Collapsible to Disclosure,

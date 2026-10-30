@@ -7,6 +7,7 @@ for (const file of [
   "components/ark-advanced.css",
   "react/editor.css",
   "react/machine-view.css",
+  "react/machine-tree-view.css",
   "react/outline-search.css",
 ]) {
   await copyFile(

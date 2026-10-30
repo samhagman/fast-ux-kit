@@ -24,6 +24,7 @@ async function at(id: string) {
       ),
     { timeout: 10000 },
   );
+  await waitFor(() => assert.ok(view.getByRole("heading", { level: 1 })), { timeout: 10000 });
   return view;
 }
 async function navigate(id: string) {
@@ -213,3 +214,25 @@ for (const page of allPages)
     const ids = [...view.container.querySelectorAll("[id]")].map((element) => element.id);
     assert.equal(new Set(ids).size, ids.length);
   });
+
+test("standalone tree route leaves browser search shortcut unclaimed and docs restores its owner", async () => {
+  const view = await at("machine-tree-view");
+  await waitFor(() => assert.ok(view.getByRole("tree", { name: "Machine hierarchy explorer" })), {
+    timeout: 10000,
+  });
+  assert.equal(view.queryByRole("navigation", { name: "Documentation" }), null);
+  assert.equal(
+    view.getByRole("link", { name: "Back to component gallery" }).getAttribute("href"),
+    "#components",
+  );
+  assert.equal(fireEvent.keyDown(document, { key: "k", ctrlKey: true, cancelable: true }), true);
+  assert.equal(fireEvent.keyDown(document, { key: "k", metaKey: true, cancelable: true }), true);
+  await navigate("overview");
+  assert.ok(view.getByRole("navigation", { name: "Documentation" }));
+  assert.equal(fireEvent.keyDown(document, { key: "k", ctrlKey: true, cancelable: true }), false);
+  await navigate("machine-tree-view");
+  await waitFor(() => assert.ok(view.getByRole("tree", { name: "Machine hierarchy explorer" })), {
+    timeout: 10000,
+  });
+  assert.equal(fireEvent.keyDown(document, { key: "k", ctrlKey: true, cancelable: true }), true);
+});
