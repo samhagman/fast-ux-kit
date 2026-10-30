@@ -230,6 +230,24 @@ test("whole-transition policy and locks reject atomically including adoption, se
     "locked",
   );
 });
+test("undo restores a deleted neighbour of a locked item while reordering it stays refused", () => {
+  const options = { ...edit, isLocked: (node: OutlineNode) => node.id === "c" };
+  const nodes = [n("a", "A", [n("a1")]), n("b"), n("c", "Locked", [n("c1")])];
+  let state = createOutlineEditorState(nodes);
+  state = reduceOutlineEditor(state, { type: "delete", ids: ["a"] }, options);
+  assert.deepEqual(ids(state.nodes), ["b", "c"]);
+  const restored = reduceOutlineEditor(state, { type: "undo" }, options);
+  assert.equal(restored.refusal, null);
+  assert.deepEqual(ids(restored.nodes), ["a", "b", "c"]);
+  const redone = reduceOutlineEditor(restored, { type: "redo" }, options);
+  assert.deepEqual(ids(redone.nodes), ["b", "c"]);
+  const reordered = reduceOutlineEditor(
+    createOutlineEditorState(nodes),
+    { type: "replace", nodes: [nodes[2]!, nodes[0]!, nodes[1]!] },
+    options,
+  );
+  assert.equal(reordered.refusal, "locked");
+});
 test("hoist/breadcrumb state, collapse focus recovery, selection roots and view-only revisions", () => {
   let state = createOutlineEditorState(tree());
   state = run(state, { type: "focus", id: "a1x", start: 2 });

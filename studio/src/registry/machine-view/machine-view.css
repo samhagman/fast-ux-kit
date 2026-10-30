@@ -1,0 +1,227 @@
+/* ───────── Machine View canvas (React Flow) ─────────
+ * Colour mixes with neutrals use oklab: oklch interpolates hue toward the neutral's
+ * meaningless hue 0 and tints signal mixes pink. */
+.machine-flow {
+  /* Light mode needs firmer strokes on the dotted canvas; dark keeps the token border. */
+  --mv-node-border: oklch(0.87 0.006 265);
+  --mv-edge: color-mix(in oklab, var(--foreground) 46%, transparent);
+  --xy-edge-stroke: var(--mv-edge);
+  --xy-selection-background-color: var(--signal-muted);
+  --xy-selection-border: 1px solid var(--signal);
+}
+.dark .machine-flow {
+  --mv-node-border: var(--border);
+  --mv-edge: color-mix(in oklab, var(--foreground) 38%, transparent);
+}
+.machine-flow .react-flow__node {
+  font-family: var(--font-sans);
+}
+/* Chips sit on their line. The label layer makes NO stacking context of its own, so each chip's
+ * z (its own edge's elevated z + 1, set inline) interleaves with nodes and edges inside the
+ * viewport: a line never draws through its own chip, and a selected or dragged state (z 1000+)
+ * still draws over a chip it is moved onto. */
+.machine-flow .react-flow__edgelabel-renderer {
+  z-index: auto;
+}
+/* Event chips: an invisible hit area sized in SCREEN pixels (divided by the canvas zoom). */
+.mv-chip::after {
+  content: "";
+  position: absolute;
+  inset-inline: min(-3px, calc(-6px / var(--mv-zoom, 1)));
+  top: min(-3px, calc(50% - 14px / var(--mv-zoom, 1)));
+  bottom: min(-3px, calc(50% - 14px / var(--mv-zoom, 1)));
+  border-radius: 8px;
+}
+@media (pointer: coarse) {
+  .mv-chip::after {
+    inset-inline: min(-4px, calc(-10px / var(--mv-zoom, 1)));
+    top: min(-4px, calc(50% - 22px / var(--mv-zoom, 1)));
+    bottom: min(-4px, calc(50% - 22px / var(--mv-zoom, 1)));
+  }
+}
+/* Opening: hidden until the measured layout settles, then one fade (no visible jump). */
+.machine-flow .react-flow__viewport {
+  transition: opacity 180ms var(--ease-standard);
+}
+.machine-flow.mv-unrevealed .react-flow__viewport,
+.machine-flow.mv-unrevealed .mv-overflow {
+  opacity: 0;
+  transition: none;
+}
+/* Re-target by dragging an edge end (custom anchors on the routed path ends, see machine-edges):
+ * an invisible screen-sized grab zone, and a small grip that shows on hover or selection. */
+.machine-flow .mv-reconnect {
+  cursor: grab;
+}
+.machine-flow .mv-reconnect-dot {
+  fill: var(--surface);
+  stroke: color-mix(in oklab, var(--signal) 70%, transparent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-standard);
+}
+.machine-flow .react-flow__edge:hover .mv-reconnect-dot,
+.machine-flow .react-flow__edge.selected .mv-reconnect-dot {
+  opacity: 1;
+}
+.machine-flow .react-flow__node:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+.machine-flow .react-flow__edge:focus-visible {
+  outline: none;
+}
+.machine-flow .react-flow__edge:focus-visible path:not([stroke="transparent"]) {
+  stroke: var(--ring) !important;
+}
+.machine-flow .react-flow__node-group,
+.machine-flow .react-flow__node-state,
+.machine-flow .react-flow__node-note,
+.machine-flow .react-flow__node-initial,
+.machine-flow .react-flow__node-pseudo {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.machine-handle {
+  width: 8px !important;
+  height: 8px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: 1.5px solid var(--signal) !important;
+  background: var(--surface) !important;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
+}
+/* Touch: a 36px invisible hit area around each 8px handle; handles show on the selected node. */
+@media (pointer: coarse) {
+  .machine-handle::after {
+    content: "";
+    position: absolute;
+    inset: -14px;
+    border-radius: 999px;
+  }
+  .machine-handle {
+    width: 12px !important;
+    height: 12px !important;
+  }
+}
+.machine-flow[data-mode="design"] .react-flow__node:hover > div > .machine-handle,
+.machine-flow[data-mode="design"] .react-flow__node.selected > div > .machine-handle,
+.machine-flow .react-flow__handle.connectingfrom,
+.machine-flow .react-flow__handle.connectingto,
+.machine-flow .react-flow__handle.connectionindicator:focus-visible {
+  opacity: 1;
+}
+.machine-flow[data-mode="simulate"] .machine-handle {
+  opacity: 0 !important;
+}
+.machine-flow .react-flow__node-pseudo .machine-handle,
+.machine-flow .react-flow__node-initial .machine-handle {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+.machine-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--foreground);
+}
+.machine-flow .react-flow__connectionline path {
+  stroke: var(--signal);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.machine-flow .react-flow__node.dragging {
+  cursor: grabbing;
+}
+.machine-flow.mv-drop-root .react-flow__pane {
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--signal) 35%, transparent);
+}
+
+/* Relayout: nodes glide to their new boxes and edges glide with them (path interpolation or
+ * a crossfade, see GlidingPath), so nothing blinks. A dragged node is never transitioned. */
+.machine-flow.mv-settling .react-flow__node:not(.dragging) {
+  transition:
+    transform 240ms var(--ease-standard),
+    width 240ms var(--ease-standard),
+    height 240ms var(--ease-standard);
+}
+/* Event chips ride along with their routes (not while an endpoint is being dragged). */
+.machine-flow .mv-chip.mv-chip-glide {
+  transition-property: transform, opacity, border-color, background-color, color, box-shadow;
+  transition-duration: 240ms, 200ms, 200ms, 200ms, 200ms, 200ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+/* A taken transition: one pass of flow along the edge, then it settles to the solid stroke. */
+@keyframes mv-flow {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.95;
+  }
+  80% {
+    opacity: 0.95;
+  }
+  100% {
+    stroke-dashoffset: -48;
+    opacity: 0;
+  }
+}
+.mv-flow {
+  stroke-dasharray: 6 18;
+  animation: mv-flow 1.4s linear 1 forwards;
+}
+
+.machine-flow .react-flow__attribution {
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  opacity: 0.45;
+  padding: 2px 6px;
+}
+.machine-flow .react-flow__attribution a {
+  color: var(--muted-foreground);
+}
+
+/* A slow controlled host is answering: a 1px indeterminate hairline under the toolbar. */
+.mv-saving {
+  background: linear-gradient(90deg, transparent 0%, var(--signal) 50%, transparent 100%) 0 0 / 40% 100% no-repeat;
+  animation: mv-saving 1.1s var(--ease-standard) infinite;
+}
+@keyframes mv-saving {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mv-saving {
+    animation: none;
+    background: color-mix(in oklab, var(--signal) 55%, transparent);
+  }
+  .mv-flow {
+    animation: none;
+    opacity: 0;
+  }
+  .machine-flow.mv-settling .react-flow__node:not(.dragging),
+  .machine-flow .react-flow__viewport,
+  .machine-flow .mv-chip.mv-chip-glide {
+    transition: none;
+  }
+}
+
+/* Simulate: an inactive state inside a LIVE container recedes into the container's tinted fill:
+ * no card fill of its own (only the live leaf keeps one) and a lighter outline, instead of being
+ * the brightest card in it. */
+.machine-flow [data-sim="inactive"][data-sim-recessed] {
+  --sim-surface: transparent;
+  --sim-border: color-mix(in srgb, var(--border) 85%, transparent);
+  /* --sim-muted measures 4.46:1 on the doubly tinted region (parallel + region); the region's own
+   * metadata colour keeps ≥ 5.5:1 there (measured, light and dark). */
+  --sim-text: var(--muted-foreground);
+  --sim-tag: var(--muted-foreground);
+}

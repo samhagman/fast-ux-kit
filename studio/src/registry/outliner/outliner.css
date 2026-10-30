@@ -1,0 +1,20 @@
+/* Outliner-local rules that utilities can't express. */
+@media (pointer: coarse) {
+  /* Touch menus never advertise keyboard shortcuts. */
+  [data-slot="context-menu-shortcut"],
+  [data-slot="dropdown-menu-shortcut"],
+  [data-slot="command-shortcut"] {
+    display: none;
+  }
+}
+
+/* The phone action sheet keeps its target row readable above it: no backdrop blur, a light scrim. */
+body:has([data-outliner-sheet]) [data-slot="drawer-overlay"] {
+  backdrop-filter: none;
+  background-color: rgb(0 0 0 / 0.08);
+}
+
+/* Room below the content while the action sheet is open, so its target can rise above it. */
+[data-outliner-scroll][data-sheet-open] > div {
+  padding-bottom: 70vh;
+}

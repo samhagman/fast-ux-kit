@@ -209,6 +209,8 @@ const clamp = (value: number, length: number) =>
 
 /** History/replacement must preserve protected nodes and their complete structural placement.
  * Compare positions, not ancestor object identities: editing an unlocked ancestor title is valid.
+ * A position counts only siblings that keep the same parent on both sides, so inserting or
+ * deleting an unlocked neighbour is not a move of the locked node, while reordering it is.
  */
 function changesLockedStructure<T>(
   before: readonly OutlineNode<T>[],
@@ -220,39 +222,69 @@ function changesLockedStructure<T>(
     parentId: string | null;
     index: number;
   }
+  const parents = (roots: readonly OutlineNode<T>[]) => {
+    const map = new Map<string, string | null>();
+    const pending: { nodes: readonly OutlineNode<T>[]; parentId: string | null }[] = [
+      { nodes: roots, parentId: null },
+    ];
+    while (pending.length) {
+      const { nodes, parentId } = pending.pop()!;
+      for (const node of nodes) {
+        map.set(node.id, parentId);
+        if (node.children) pending.push({ nodes: node.children, parentId: node.id });
+      }
+    }
+    return map;
+  };
+  const beforeParents = parents(before),
+    afterParents = parents(after);
+  /** Index among the siblings that sit under the same parent in the other snapshot. */
+  const sharedIndexes = (
+    siblings: readonly OutlineNode<T>[],
+    parentId: string | null,
+    other: Map<string, string | null>,
+  ) => {
+    let index = 0;
+    return siblings.map((node) => (other.get(node.id) === parentId ? index++ : -1));
+  };
   const nextLocations = new Map<string, Location>();
-  const nextPending: Location[] = after.map((node, index) => ({ node, index, parentId: null }));
+  const nextPending: { nodes: readonly OutlineNode<T>[]; parentId: string | null }[] = [
+    { nodes: after, parentId: null },
+  ];
   while (nextPending.length) {
-    const location = nextPending.pop()!;
-    nextLocations.set(location.node.id, location);
-    for (const [index, node] of (location.node.children ?? []).entries())
-      nextPending.push({ node, index, parentId: location.node.id });
+    const { nodes, parentId } = nextPending.pop()!;
+    const indexes = sharedIndexes(nodes, parentId, beforeParents);
+    for (const [position, node] of nodes.entries()) {
+      nextLocations.set(node.id, { node, parentId, index: indexes[position]! });
+      if (node.children) nextPending.push({ nodes: node.children, parentId: node.id });
+    }
   }
-  const pending = before.map((node, index) => ({
-    node,
-    index,
-    parentId: null as string | null,
-    inheritedLock: false,
-    stableParent: true,
-  }));
+  const pending: {
+    nodes: readonly OutlineNode<T>[];
+    parentId: string | null;
+    inheritedLock: boolean;
+    stableParent: boolean;
+  }[] = [{ nodes: before, parentId: null, inheritedLock: false, stableParent: true }];
   while (pending.length) {
     const current = pending.pop()!;
-    const next = nextLocations.get(current.node.id);
-    const protectedNode = current.inheritedLock || isLocked(current.node);
-    const stablePlacement =
-      current.stableParent &&
-      !!next &&
-      next.parentId === current.parentId &&
-      next.index === current.index;
-    if (protectedNode && (!stablePlacement || next?.node !== current.node)) return true;
-    for (const [index, node] of (current.node.children ?? []).entries())
-      pending.push({
-        node,
-        index,
-        parentId: current.node.id,
-        inheritedLock: protectedNode,
-        stableParent: stablePlacement,
-      });
+    const indexes = sharedIndexes(current.nodes, current.parentId, afterParents);
+    for (const [position, node] of current.nodes.entries()) {
+      const next = nextLocations.get(node.id);
+      const protectedNode = current.inheritedLock || isLocked(node);
+      const stablePlacement =
+        current.stableParent &&
+        !!next &&
+        next.parentId === current.parentId &&
+        next.index === indexes[position];
+      if (protectedNode && (!stablePlacement || next?.node !== node)) return true;
+      if (node.children)
+        pending.push({
+          nodes: node.children,
+          parentId: node.id,
+          inheritedLock: protectedNode,
+          stableParent: stablePlacement,
+        });
+    }
   }
   return false;
 }
