@@ -31,13 +31,14 @@ This is an independently authored, native React implementation. This document re
 
 ### Local search and productivity
 
-| Area                        | Implemented contract                                                                                                                           | Evidence                                                  |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Metadata and views          | Safe own-data notes/flags/dates, completion separate from checkbox presence, tag inventory, canonical projection, explicit date-entry cap      | `outline-productivity.test.ts`                            |
-| Atomic sorting              | Exact sibling permutation, selected slots, stable ties, malformed/sparse/custom-array refusal, displaced subtree locks, one undo step          | `outline-reorder.test.ts`, `outline-productivity.test.ts` |
-| Bounded local search        | Literal query grammar, metadata/ancestor predicates, UTF-16 ranges, explicit unsupported operators and partial results, linear ancestor checks | `outline-search.test.ts`                                  |
-| Search reader               | Context/flat modes, query-local extra child context, independent folds, canonical renderer identities, note/completion views, owned keys, SSR  | `outline-search-react.test.tsx`                           |
-| Productive host composition | Read-first local lab, explicit editing, atomic Save, retained host metadata, dirty-draft protection, sorting/history/locks and repeated resets | `outline-search-lab.test.tsx`                             |
+| Area                        | Implemented contract                                                                                                                           | Evidence                                                                                |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Metadata and views          | Safe own-data notes/flags/dates, completion separate from checkbox presence, tag inventory, canonical projection, explicit date-entry cap      | `outline-productivity.test.ts`                                                          |
+| Atomic sorting              | Exact sibling permutation, selected slots, stable ties, malformed/sparse/custom-array refusal, displaced subtree locks, one undo step          | `outline-reorder.test.ts`, `outline-productivity.test.ts`                               |
+| Bounded local search        | Literal query grammar, metadata/ancestor predicates, UTF-16 ranges, explicit unsupported operators and partial results, linear ancestor checks | `outline-search.test.ts`                                                                |
+| Search reader               | Context/flat modes, query-local extra child context, independent folds, canonical renderer identities, note/completion views, owned keys, SSR  | `outline-search-react.test.tsx`                                                         |
+| Optional note field         | Trusted host adapter, canonical local changes, separate caret/history, opt-in field switching, policy and isolated note keymaps                | `editor-note-core.test.ts`, `outline-notes-react.test.tsx`, `outline-note-lab.test.tsx` |
+| Productive host composition | Read-first local lab, explicit editing, atomic Save, retained host metadata, dirty-draft protection, sorting/history/locks and repeated resets | `outline-search-lab.test.tsx`                                                           |
 
 The optional local search surface has executable DOM/SSR coverage, not completed
 browser-layout, physical-device, IME or assistive-technology acceptance. It does

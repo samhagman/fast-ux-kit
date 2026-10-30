@@ -10,6 +10,7 @@ export {
   type OutlineEditorHandle,
   type OutlinePlugin,
   type OutlineKeyContext,
+  type OutlineNoteKeyContext,
   type OutlinePlaceholder,
 } from "./OutlineEditor.js";
 export {

@@ -126,6 +126,13 @@ outline typography, row controls, indentation, hierarchy and interaction states.
 
 ## Local outline search lab
 
+`#outline-note-lab` is another lazy, read-first synthetic host composition. It
+exercises a typed note adapter, deliberate editing, separately enabled
+Shift+Enter switching, canonical note updates, local history and policy refusal.
+Its optional search reads the same canonical document. Reset and authoritative
+replacement are visible controls; nothing is persisted outside the page. See
+[note contracts](OUTLINE_NOTES.md) for exact scope and remaining device gates.
+
 `#outline-search-lab` is an additional lazy route, not a replacement for the
 reader, structural editor, Machine View or component gallery. It composes the
 public local search and productivity APIs over an original synthetic outline.

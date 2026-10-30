@@ -20,7 +20,18 @@ import {
   type OutlineCommand,
 } from "./index.js";
 
+/** Trusted host code owns note storage; callbacks must be pure and immutable. */
+export interface OutlineNoteAdapter<T = unknown> {
+  readonly read: (node: OutlineNode<T>) => string | undefined;
+  readonly prepareData: (
+    current: OutlineNode<T>,
+    note: string,
+  ) => { readonly ok: true; readonly data: T } | { readonly ok: false };
+}
+
 export interface OutlineCaret {
+  /** Omitted means title; note offsets never use title length. */
+  readonly field?: "note";
   readonly id: string;
   readonly start: number;
   readonly end: number;
@@ -31,10 +42,16 @@ export interface OutlineSnapshot<T = unknown> {
   readonly selection: ReadonlySet<string>;
   readonly selectionAnchor?: string | null;
 }
+export interface OutlineHistorySnapshot<T = unknown> extends OutlineSnapshot<T> {
+  /** Applied note caret retained independently of later navigation. */
+  readonly redoCaret?: OutlineCaret;
+  /** Future entries retain the original pre-edit caret across intervening navigation. */
+  readonly undoCaret?: OutlineCaret | null;
+}
 export interface OutlineHistory<T = unknown> {
-  readonly past: readonly OutlineSnapshot<T>[];
-  readonly future: readonly OutlineSnapshot<T>[];
-  readonly group: { readonly id: string; readonly time: number } | null;
+  readonly past: readonly OutlineHistorySnapshot<T>[];
+  readonly future: readonly OutlineHistorySnapshot<T>[];
+  readonly group: { readonly id: string; readonly time: number; readonly field?: "note" } | null;
 }
 export interface OutlineEditorState<T = unknown> extends OutlineSnapshot<T> {
   readonly expandedIds: ReadonlySet<string>;
@@ -49,6 +66,7 @@ export interface OutlineEditorState<T = unknown> extends OutlineSnapshot<T> {
 export interface OutlineEditorOptions<T = unknown> extends OutlineEditPolicy<T> {
   readonly historyLimit?: number;
   readonly typingGroupMs?: number;
+  readonly noteAdapter?: OutlineNoteAdapter<T>;
   /** Refuse or explain any whole-document structural transition. */
   readonly canChange?: (
     before: readonly OutlineNode<T>[],
@@ -66,6 +84,13 @@ export type OutlineAction<T = unknown> =
     }
   | {
       readonly type: "text";
+      readonly id: string;
+      readonly text: string;
+      readonly caret?: number;
+      readonly time?: number;
+    }
+  | {
+      readonly type: "note";
       readonly id: string;
       readonly text: string;
       readonly caret?: number;
@@ -119,9 +144,27 @@ export type OutlineAction<T = unknown> =
   | { readonly type: "expand"; readonly ids: readonly string[]; readonly expanded: boolean }
   | { readonly type: "expand-all"; readonly expanded: boolean; readonly depth?: number }
   | { readonly type: "hoist"; readonly id: string | null }
-  | { readonly type: "caret"; readonly id: string; readonly start: number; readonly end: number }
-  | { readonly type: "reveal"; readonly id: string; readonly start?: number; readonly end?: number }
-  | { readonly type: "focus"; readonly id: string; readonly start?: number; readonly end?: number }
+  | {
+      readonly type: "caret";
+      readonly field?: "note";
+      readonly id: string;
+      readonly start: number;
+      readonly end: number;
+    }
+  | {
+      readonly type: "reveal";
+      readonly field?: "note";
+      readonly id: string;
+      readonly start?: number;
+      readonly end?: number;
+    }
+  | {
+      readonly type: "focus";
+      readonly field?: "note";
+      readonly id: string;
+      readonly start?: number;
+      readonly end?: number;
+    }
   | {
       readonly type: "select";
       readonly id: string;
@@ -214,20 +257,37 @@ function changesLockedStructure<T>(
   return false;
 }
 
+/** Unavailable adapters or fields never invent note content. */
+function readNote<T>(node: OutlineNode<T>, adapter?: OutlineNoteAdapter<T>): string | null {
+  if (!adapter) return null;
+  try {
+    const value = adapter.read(node);
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Keep interaction targets visible without reopening reader-local folds. */
-function reconcileInteraction<T>(state: OutlineEditorState<T>): OutlineEditorState<T> {
+function reconcileInteraction<T>(
+  state: OutlineEditorState<T>,
+  options: Pick<OutlineEditorOptions<T>, "noteAdapter"> = {},
+): OutlineEditorState<T> {
   const rows = editorVisibleRows(state);
   const visible = new Map(rows.map((row) => [row.id, row.node]));
   let caret = state.caret;
   if (caret) {
     const target = visible.get(caret.id);
-    if (target)
+    if (target) {
+      const note = caret.field === "note" ? readNote(target, options.noteAdapter) : null;
+      const length = note === null ? target.text.length : note.length;
       caret = {
         id: caret.id,
-        start: clamp(caret.start, target.text.length),
-        end: clamp(caret.end, target.text.length),
+        start: clamp(caret.start, length),
+        end: clamp(caret.end, length),
+        ...(note === null ? {} : { field: "note" as const }),
       };
-    else {
+    } else {
       const ancestor = [...getOutlinePath(state.nodes, caret.id)]
         .reverse()
         .find((node) => visible.has(node.id));
@@ -252,29 +312,59 @@ function reconcileInteraction<T>(state: OutlineEditorState<T>): OutlineEditorSta
 export function reconcileOutlineEditorState<T>(
   state: OutlineEditorState<T>,
   nodes: readonly OutlineNode<T>[],
+  options: Pick<OutlineEditorOptions<T>, "noteAdapter"> = {},
 ): OutlineEditorState<T> {
-  if (state.nodes === nodes) return state;
+  if (state.nodes === nodes) {
+    if (state.caret?.field !== "note") return state;
+    const next = reconcileInteraction(state, options);
+    if (
+      next.caret?.id === state.caret.id &&
+      next.caret?.field === state.caret.field &&
+      next.caret?.start === state.caret.start &&
+      next.caret?.end === state.caret.end
+    )
+      return state;
+    return {
+      ...next,
+      focusVersion: state.focusVersion + 1,
+      history: { ...state.history, group: null },
+    };
+  }
   const base = createOutlineEditorState(nodes, {
     expandedIds: state.expandedIds,
     hoistedId: state.hoistedId,
   });
-  const next = reconcileInteraction({
-    ...base,
-    caret:
-      state.caret && !findOutlineNode(nodes, state.caret.id)
-        ? (() => {
-            const ancestor = [...getOutlinePath(state.nodes, state.caret!.id)]
-              .reverse()
-              .find((node) => findOutlineNode(nodes, node.id));
-            return ancestor ? { id: ancestor.id, start: 0, end: 0 } : state.caret;
-          })()
-        : state.caret,
-    selection: state.selection,
-    selectionAnchor: state.selectionAnchor,
-    revision: state.revision + 1,
-    focusVersion: state.focusVersion + 1,
-  });
+  const next = reconcileInteraction(
+    {
+      ...base,
+      caret:
+        state.caret && !findOutlineNode(nodes, state.caret.id)
+          ? (() => {
+              const ancestor = [...getOutlinePath(state.nodes, state.caret!.id)]
+                .reverse()
+                .find((node) => findOutlineNode(nodes, node.id));
+              return ancestor ? { id: ancestor.id, start: 0, end: 0 } : state.caret;
+            })()
+          : state.caret,
+      selection: state.selection,
+      selectionAnchor: state.selectionAnchor,
+      revision: state.revision + 1,
+      focusVersion: state.focusVersion + 1,
+    },
+    options,
+  );
   return next;
+}
+
+/** A recognized field must be an own data property, never an inherited/accessor fallback. */
+function validCaretField(value: object): boolean {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, "field");
+    if (!descriptor) return !Reflect.has(value, "field");
+    return "value" in descriptor && (descriptor.value === undefined || descriptor.value === "note");
+  } catch {
+    return false;
+  }
 }
 
 /** Runtime callers and extension adapters receive an atomic refusal for malformed actions. */
@@ -292,6 +382,7 @@ function validAction<T>(action: OutlineAction<T>): boolean {
     (Array.isArray(value.ids) && value.ids.every((id) => typeof id === "string"));
   switch (action.type) {
     case "text":
+    case "note":
       return (
         string("id") &&
         string("text") &&
@@ -352,10 +443,12 @@ function validAction<T>(action: OutlineAction<T>): boolean {
     case "hoist":
       return value.id === null || string("id");
     case "caret":
-      return string("id") && number("start") && number("end");
+      return string("id") && number("start") && number("end") && validCaretField(action);
     case "focus":
     case "reveal":
-      return string("id") && optionalNumber("start") && optionalNumber("end");
+      return (
+        string("id") && optionalNumber("start") && optionalNumber("end") && validCaretField(action)
+      );
     case "select":
       return string("id") && optionalBoolean("extend") && optionalBoolean("toggle");
     case "transaction":
@@ -365,7 +458,8 @@ function validAction<T>(action: OutlineAction<T>): boolean {
           (!!action.caret &&
             typeof action.caret.id === "string" &&
             Number.isFinite(action.caret.start) &&
-            Number.isFinite(action.caret.end)))
+            Number.isFinite(action.caret.end) &&
+            validCaretField(action.caret)))
       );
     case "undo":
     case "redo":
@@ -388,9 +482,18 @@ export function reduceOutlineEditor<T>(
     ...state,
     refusal: reason,
   });
-  const focus = (id: string, start = 0, end = start): OutlineEditorState<T> => {
+  const focus = (id: string, start = 0, end = start, field?: "note"): OutlineEditorState<T> => {
     const location = findOutlineNode(state.nodes, id);
     if (!location) return fail("not-found");
+    if (
+      field === "note" &&
+      options.isLocked &&
+      [...location.ancestors, location.node].some(options.isLocked)
+    )
+      return fail("locked");
+    const note = field === "note" ? readNote(location.node, options.noteAdapter) : null;
+    if (field === "note" && note === null) return fail("invalid-command");
+    const length = note === null ? location.node.text.length : note.length;
     const outside =
       state.hoistedId &&
       ![...location.ancestors, location.node].some((node) => node.id === state.hoistedId);
@@ -403,8 +506,9 @@ export function reduceOutlineEditor<T>(
       hoistedId: outside ? null : state.hoistedId,
       caret: {
         id,
-        start: clamp(start, location.node.text.length),
-        end: clamp(end, location.node.text.length),
+        start: clamp(start, length),
+        end: clamp(end, length),
+        ...(field === "note" ? { field } : {}),
       },
       selection: new Set(),
       selectionAnchor: id,
@@ -416,10 +520,20 @@ export function reduceOutlineEditor<T>(
   if (action.type === "caret") {
     const node = findOutlineNode(state.nodes, action.id)?.node;
     if (!node) return fail("not-found");
-    const start = clamp(action.start, node.text.length),
-      end = clamp(action.end, node.text.length);
+    if (
+      action.field === "note" &&
+      options.isLocked &&
+      getOutlinePath(state.nodes, action.id).some(options.isLocked)
+    )
+      return fail("locked");
+    const note = action.field === "note" ? readNote(node, options.noteAdapter) : null;
+    if (action.field === "note" && note === null) return fail("invalid-command");
+    const length = note === null ? node.text.length : note.length;
+    const start = clamp(action.start, length),
+      end = clamp(action.end, length);
     if (
       state.caret?.id === action.id &&
+      state.caret.field === action.field &&
       state.caret.start === start &&
       state.caret.end === end &&
       !state.selection.size
@@ -427,14 +541,19 @@ export function reduceOutlineEditor<T>(
       return state;
     return {
       ...state,
-      caret: { id: action.id, start, end },
+      caret: {
+        id: action.id,
+        start,
+        end,
+        ...(action.field === "note" ? { field: action.field } : {}),
+      },
       selection: new Set(),
       selectionAnchor: action.id,
       history: { ...state.history, group: null },
     };
   }
   if (action.type === "focus" || action.type === "reveal")
-    return focus(action.id, action.start, action.end);
+    return focus(action.id, action.start, action.end, action.field);
   if (action.type === "clear-selection")
     return { ...state, selection: new Set(), selectionAnchor: null };
   if (action.type === "select-all") {
@@ -493,7 +612,7 @@ export function reduceOutlineEditor<T>(
       if (expanded && depthAllowed) expandedIds.add(id);
       else expandedIds.delete(id);
     }
-    const next = reconcileInteraction({ ...state, expandedIds, refusal: null });
+    const next = reconcileInteraction({ ...state, expandedIds, refusal: null }, options);
     return {
       ...next,
       focusVersion:
@@ -505,17 +624,20 @@ export function reduceOutlineEditor<T>(
     if (action.id !== null && !findOutlineNode(state.nodes, action.id)) return fail("not-found");
     const expandedIds = new Set(state.expandedIds);
     if (action.id) expandedIds.add(action.id);
-    return reconcileInteraction({
-      ...state,
-      hoistedId: action.id,
-      expandedIds,
-      caret: state.caret ?? (action.id ? { id: action.id, start: 0, end: 0 } : null),
-      selection: new Set(),
-      selectionAnchor: null,
-      history: { ...state.history, group: null },
-      focusVersion: state.focusVersion + 1,
-      refusal: null,
-    });
+    return reconcileInteraction(
+      {
+        ...state,
+        hoistedId: action.id,
+        expandedIds,
+        caret: state.caret ?? (action.id ? { id: action.id, start: 0, end: 0 } : null),
+        selection: new Set(),
+        selectionAnchor: null,
+        history: { ...state.history, group: null },
+        focusVersion: state.focusVersion + 1,
+        refusal: null,
+      },
+      options,
+    );
   }
   // Every remaining intent can mutate content, including history and replacement.
   if (options.readOnly !== false) return fail("read-only");
@@ -536,30 +658,50 @@ export function reduceOutlineEditor<T>(
     const coalesce =
       group !== null &&
       state.history.group?.id === group.id &&
+      state.history.group.field === group.field &&
       group.time >= state.history.group.time &&
       group.time - state.history.group.time <= (options.typingGroupMs ?? 750);
+    const noteCaret = action.type === "note" && caret?.field === "note" ? caret : undefined;
+    const entry: OutlineHistorySnapshot<T> = {
+      ...snapshot(state),
+      ...(noteCaret ? { redoCaret: noteCaret } : {}),
+    };
     const past = coalesce
-      ? state.history.past
-      : [...state.history.past, snapshot(state)].slice(-Math.max(1, options.historyLimit ?? 100));
-    return reconcileInteraction({
-      ...state,
-      nodes: result.nodes,
-      caret: caret && ids.has(caret.id) ? caret : null,
-      expandedIds,
-      hoistedId: state.hoistedId && ids.has(state.hoistedId) ? state.hoistedId : null,
-      selection: new Set(),
-      selectionAnchor: caret?.id ?? null,
-      history: { past, future: [], group },
-      revision: state.revision + 1,
-      focusVersion: state.focusVersion + 1,
-      refusal: null,
-    });
-  };
-  if (action.type === "transaction")
-    return finish(
-      applyOutlineTransaction(state.nodes, action.commands, policy),
-      action.caret ?? state.caret,
+      ? noteCaret && state.history.past.length
+        ? [
+            ...state.history.past.slice(0, -1),
+            { ...state.history.past.at(-1)!, redoCaret: noteCaret },
+          ]
+        : state.history.past
+      : [...state.history.past, entry].slice(-Math.max(1, options.historyLimit ?? 100));
+    return reconcileInteraction(
+      {
+        ...state,
+        nodes: result.nodes,
+        caret: caret && ids.has(caret.id) ? caret : null,
+        expandedIds,
+        hoistedId: state.hoistedId && ids.has(state.hoistedId) ? state.hoistedId : null,
+        selection: new Set(),
+        selectionAnchor: caret?.id ?? null,
+        history: { past, future: [], group },
+        revision: state.revision + 1,
+        focusVersion: state.focusVersion + 1,
+        refusal: null,
+      },
+      options,
     );
+  };
+  if (action.type === "transaction") {
+    const result = applyOutlineTransaction(state.nodes, action.commands, policy);
+    if (result.ok && action.caret?.field === "note") {
+      const target = findOutlineNode(result.nodes, action.caret.id)?.node;
+      if (!target) return fail("not-found");
+      if (options.isLocked && getOutlinePath(result.nodes, action.caret.id).some(options.isLocked))
+        return fail("locked");
+      if (readNote(target, options.noteAdapter) === null) return fail("invalid-command");
+    }
+    return finish(result, action.caret ?? state.caret);
+  }
   if (action.type === "undo" || action.type === "redo") {
     const stack = action.type === "undo" ? state.history.past : state.history.future;
     const restored = stack.at(-1);
@@ -570,33 +712,87 @@ export function reduceOutlineEditor<T>(
     if (options.canChange && !options.canChange(state.nodes, restored.nodes, action))
       return fail("locked");
     const ids = new Set(outlineIds(restored.nodes));
-    return reconcileInteraction({
-      ...state,
-      ...restored,
-      selectionAnchor: restored.selectionAnchor ?? restored.caret?.id ?? null,
-      hoistedId: state.hoistedId && ids.has(state.hoistedId) ? state.hoistedId : null,
-      history:
-        action.type === "undo"
-          ? {
-              past: state.history.past.slice(0, -1),
-              future: [...state.history.future, snapshot(state)],
-              group: null,
-            }
-          : {
-              past: [...state.history.past, snapshot(state)],
-              future: state.history.future.slice(0, -1),
-              group: null,
-            },
-      revision: state.revision + 1,
-      focusVersion: state.focusVersion + 1,
-      refusal: null,
-    });
+    const reciprocal: OutlineHistorySnapshot<T> = {
+      ...snapshot(state),
+      ...(restored.redoCaret
+        ? {
+            redoCaret: restored.redoCaret,
+            ...(action.type === "undo"
+              ? { caret: restored.redoCaret, undoCaret: restored.caret }
+              : restored.undoCaret !== undefined
+                ? { caret: restored.undoCaret }
+                : {}),
+          }
+        : {}),
+    };
+    return reconcileInteraction(
+      {
+        ...state,
+        nodes: restored.nodes,
+        caret: restored.caret,
+        selection: restored.selection,
+        selectionAnchor: restored.selectionAnchor ?? restored.caret?.id ?? null,
+        hoistedId: state.hoistedId && ids.has(state.hoistedId) ? state.hoistedId : null,
+        history:
+          action.type === "undo"
+            ? {
+                past: state.history.past.slice(0, -1),
+                future: [...state.history.future, reciprocal],
+                group: null,
+              }
+            : {
+                past: [...state.history.past, reciprocal],
+                future: state.history.future.slice(0, -1),
+                group: null,
+              },
+        revision: state.revision + 1,
+        focusVersion: state.focusVersion + 1,
+        refusal: null,
+      },
+      options,
+    );
   }
   if (action.type === "replace") {
     if (validateOutline(action.nodes).length) return fail("invalid-outline");
     if (options.isLocked && changesLockedStructure(state.nodes, action.nodes, options.isLocked))
       return fail("locked");
     return finish({ ok: true, nodes: action.nodes }, null);
+  }
+  if (action.type === "note") {
+    const current = findOutlineNode(state.nodes, action.id)?.node;
+    if (!current) return fail("not-found");
+    if (options.isLocked && getOutlinePath(state.nodes, action.id).some(options.isLocked))
+      return fail("locked");
+    const note = readNote(current, options.noteAdapter);
+    if (note === null) return fail("invalid-command");
+    if (note === action.text) return { ...state, refusal: null };
+    let data: T;
+    try {
+      const prepared = options.noteAdapter!.prepareData(current, action.text);
+      if (
+        !prepared ||
+        typeof prepared !== "object" ||
+        Array.isArray(prepared) ||
+        prepared.ok !== true ||
+        !Object.prototype.hasOwnProperty.call(prepared, "data")
+      )
+        return fail("invalid-command");
+      data = prepared.data;
+      if (readNote({ ...current, data }, options.noteAdapter) !== action.text)
+        return fail("invalid-command");
+    } catch {
+      return fail("invalid-command");
+    }
+    const caret = clamp(action.caret ?? action.text.length, action.text.length);
+    return finish(
+      applyOutlineTransaction(
+        state.nodes,
+        [{ type: "update", id: action.id, changes: { data } }],
+        policy,
+      ),
+      { id: action.id, start: caret, end: caret, field: "note" },
+      { id: action.id, time: action.time ?? 0, field: "note" },
+    );
   }
   if (action.type === "text") {
     const result = applyOutlineCommand(
@@ -930,11 +1126,14 @@ export function reduceOutlineEditor<T>(
         }
       const next = finish(moved, state.caret, null, expanded);
       return next.nodes !== state.nodes
-        ? reconcileInteraction({
-            ...next,
-            selection: state.selection,
-            selectionAnchor: state.selectionAnchor,
-          })
+        ? reconcileInteraction(
+            {
+              ...next,
+              selection: state.selection,
+              selectionAnchor: state.selectionAnchor,
+            },
+            options,
+          )
         : next;
     }
     if (action.type === "drop") {
@@ -961,11 +1160,14 @@ export function reduceOutlineEditor<T>(
       if (action.parentId) expanded.add(action.parentId);
       const next = finish(result, state.caret, null, expanded);
       return next.nodes !== state.nodes
-        ? reconcileInteraction({
-            ...next,
-            selection: state.selection,
-            selectionAnchor: state.selectionAnchor,
-          })
+        ? reconcileInteraction(
+            {
+              ...next,
+              selection: state.selection,
+              selectionAnchor: state.selectionAnchor,
+            },
+            options,
+          )
         : next;
     }
     if (action.type === "outdent") {
@@ -1010,11 +1212,14 @@ export function reduceOutlineEditor<T>(
     }
     const result = finish({ ok: true, nodes: candidate }, caret, null, expanded);
     return action.type !== "delete" && result.nodes !== state.nodes
-      ? reconcileInteraction({
-          ...result,
-          selection: state.selection,
-          selectionAnchor: state.selectionAnchor,
-        })
+      ? reconcileInteraction(
+          {
+            ...result,
+            selection: state.selection,
+            selectionAnchor: state.selectionAnchor,
+          },
+          options,
+        )
       : result;
   }
   return fail("invalid-command");
