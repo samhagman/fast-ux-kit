@@ -23,6 +23,13 @@ export const componentCategoryOrder = [
 
 export const experiencePages = [
   {
+    id: "machine-view",
+    name: "Machine View",
+    description:
+      "Build state diagrams, simulate deterministic scenarios, and inspect explicitly supplied runtime snapshots without running live effects.",
+    category: "State machines",
+  },
+  {
     id: "outliner-lab",
     name: "Outliner lab",
     description:

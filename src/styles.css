@@ -1,5 +1,6 @@
 @import "./components.css";
 @import "./react/editor.css";
+@import "./react/machine-view.css";
 /* Optional skin: a continuous document with separate glyph and touch geometry. */
 .fast-ux-outliner {
   --outline-indent: var(--fux-outline-indent, 1rem);
@@ -42,6 +43,16 @@
   border-radius: var(--fux-radius-sm, 0.1875rem);
 }
 .fast-ux-outliner__item > .fast-ux-outliner__row:focus-within {
+  background: var(--fux-surface-subtle, transparent);
+}
+.fast-ux-outliner[data-read-only="true"] .fast-ux-outliner__item:focus-visible {
+  outline: none;
+}
+.fast-ux-outliner[data-read-only="true"]
+  .fast-ux-outliner__item:focus-visible
+  > .fast-ux-outliner__row {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
   background: var(--fux-surface-subtle, transparent);
 }
 @media (hover: hover) {

@@ -46,7 +46,12 @@
     "./components/aria": {
       "types": "./dist/components/aria.d.ts",
       "import": "./dist/components/aria.js"
-    }
+    },
+    "./machine": {
+      "types": "./dist/core/machine/index.d.ts",
+      "import": "./dist/core/machine/index.js"
+    },
+    "./machine.css": "./dist/react/machine-view.css"
   },
   "sideEffects": [
     "**/*.css"
@@ -57,7 +62,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/copy-styles.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-concurrency=2 tests/*.test.ts tests/*.test.tsx tests/*.test.mjs",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts tests/*.test.tsx tests/*.test.mjs",
     "check": "npm run typecheck && npm run format:check && npm test && npm run build",
     "test:consumer": "node scripts/test-consumer.mjs",
     "demo:build": "node scripts/build-demo.mjs",

@@ -476,7 +476,13 @@ export function OutlineEditor<T = unknown>({
       return;
     }
     if (rowModeRef.current) {
-      rowElements.current.get(caret.id)?.focus({ preventScroll: true });
+      const row = rowElements.current.get(caret.id);
+      row?.focus({ preventScroll: true });
+      row?.querySelector<HTMLElement>(":scope > .fast-ux-outliner__row")?.scrollIntoView?.({
+        block: "nearest",
+        inline: "nearest",
+        behavior: "instant",
+      });
       pendingFocus.current = false;
       return;
     }
@@ -487,7 +493,7 @@ export function OutlineEditor<T = unknown>({
     focused.current = caret.id;
     selectedCaret.current = { start: caret.start, end: caret.end };
     pendingFocus.current = false;
-    textarea.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    textarea.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
   }, [state.focusVersion, readOnly]);
   const resizeTextareas = useCallback((targets?: Iterable<HTMLTextAreaElement>) => {
     // Batch the writes and reads: one width notification must not force a fresh

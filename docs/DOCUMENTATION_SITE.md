@@ -100,14 +100,22 @@ pathway and capability map stack on narrow screens without animation.
 
 ## Compact component workbench
 
-`#components` is one horizontally scrollable live-preview ribbon containing all
-86 canonical families, not 86 inline documentation pages. Category buttons and
-a grouped component selector jump without filtering families out. Every tile
-links to its own complete documentation. Arrow keys and Home/End work when the
-gallery region itself is focused; nested components retain their own keys.
-Direction-aware scrolling and route-return position are maintained. Only nearby
-previews and the last interacted preview remain mounted; distant preview state
-resets. A local Reset action recovers each tile independently.
+`#components` is a responsive vertical gallery: original Outliner and Machine View
+compositions precede cards for every canonical component family, not duplicated
+inline documentation pages. Category buttons, search and a grouped component
+selector jump without filtering families out. Each card links to full documentation.
+Arrow keys and Home/End work when the gallery region itself is focused; nested
+components retain their own keys. Route-return position and search are retained.
+Only nearby previews and the last interacted preview remain mounted; distant
+preview state resets. A local Reset action recovers each card independently.
+
+`#machine-view` provides the reusable state-machine editor and inspection lab.
+Portable data/commands/layout/validation and documented local simulation are
+separate from host-supplied committed inspection frames. The tester uses synthetic
+local workflows, explicit pure guard/action callbacks and expected-state scenarios;
+it never publishes documents, dispatches live services or retries effects. Runtime
+metadata is opt-in. See [Machine View](MACHINE_VIEW.md) for the exact contract and
+unsupported semantics.
 
 The lab puts its actual document before optional instructions and policy probes.
 Scenario selection and deliberate edit activation share one control band. Reset

@@ -1,4 +1,6 @@
 /** Portable, framework-independent outline model. Expansion is reader state, not document data. */
+export * from "./machine/index.js";
+
 export interface OutlineNode<T = unknown> {
   readonly id: string;
   readonly text: string;

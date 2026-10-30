@@ -1,7 +1,6 @@
-/* A single compact workbench, not a second set of component documentation pages. */
+/* Original composed workspaces and a vertically browsable primitive catalog. */
 .component-gallery {
   min-inline-size: 0;
-  --gallery-tile-width: min(352px, calc(100% - 20px));
 }
 .component-gallery .page-heading {
   margin-block-end: 16px;
@@ -128,34 +127,34 @@
 .gallery-viewport {
   min-inline-size: 0;
   max-inline-size: 100%;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  border-block: 1px solid var(--line);
-  background: var(--paper);
-  scroll-snap-type: inline proximity;
+  block-size: clamp(420px, 76vh, 900px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
   scrollbar-width: thin;
   scrollbar-color: var(--fux-border) var(--soft);
 }
 .gallery-ribbon {
-  display: flex;
-  align-items: stretch;
-  inline-size: 100%;
-  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  align-items: start;
+  gap: 16px;
+  padding: 16px;
   margin: 0;
   list-style: none;
 }
-/* Allow the last family to align at the start just like every other jump target. */
-.gallery-ribbon::after {
-  content: "";
-  flex: 0 0 max(0px, calc(100% - var(--gallery-tile-width)));
-}
 .gallery-tile {
-  flex: 0 0 var(--gallery-tile-width);
   min-inline-size: 0;
   display: flex;
   flex-direction: column;
-  border-inline-end: 1px solid var(--line);
-  scroll-snap-align: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent);
+  scroll-margin-block: 16px;
 }
 .gallery-tile-heading {
   display: flex;
@@ -164,6 +163,7 @@
   min-block-size: 60px;
   padding: 12px 16px;
   border-block-start: 2px solid transparent;
+  border-radius: 7px 7px 0 0;
 }
 .gallery-tile[data-selected] .gallery-tile-heading {
   border-block-start-color: var(--fux-accent);
@@ -206,7 +206,7 @@
   overflow: auto;
   overscroll-behavior: contain;
   border-block: 1px solid var(--line);
-  background: var(--fux-surface-subtle);
+  background: var(--paper);
   scrollbar-width: thin;
   font-size: 14px;
 }
@@ -297,7 +297,7 @@
   color: var(--subtle);
   font-size: 12px;
 }
-.component-gallery :is(button, select, [tabindex]):focus-visible {
+.component-gallery :is(button, input, select, [tabindex]):focus-visible {
   outline: 2px solid var(--fux-focus);
   outline-offset: -3px;
 }
@@ -356,5 +356,170 @@
   .gallery-tile[data-selected] .gallery-tile-heading,
   .gallery-categories button[aria-pressed="true"] {
     border-color: Highlight;
+  }
+}
+
+.gallery-showcases {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-block: 24px 32px;
+}
+.gallery-showcase {
+  min-inline-size: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.gallery-showcase > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-block-end: 1px solid var(--line);
+}
+.gallery-showcase h2,
+.gallery-catalog-heading h2 {
+  margin: 3px 0 0;
+  font-size: 19px;
+  letter-spacing: -0.03em;
+}
+.gallery-showcase-preview {
+  position: relative;
+  block-size: 310px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+  scrollbar-width: thin;
+}
+.gallery-showcase-preview .outline-playground {
+  min-inline-size: 0;
+  border: 0;
+  box-shadow: none;
+}
+.gallery-showcase-preview .notebook-heading {
+  padding-inline: 4px;
+}
+.gallery-showcase > footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 10px 18px;
+  border-block-start: 1px solid var(--line);
+}
+.gallery-showcase > footer p {
+  flex: 1 1 160px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--subtle);
+}
+.gallery-showcase > footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.gallery-showcase > footer a:hover {
+  text-decoration: underline;
+}
+.gallery-machine-intro {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  block-size: 100%;
+  padding: 12px;
+  background: var(--fux-surface-subtle);
+  border-radius: 6px;
+}
+.gallery-machine-intro p {
+  margin: 12px 0 0;
+  color: var(--subtle);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.gallery-machine-intro p:first-of-type {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  max-inline-size: 16ch;
+}
+.gallery-catalog-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-block-end: 18px;
+}
+.gallery-catalog-heading > p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--subtle);
+}
+.gallery-find {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding-block: 0 12px;
+  font-size: 13px;
+}
+.gallery-find-field {
+  display: flex;
+  align-items: center;
+  flex: 1 1 220px;
+  gap: 8px;
+  padding-inline: 10px;
+  border: 1px solid var(--fux-border);
+  border-radius: 4px;
+  background: var(--paper);
+}
+.gallery-find-field input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+.gallery-find-status {
+  flex: 1 1 100%;
+  color: var(--subtle);
+  font-size: 12px;
+}
+.gallery-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+@media (max-width: 1000px) {
+  .gallery-showcases {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .gallery-ribbon {
+    padding: 8px;
+    gap: 12px;
+  }
+  .gallery-showcases {
+    gap: 14px;
+    margin-block: 20px 28px;
+  }
+  .gallery-showcase-preview {
+    padding: 8px;
+  }
+  .gallery-find > label {
+    flex-basis: 100%;
   }
 }

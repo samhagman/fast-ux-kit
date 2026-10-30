@@ -1,0 +1,200 @@
+.machine-lab {
+  min-inline-size: 0;
+}
+.machine-lab__intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding-block-end: 1rem;
+}
+.machine-lab__intro p {
+  max-inline-size: 70ch;
+  margin: 0;
+}
+.machine-lab__intro a {
+  white-space: nowrap;
+  color: var(--ink);
+  min-block-size: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.machine-lab__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1.5rem;
+  border-block-start: 1px solid var(--line);
+  padding-block: 0.875rem 0.5rem;
+}
+.machine-lab label:not(.machine-lab__check) {
+  display: grid;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 550;
+}
+.machine-lab select {
+  min-block-size: 44px;
+  max-inline-size: 100%;
+  border: 1px solid var(--fux-border);
+  border-radius: 4px;
+  padding: 0.5rem 0.625rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+.machine-lab__check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 44px;
+  font-size: 0.8125rem;
+}
+.machine-lab__check input {
+  inline-size: 18px;
+  block-size: 18px;
+  accent-color: var(--ink);
+}
+.machine-lab__case-note {
+  color: var(--subtle);
+  font-size: 0.8125rem;
+  margin: 0.25rem 0 0.875rem;
+}
+.machine-lab__status {
+  min-block-size: 1.5em;
+  margin: 0.625rem 0 1.5rem;
+  font-size: 0.8125rem;
+  color: var(--subtle);
+}
+.machine-lab__lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem;
+}
+.machine-lab__panel {
+  border-block-start: 1px solid var(--line);
+  padding-block: 1.25rem;
+  min-inline-size: 0;
+}
+.machine-lab__section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+.machine-lab__eyebrow {
+  font-size: 0.6875rem;
+  letter-spacing: 0.11em;
+  font-weight: 700;
+  color: var(--subtle);
+}
+.machine-lab h2 {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+}
+.machine-lab h3 {
+  font-size: 0.9375rem;
+  margin: 0.5rem 0;
+}
+.machine-lab__panel p,
+.machine-lab__contract p {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.machine-lab__empty {
+  padding: 1rem;
+  border: 1px dashed var(--line);
+  color: var(--subtle);
+}
+.machine-lab__results {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+}
+.machine-lab__results li {
+  border-block-start: 1px solid var(--line);
+  padding-block: 0.75rem;
+}
+.machine-lab__results li > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+.machine-lab__results p {
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
+  color: var(--subtle);
+}
+.machine-lab [data-result] {
+  font-size: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0.125rem 0.375rem;
+}
+.machine-lab [data-result="fail"] {
+  color: var(--fux-danger, #a62929);
+}
+.machine-lab meter {
+  inline-size: 100%;
+  block-size: 0.75rem;
+}
+.machine-lab__fine {
+  color: var(--subtle);
+  font-size: 0.75rem !important;
+  overflow-wrap: anywhere;
+}
+.machine-lab__host-controls {
+  display: grid;
+  gap: 0.625rem;
+  margin-block: 1rem;
+}
+.machine-lab__contract {
+  padding-block: 1.5rem;
+  border-block-start: 1px solid var(--line);
+  margin-block-start: 0.75rem;
+  scroll-margin-block-start: 5rem;
+}
+.machine-lab__contract-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.machine-lab summary {
+  min-block-size: 44px;
+  cursor: pointer;
+  padding-block: 0.625rem;
+  font-size: 0.8125rem;
+}
+.machine-lab :is(select, input, summary, a):focus-visible {
+  outline: 3px solid var(--fux-focus);
+  outline-offset: 3px;
+}
+@media (max-width: 800px) {
+  .machine-lab__lower,
+  .machine-lab__contract-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+  .machine-lab__intro {
+    display: block;
+  }
+  .machine-lab__section-title {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .machine-lab * {
+    scroll-behavior: auto !important;
+  }
+}
+
+.machine-gallery-preview .fux-machine__viewport {
+  block-size: 220px;
+  min-block-size: 220px;
+  max-block-size: none;
+}

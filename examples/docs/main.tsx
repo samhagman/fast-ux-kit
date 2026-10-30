@@ -6,6 +6,7 @@ import "../../src/styles.css";
 import "./docs.css";
 import "./gallery.css";
 import "./outliner-lab.css";
+import "./machine-lab.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <DocsApp />

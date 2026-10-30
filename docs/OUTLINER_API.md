@@ -31,6 +31,21 @@ const notes: readonly OutlineNode<RichOutlineData>[] = [
 
 `Outliner` renders nested disclosure lists, not an ARIA tree. Links, media, selection and interactive React children own their interactions. Disclosures default to the inline-end side, have 44px targets with the optional stylesheet, and share the same semantic tokens as other controls. `disclosurePosition="start"` is available. Expansion/hoisting never mutate nodes or authorize editing.
 
+### Row navigation
+
+A nonempty reader has one container entry in the normal Tab order. Unmodified Up/Down
+from that container, a focused row, or its disclosure/hoist control moves through
+visible rows without triggering browser page scrolling. First/last-row boundaries
+are consumed; collapsed descendants are skipped. Embedded inputs, media, links,
+custom controls and nested outlines keep their own keys. Tab remains native.
+A host may override the container tab index or cancel navigation in `onKeyDown`.
+
+Keyboard row moves use focus without browser scrolling, then reveal only the
+row itself with nearest-edge scrolling, including nested scroll containers. The
+editor uses the same minimal reveal in row-selection mode; text mode keeps native
+Up/Down within a visual line and crosses rows only at a visual boundary. No content
+revision or undo entry is created by navigation.
+
 ### Default visual contract
 
 The optional skin presents one continuous document, not a card per node. Branches,

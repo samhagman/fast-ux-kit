@@ -1,5 +1,7 @@
 import {
   Component,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -12,6 +14,9 @@ import { componentManifest, type ComponentManifestEntry } from "../../src/compon
 import { componentCategoryOrder, componentId } from "./catalog.js";
 import { useFamilyDemo } from "./demo-loader.js";
 import { PageHeading, Symbol } from "./ui.js";
+const GalleryReader = lazy(() =>
+  import("./reader-demo.js").then((module) => ({ default: module.ReaderDemo })),
+);
 
 const categories = [
   ...new Set([...componentCategoryOrder, ...componentManifest.map((entry) => entry.category)]),
@@ -22,7 +27,10 @@ export const galleryEntries = categories.flatMap((category) =>
 const owners = { aria: "React Aria", ark: "Ark UI", native: "Layout" };
 export interface GalleryPosition {
   name: string;
+  /** Retained for saved locations from the earlier horizontal gallery. */
   scrollLeft: number;
+  scrollTop?: number;
+  query?: string;
 }
 function neighbors(index: number) {
   return [index - 1, index, index + 1, index + 2].filter(
@@ -30,19 +38,22 @@ function neighbors(index: number) {
   );
 }
 
-class PreviewBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class PreviewBoundary extends Component<
+  { children: ReactNode; fallback?: ReactNode },
+  { failed: boolean }
+> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
   }
   render() {
-    return this.state.failed ? (
-      <p className="gallery-preview-message" role="alert">
-        This preview could not render. Reset it below, or open the component documentation.
-      </p>
-    ) : (
-      this.props.children
-    );
+    return this.state.failed
+      ? (this.props.fallback ?? (
+          <p className="gallery-preview-message" role="alert">
+            This preview could not render. Reset it below, or open the component documentation.
+          </p>
+        ))
+      : this.props.children;
   }
 }
 
@@ -151,13 +162,16 @@ function GalleryTile({
   );
 }
 
-/** All families form one row. Jumps move the viewport, never filter away component coverage. */
+/** A responsive catalog. Finding a family never hides the rest of the library. */
 export function ComponentGallery({
   initialPosition,
   onPositionChange,
+  machinePreview,
 }: {
   initialPosition?: GalleryPosition;
   onPositionChange?: (position: GalleryPosition) => void;
+  /** A consumer-owned, lazy Machine View composition. */
+  machinePreview?: ReactNode;
 }) {
   const initial = useRef(initialPosition);
   const initialIndex = Math.max(
@@ -165,6 +179,9 @@ export function ComponentGallery({
     galleryEntries.findIndex((entry) => entry.name === initial.current?.name),
   );
   const [selected, setSelected] = useState(initialIndex);
+  const [query, setQuery] = useState(initial.current?.query ?? "");
+  const queryRef = useRef(query);
+  queryRef.current = query;
   const [visible, setVisible] = useState(() => new Set<number>());
   const [retained, setRetained] = useState<number | undefined>(undefined);
   const selectedRef = useRef(selected);
@@ -173,6 +190,14 @@ export function ComponentGallery({
   const scrollFrame = useRef<number | undefined>(undefined);
   const id = useId();
   const current = galleryEntries[selected]!;
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const matches = galleryEntries.flatMap((entry, index) =>
+    terms.every((term) =>
+      `${entry.name} ${entry.category} ${entry.description}`.toLocaleLowerCase().includes(term),
+    )
+      ? [index]
+      : [],
+  );
 
   const remember = useCallback(
     (index: number) => {
@@ -180,7 +205,9 @@ export function ComponentGallery({
       setSelected(index);
       onPositionChange?.({
         name: galleryEntries[index]!.name,
-        scrollLeft: viewport.current?.scrollLeft ?? 0,
+        scrollLeft: 0,
+        scrollTop: viewport.current?.scrollTop ?? 0,
+        query: queryRef.current,
       });
     },
     [onPositionChange],
@@ -194,13 +221,12 @@ export function ComponentGallery({
       if (!scroller || !target) return;
       const rootRect = scroller.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
-      const rtl = getComputedStyle(scroller).direction === "rtl";
-      const offset = rtl ? targetRect.right - rootRect.right : targetRect.left - rootRect.left;
-      // Physical geometry works with both LTR and native negative RTL scrollLeft values.
-      // Instant movement also respects reduced motion and makes a distant jump predictable.
-      scroller.scrollTo({ left: scroller.scrollLeft + offset, behavior: "instant" });
+      const offset = targetRect.top - rootRect.top;
+      // Vertical physical geometry is the same in LTR and RTL. No smooth-scroll
+      // race when finding a distant family, and no reduced-motion exception needed.
+      scroller.scrollTo({ top: scroller.scrollTop + offset, behavior: "instant" });
       remember(bounded);
-      if (focus) target.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+      if (focus) target.querySelector<HTMLElement>("h2")?.focus();
     },
     [remember],
   );
@@ -209,12 +235,12 @@ export function ComponentGallery({
     const scroller = viewport.current;
     if (!scroller) return;
     if (initial.current) {
-      scroller.scrollTo({ left: initial.current.scrollLeft, behavior: "instant" });
+      scroller.scrollTo({ top: initial.current.scrollTop ?? 0, behavior: "instant" });
       // A viewport resize can change the saved pixel offset. Keep the named family in view.
       const target = tiles.current.get(initialIndex);
       const rootRect = scroller.getBoundingClientRect();
       const targetRect = target?.getBoundingClientRect();
-      if (targetRect && (targetRect.right <= rootRect.left || targetRect.left >= rootRect.right))
+      if (targetRect && (targetRect.bottom <= rootRect.top || targetRect.top >= rootRect.bottom))
         jump(initialIndex);
     }
     if (typeof IntersectionObserver === "undefined") return;
@@ -230,7 +256,7 @@ export function ComponentGallery({
           return next;
         });
       },
-      { root: scroller, rootMargin: "0px 400px" },
+      { root: scroller, rootMargin: "160px 0px" },
     );
     tiles.current.forEach((tile) => observer.observe(tile));
     return () => observer.disconnect();
@@ -251,12 +277,15 @@ export function ComponentGallery({
       const scroller = viewport.current;
       if (!scroller) return;
       const rect = scroller.getBoundingClientRect();
-      const rtl = getComputedStyle(scroller).direction === "rtl";
       let nearest = selectedRef.current;
-      let distance = Infinity;
+      // Preserve the selected column when several cards share the same row.
+      const currentTile = tiles.current.get(nearest);
+      let distance = currentTile
+        ? Math.abs(currentTile.getBoundingClientRect().top - rect.top)
+        : Infinity;
       tiles.current.forEach((tile, index) => {
         const tileRect = tile.getBoundingClientRect();
-        const candidate = Math.abs(rtl ? tileRect.right - rect.right : tileRect.left - rect.left);
+        const candidate = Math.abs(tileRect.top - rect.top);
         if (candidate < distance) {
           distance = candidate;
           nearest = index;
@@ -280,11 +309,15 @@ export function ComponentGallery({
         ? 0
         : event.key === "End"
           ? galleryEntries.length - 1
-          : event.key === "ArrowRight"
-            ? selectedRef.current + (rtl ? -1 : 1)
-            : event.key === "ArrowLeft"
-              ? selectedRef.current + (rtl ? 1 : -1)
-              : undefined;
+          : event.key === "ArrowDown"
+            ? selectedRef.current + 1
+            : event.key === "ArrowUp"
+              ? selectedRef.current - 1
+              : event.key === "ArrowRight"
+                ? selectedRef.current + (rtl ? -1 : 1)
+                : event.key === "ArrowLeft"
+                  ? selectedRef.current + (rtl ? 1 : -1)
+                  : undefined;
     if (next !== undefined) {
       event.preventDefault();
       jump(next);
@@ -296,8 +329,73 @@ export function ComponentGallery({
       <PageHeading
         category="Get started"
         title="All components"
-        description="A live, side-by-side gallery. Try a component here; open its documentation for usage, anatomy and behavior."
+        description="Working interfaces, built from small parts. Explore the compositions, then try every component in the catalog."
       />
+      <div className="gallery-showcases" aria-label="Application components">
+        <article className="gallery-showcase">
+          <header>
+            <div>
+              <span className="gallery-category">Document workspace</span>
+              <h2>Outliner</h2>
+            </div>
+            <Symbol name="outline" />
+          </header>
+          <div className="gallery-showcase-preview">
+            <PreviewBoundary
+              fallback={
+                <p role="alert">
+                  The outliner preview could not render. Open the outliner lab to try the full
+                  workspace.
+                </p>
+              }
+            >
+              <Suspense fallback={<p role="status">Loading outliner preview…</p>}>
+                <GalleryReader compact />
+              </Suspense>
+            </PreviewBoundary>
+          </div>
+          <footer>
+            <p>Fold the details. Keep the bigger picture.</p>
+            <a href="#outliner-lab">
+              Open outliner lab <Symbol name="arrow" size={16} />
+            </a>
+          </footer>
+        </article>
+        <article className="gallery-showcase">
+          <header>
+            <div>
+              <span className="gallery-category">Behavior workspace</span>
+              <h2>Machine View</h2>
+            </div>
+            <Symbol name="layers" />
+          </header>
+          <div className="gallery-showcase-preview gallery-machine-preview">
+            {machinePreview ?? (
+              <div className="gallery-machine-intro">
+                <span className="gallery-category">Model · inspect · replay</span>
+                <p>Follow a system through its states.</p>
+                <p>
+                  Explore nested behavior, inspect transitions and trace what happens next in the
+                  dedicated workbench.
+                </p>
+              </div>
+            )}
+          </div>
+          <footer>
+            <p>A clear view of changing behavior.</p>
+            <a href="#machine-view">
+              Open Machine View <Symbol name="arrow" size={16} />
+            </a>
+          </footer>
+        </article>
+      </div>
+      <div className="gallery-catalog-heading">
+        <div>
+          <span className="gallery-category">The building blocks</span>
+          <h2>Component catalog</h2>
+        </div>
+        <p>Every family. Real controls. Separate documentation.</p>
+      </div>
       <div className="gallery-controls">
         <div className="gallery-heading-meta">
           <strong>{galleryEntries.length} components</strong>
@@ -348,6 +446,44 @@ export function ComponentGallery({
           </button>
         </div>
       </div>
+      <form
+        className="gallery-find"
+        role="search"
+        aria-label="Find a component"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (matches[0] !== undefined) jump(matches[0], true);
+        }}
+      >
+        <label htmlFor={`${id}-find`}>Find in catalog</label>
+        <div className="gallery-find-field">
+          <Symbol name="search" size={17} />
+          <input
+            id={`${id}-find`}
+            type="search"
+            value={query}
+            placeholder="Name, category or capability…"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <button className="gallery-action" type="submit" disabled={matches.length === 0}>
+          Find component
+        </button>
+        {terms.length > 0 && matches.length > 1 && (
+          <button
+            type="button"
+            className="gallery-action"
+            onClick={() => jump(matches.find((index) => index > selected) ?? matches[0]!, true)}
+          >
+            Next match
+          </button>
+        )}
+        <span className="gallery-find-status" role="status">
+          {terms.length
+            ? `${matches.length} matching ${matches.length === 1 ? "family" : "families"} · all ${galleryEntries.length} remain below`
+            : "Search jumps to a match; it never hides a component."}
+        </span>
+      </form>
       <nav className="gallery-categories" aria-label="Component categories">
         {categories.map((category) => (
           <button
@@ -387,7 +523,9 @@ export function ComponentGallery({
               entry={entry}
               index={index}
               enabled={
-                neighbors(selected).includes(index) || visible.has(index) || retained === index
+                neighbors(selected).includes(index) ||
+                [...visible].slice(0, 8).includes(index) ||
+                retained === index
               }
               selected={selected === index}
               register={(node) => {
@@ -402,15 +540,16 @@ export function ComponentGallery({
       </div>
       <div className="gallery-caption">
         <p id={`${id}-instructions`}>
-          Scroll sideways or use the jump controls. When the gallery is focused, use ← →, Home or
-          End.
+          Scroll down or use the find and jump controls. With the catalog focused, use arrow keys,
+          Home or End.
         </p>
         <span className="gallery-position" role="status" aria-live="polite" aria-atomic="true">
           {String(selected + 1).padStart(2, "0")} / {galleryEntries.length} · {current.name}
         </span>
       </div>
       <p className="gallery-scope-note">
-        Nearby previews stay live; distant previews reset. All families stay in this row.{" "}
+        Nearby previews stay live; distant previews reset. Your last focused preview stays mounted.
+        All families remain in the catalog.{" "}
         <a href="#system-coverage">Explore aliases and utilities</a>.
       </p>
     </section>
