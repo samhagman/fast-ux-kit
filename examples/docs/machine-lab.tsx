@@ -319,6 +319,13 @@ export function MachineLab() {
             Explore a fixed approval trace with a coordinator, a child actor and pending work. These
             are sample observations, not a running backend.
           </p>
+          <p className="machine-lab__fine">
+            Use Find to locate a state or transition across graphs. In this sample, enable
+            diagnostic payloads and append an observation to compare recorded context. The child
+            actor has no context: unavailable is not empty. Filter the Trace while a historical
+            frame is selected to see that filtering and new observations never replace pinned
+            evidence.
+          </p>
           <Button onPress={loadCommittedExample}>Load committed sample</Button>
           <div className="machine-lab__host-controls">
             <label>

@@ -946,3 +946,46 @@
   background: var(--fux-surface, #fff);
   box-shadow: 0 2px 6px rgb(0 0 0 / 0.06);
 }
+
+.fux-machine__find-field {
+  display: grid;
+  gap: 8px;
+}
+.fux-machine__find input {
+  min-block-size: 44px;
+  inline-size: 100%;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  font: inherit;
+  color: inherit;
+  background: var(--fux-surface, #fff);
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 5px;
+  padding-inline: 10px;
+}
+.fux-machine__search-results,
+.fux-machine__context-diff {
+  overflow-wrap: anywhere;
+  list-style: none;
+  padding: 0;
+}
+.fux-machine__search-results button {
+  inline-size: 100%;
+  text-align: start;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.fux-machine__pinned-frame {
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 12px;
+  overflow-wrap: anywhere;
+}
+.fux-machine__timeline-filter {
+  display: grid;
+  gap: 8px;
+}
+.fux-machine__context-diff pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

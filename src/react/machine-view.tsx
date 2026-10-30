@@ -15,6 +15,8 @@ import { Button } from "react-aria-components";
 import {
   applyMachineCommand,
   createMachineSnapshot,
+  compareMachineInspectionContexts,
+  searchMachineDocument,
   getEnabledMachineTransitions,
   layoutMachineGraph,
   parseMachineDocument,
@@ -119,7 +121,7 @@ const KIND_LABEL: Record<MachineNodeKind, string> = {
   submachine: "Submachine",
   note: "Note",
 };
-type Panel = "selection" | "runtime" | "trace" | "issues" | "data";
+type Panel = "find" | "selection" | "runtime" | "trace" | "issues" | "data";
 type History = { past: readonly MachineDocument[]; future: readonly MachineDocument[] };
 type Pending = { before: MachineDocument; after: MachineDocument; history: History };
 type Drag = {
@@ -131,6 +133,15 @@ type Drag = {
   y: number;
   moved: boolean;
 };
+function diagnosticValue(value: unknown, key: string): unknown {
+  if (value === null || typeof value !== "object") return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && "value" in descriptor ? descriptor.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 function displayJSON(value: unknown) {
   const seen = new WeakSet<object>();
   let entries = 0;
@@ -578,7 +589,8 @@ function MachineViewSurface({
   >(undefined);
   const [traceCursor, setTraceCursor] = useState<number | undefined>();
   const [actorId, setActorId] = useState("");
-  const [frameCursor, setFrameCursor] = useState<string | undefined>();
+  const [frameCursor, setCursor] = useState<string | undefined>();
+  const [frameMachine, setFrameMachine] = useState<string | undefined>();
   const [dispatchPending, setDispatchPending] = useState(false);
   const dispatchLock = useRef(false);
   const [eventType, setEventType] = useState("");
@@ -586,6 +598,18 @@ function MachineViewSurface({
   const [importText, setImportText] = useState("");
   const [importIssues, setImportIssues] = useState<readonly MachineIssue[]>([]);
   const [query, setQuery] = useState("");
+  const [findQuery, setFindQuery] = useState("");
+  const [timelineQuery, setTimelineQuery] = useState("");
+  const findInput = useRef<HTMLInputElement>(null);
+  const focusFindInput = useRef(false);
+  const findTab = useRef<HTMLButtonElement>(null);
+  const pendingSearch = useRef<
+    { machineId: string; elementId: string; kind: "node" | "transition" } | undefined
+  >(undefined);
+  const findResults = useMemo(
+    () => searchMachineDocument(document, findQuery, { maxResults: 50 }),
+    [document, findQuery],
+  );
   const replayRef = useRef<HTMLButtonElement>(null);
   const restoreReplayFocus = useRef(false);
   const rootRef = useRef<HTMLElement>(null);
@@ -633,13 +657,47 @@ function MachineViewSurface({
     ? undefined
     : graph?.transitions.find((edge) => selected.includes(edge.id));
   const actorIds = [...new Set(inspectionFrames.map((frame) => frame.actorId))];
-  const activeActorId = actorIds.includes(actorId) ? actorId : (actorIds[0] ?? "");
+  const activeActorId = actorId || (actorIds[0] ?? "");
   const actorFrames = inspectionFrames.filter((frame) => frame.actorId === activeActorId);
+  function setFrameCursor(id: string | undefined) {
+    setCursor(id);
+    setFrameMachine(
+      id === undefined ? undefined : actorFrames.find((item) => item.id === id)?.machineId,
+    );
+    if (id !== undefined) setActorId(activeActorId);
+  }
   const frame =
     frameCursor === undefined
       ? actorFrames[actorFrames.length - 1]
-      : actorFrames.find((item) => item.id === frameCursor);
+      : actorFrames.find((item) => item.id === frameCursor && item.machineId === frameMachine);
   const missingFrame = frameCursor !== undefined && !frame;
+  const timelineNeedle = timelineQuery.trim().toLowerCase();
+  const filteredFrames = actorFrames.filter(
+    (item) =>
+      !timelineNeedle ||
+      [item.id, item.event?.type ?? "", item.status ?? "observed"].some((text) =>
+        text.toLowerCase().includes(timelineNeedle),
+      ),
+  );
+  const pinnedFrame = frameCursor && frame && !filteredFrames.includes(frame) ? frame : undefined;
+  const previousFrame = frame
+    ? actorFrames
+        .slice(0, actorFrames.indexOf(frame))
+        .filter((item) => item.machineId === frame.machineId)
+        .at(-1)
+    : undefined;
+  const diagnosticContext = showDiagnostics ? diagnosticValue(frame, "context") : undefined;
+  const diagnosticPayload = showDiagnostics
+    ? diagnosticValue(diagnosticValue(frame, "event"), "payload")
+    : undefined;
+  const diagnosticMetadata = showDiagnostics ? diagnosticValue(frame, "metadata") : undefined;
+  const contextComparison =
+    showDiagnostics && frame
+      ? compareMachineInspectionContexts(previousFrame, frame, {
+          continuity:
+            inspectionStatus === "gap" ? "gap" : (inspectionSession?.continuity ?? "unknown"),
+        })
+      : undefined;
   const traceFrame =
     traceCursor === undefined
       ? undefined
@@ -728,6 +786,12 @@ function MachineViewSurface({
   }, [mode, frame, document]);
 
   useEffect(() => {
+    if (panel === "find" && focusFindInput.current) {
+      focusFindInput.current = false;
+      findInput.current?.focus();
+    }
+  }, [panel]);
+  useEffect(() => {
     const issue = pendingIssueFocus.current;
     if (issue && graph && (!issue.machineId || issue.machineId === graph.id)) {
       pendingIssueFocus.current = undefined;
@@ -772,7 +836,11 @@ function MachineViewSurface({
           serializeMachineDocument(document));
     if (!committedFit && (!autoFit || fitMachine.current === graph.id)) return;
     const timer = requestAnimationFrame(() => {
-      if (viewportRef.current && viewportRef.current.clientWidth > 0) {
+      if (
+        viewportRef.current &&
+        viewportRef.current.clientWidth > 0 &&
+        (committedFit || !viewportTouched.current)
+      ) {
         fit();
         fitMachine.current = graph.id;
         pendingFitDocument.current = undefined;
@@ -801,6 +869,35 @@ function MachineViewSurface({
     observer.observe(viewportRef.current);
     return () => observer.disconnect();
   }, [graph?.id, autoFit]);
+  useEffect(() => {
+    const match = pendingSearch.current;
+    if (!match || match.machineId !== graph?.id) return;
+    pendingSearch.current = undefined;
+    viewportTouched.current = true;
+    const scale = Math.max(1, zoom);
+    setZoom(scale);
+    const node = match.kind === "node" ? rectangles.get(match.elementId) : undefined;
+    const edge =
+      match.kind === "transition"
+        ? graph.transitions.find((item) => item.id === match.elementId)
+        : undefined;
+    const from = edge && rectangles.get(edge.sourceId);
+    const to = edge && rectangles.get(edge.targetId);
+    const point = node
+      ? { x: node.x + Math.min(node.width / 2, 128), y: node.y + 24 }
+      : from && to
+        ? edgeGeometry(from, to, direction, 0)
+        : undefined;
+    const view = viewportRef.current;
+    if (point && view)
+      setPan({
+        x: view.clientWidth / 2 - point.x * scale,
+        y: Math.min(view.clientHeight / 2, 180) - point.y * scale,
+      });
+    (match.kind === "node" ? nodeRefs : edgeRefs).current
+      .get(match.elementId)
+      ?.focus({ preventScroll: true });
+  }, [graph, selected, rectangles, direction, zoom, panel]);
   useEffect(() => {
     if (panel === "runtime" && restoreReplayFocus.current) {
       restoreReplayFocus.current = false;
@@ -874,6 +971,17 @@ function MachineViewSurface({
     if (!showInspector) return;
     setInspectorCollapsed(false);
     setPanel(nextPanel);
+  }
+  function selectSearchResult(match: {
+    machineId: string;
+    elementId: string;
+    kind: "node" | "transition";
+  }) {
+    pendingSearch.current = match;
+    if (match.machineId !== graph?.id) openMachine(match.machineId);
+    select([match.elementId]);
+    setPanel("selection");
+    setAnnouncement(`Selected ${match.kind} ${match.elementId} in ${match.machineId}`);
   }
   function focusSelection() {
     if (!selectedNode) return;
@@ -1058,6 +1166,7 @@ function MachineViewSurface({
       if (
         onDispatchEvent &&
         activeActorId &&
+        frame &&
         inspectionStatus === "connected" &&
         inspectionSession?.source !== "simulation" &&
         !dispatchLock.current &&
@@ -1161,6 +1270,15 @@ function MachineViewSurface({
     }
   }
   function rootKey(event: KeyboardEvent<HTMLElement>) {
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    if (panel === "find" && event.key === "Escape") {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPanel("selection");
+      findTab.current?.focus();
+      return;
+    }
     if (
       isField(event.target) &&
       !(
@@ -2021,6 +2139,7 @@ function MachineViewSurface({
               {(
                 [
                   ["selection", "Selection"],
+                  ["find", "Find"],
                   ["runtime", "Runtime"],
                   ["trace", "Trace"],
                   ["issues", `Issues ${issues.length + importIssues.length}`],
@@ -2030,12 +2149,19 @@ function MachineViewSurface({
                 <button
                   type="button"
                   role="tab"
+                  ref={id === "find" ? findTab : undefined}
                   id={`${uid}-tab-${id}`}
                   aria-selected={panel === id}
                   aria-controls={`${uid}-panel-${id}`}
                   tabIndex={panel === id ? 0 : -1}
                   key={id}
-                  onClick={() => setPanel(id)}
+                  onClick={() => {
+                    if (id === "find") {
+                      if (panel === "find") findInput.current?.focus();
+                      else focusFindInput.current = true;
+                    }
+                    setPanel(id);
+                  }}
                   onKeyDown={(event) => {
                     let next = index;
                     if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
@@ -2062,6 +2188,65 @@ function MachineViewSurface({
               aria-labelledby={`${uid}-tab-${panel}`}
               tabIndex={0}
             >
+              {panel === "find" && (
+                <div className="fux-machine__find">
+                  <h3>Find state or transition</h3>
+                  <p className="fux-machine__hint">
+                    Search topology across all machines. Private observation data is never searched.
+                    Enter selects the first result; Escape closes Find.
+                  </p>
+                  {mode === "simulate" && (
+                    <p className="fux-machine__hint">
+                      Opening another graph clears this local simulation and replay; host
+                      observations are unchanged.
+                    </p>
+                  )}
+                  <div className="fux-machine__find-field">
+                    <label htmlFor={`${uid}-find`}>Find state or transition</label>
+                    <input
+                      id={`${uid}-find`}
+                      ref={findInput}
+                      type="search"
+                      onKeyDown={(event) => {
+                        if (
+                          event.defaultPrevented ||
+                          event.nativeEvent.isComposing ||
+                          event.altKey ||
+                          event.ctrlKey ||
+                          event.metaKey ||
+                          event.shiftKey
+                        )
+                          return;
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          const match = findResults[0];
+                          if (match) selectSearchResult(match);
+                        }
+                      }}
+                      value={findQuery}
+                      onChange={(event) => setFindQuery(event.target.value)}
+                    />
+                  </div>
+                  <p role="status">
+                    {findQuery.trim()
+                      ? `${findResults.length} results${findResults.length === 50 ? " (limit 50; refine your search)" : ""}`
+                      : "Enter a state or transition name or ID."}
+                  </p>
+                  {findQuery.trim() && !findResults.length && <p>No topology matches.</p>}
+                  <ul className="fux-machine__search-results">
+                    {findResults.map((match) => (
+                      <li key={JSON.stringify([match.machineId, match.kind, match.elementId])}>
+                        <Control onPress={() => selectSearchResult(match)}>
+                          <span>{match.label}</span>
+                          <small>
+                            {match.machineId} · {match.kind} · {match.elementId}
+                          </small>
+                        </Control>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {panel === "selection" && (
                 <>
                   {renderInspector?.(selectedNode ?? selectedEdge, graph)}
@@ -2556,6 +2741,11 @@ function MachineViewSurface({
                         <span aria-hidden="true">●</span> {inspectionStatus} ·{" "}
                         {inspectionSession?.source ?? "committed"} history
                       </p>
+                      {!frame && !missingFrame && activeActorId && (
+                        <p role="status">
+                          Selected actor {activeActorId} is unavailable: no retained observation.
+                        </p>
+                      )}
                       {actorIds.length ? (
                         <>
                           <SelectField
@@ -2566,6 +2756,9 @@ function MachineViewSurface({
                               setFrameCursor(undefined);
                             }}
                           >
+                            {actorId && !actorIds.includes(actorId) && (
+                              <option value={actorId}>{actorId} (unavailable)</option>
+                            )}
                             {actorIds.map((id) => {
                               const latest = inspectionFrames
                                 .filter((item) => item.actorId === id)
@@ -2595,15 +2788,21 @@ function MachineViewSurface({
                                 </dd>
                                 <dt>Parent actor</dt>
                                 <dd>{frame.parentActorId ?? "Root actor"}</dd>
+                                {frame.sequence !== undefined && (
+                                  <>
+                                    <dt>Frame sequence</dt>
+                                    <dd>{frame.sequence}</dd>
+                                  </>
+                                )}
                                 {inspectionSession?.sequence !== undefined && (
                                   <>
-                                    <dt>Sequence</dt>
+                                    <dt>Session sequence</dt>
                                     <dd>{inspectionSession.sequence}</dd>
                                   </>
                                 )}
                                 {inspectionSession?.cursor && (
                                   <>
-                                    <dt>Cursor</dt>
+                                    <dt>Session cursor</dt>
                                     <dd>{inspectionSession.cursor}</dd>
                                   </>
                                 )}
@@ -2631,11 +2830,75 @@ function MachineViewSurface({
                                 <>
                                   <details open>
                                     <summary>Context</summary>
-                                    <pre>{displayJSON(frame.context ?? {})}</pre>
+                                    {diagnosticContext === undefined ? (
+                                      <p>Context unavailable for this observation.</p>
+                                    ) : (
+                                      <pre>{displayJSON(diagnosticContext)}</pre>
+                                    )}
+                                  </details>
+                                  <details open>
+                                    <summary>Observed event payload</summary>
+                                    {diagnosticPayload === undefined ? (
+                                      <p>Event payload unavailable for this observation.</p>
+                                    ) : (
+                                      <pre>{displayJSON(diagnosticPayload)}</pre>
+                                    )}
+                                  </details>
+                                  <details open>
+                                    <summary>Context comparison</summary>
+                                    <p>
+                                      Before: {previousFrame?.id ?? "Unavailable"} · After:{" "}
+                                      {frame.id}
+                                    </p>
+                                    <p className="fux-machine__hint">
+                                      Previous retained observation for the same actor and machine.
+                                      Differences do not establish event causality.
+                                    </p>
+                                    {contextComparison?.warnings.map((warning, index) => (
+                                      <p key={index}>{warning}</p>
+                                    ))}
+                                    {contextComparison?.status === "available" ? (
+                                      <>
+                                        {!contextComparison.entries.length && (
+                                          <p>
+                                            {contextComparison.truncated ||
+                                            contextComparison.warnings.some((warning) =>
+                                              /unsupported|accessor/i.test(warning),
+                                            )
+                                              ? "Comparison incomplete; complete equality is not established."
+                                              : "No context differences in the supported values compared."}
+                                          </p>
+                                        )}
+                                        <ul className="fux-machine__context-diff">
+                                          {contextComparison.entries.map((entry, index) => (
+                                            <li key={index}>
+                                              <strong>
+                                                {entry.path || "Context root"} · {entry.kind}
+                                              </strong>
+                                              <pre>
+                                                Before: {entry.before}
+                                                {"\n"}After: {entry.after}
+                                              </pre>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                        {contextComparison.truncated && (
+                                          <p>
+                                            Comparison truncated; not all differences are shown.
+                                          </p>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <p>Context comparison unavailable.</p>
+                                    )}
                                   </details>
                                   <details>
                                     <summary>Runtime metadata</summary>
-                                    <pre>{displayJSON(frame.metadata ?? {})}</pre>
+                                    {diagnosticMetadata === undefined ? (
+                                      <p>Runtime metadata unavailable for this observation.</p>
+                                    ) : (
+                                      <pre>{displayJSON(diagnosticMetadata)}</pre>
+                                    )}
                                   </details>
                                   {inspectionSession?.diagnostics && (
                                     <DiagnosticPanel diagnostics={inspectionSession.diagnostics} />
@@ -2695,6 +2958,7 @@ function MachineViewSurface({
                           (mode === "inspect" &&
                             (!onDispatchEvent ||
                               !activeActorId ||
+                              !frame ||
                               Boolean(frameCursor) ||
                               dispatchPending ||
                               inspectionStatus !== "connected" ||
@@ -2710,11 +2974,13 @@ function MachineViewSurface({
                       {mode === "inspect" && (
                         <p className="fux-machine__hint">
                           {onDispatchEvent
-                            ? inspectionStatus !== "connected"
-                              ? `Dispatch unavailable while ${inspectionStatus}. Reconnect and establish current state first.`
-                              : inspectionSession?.source === "simulation"
-                                ? "Dispatch unavailable from a simulation recording."
-                                : "Dispatch is explicit and host-owned. The graph changes only after a new observation arrives."
+                            ? !frame
+                              ? "Dispatch unavailable: the selected actor has no retained observation. Select an available actor."
+                              : inspectionStatus !== "connected"
+                                ? `Dispatch unavailable while ${inspectionStatus}. Reconnect and establish current state first.`
+                                : inspectionSession?.source === "simulation"
+                                  ? "Dispatch unavailable from a simulation recording."
+                                  : "Dispatch is explicit and host-owned. The graph changes only after a new observation arrives."
                             : "Read-only inspection. No dispatch callback supplied."}
                         </p>
                       )}
@@ -2777,10 +3043,41 @@ function MachineViewSurface({
                   >
                     Return to latest
                   </Control>
+                  {mode === "inspect" && (
+                    <div className="fux-machine__timeline-filter">
+                      <Field
+                        label="Filter observations by event, frame ID or status"
+                        value={timelineQuery}
+                        onChange={setTimelineQuery}
+                      />
+                      <Control disabled={!timelineQuery} onPress={() => setTimelineQuery("")}>
+                        Clear observation filter
+                      </Control>
+                      <p role="status">
+                        {filteredFrames.length} of {actorFrames.length} observations match.
+                        Navigation follows all retained observations, not just matches.
+                      </p>
+                      {missingFrame && (
+                        <p role="alert">
+                          Selected observation {frameCursor} is unavailable; no newer observation
+                          has been substituted.
+                        </p>
+                      )}
+                      {pinnedFrame && (
+                        <div className="fux-machine__pinned-frame">
+                          <strong>Selected observation (outside filter)</strong>
+                          <p>
+                            {pinnedFrame.id} · {pinnedFrame.event?.type ?? "Snapshot"} ·{" "}
+                            {pinnedFrame.status ?? "observed"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {mode === "inspect" ? (
-                    actorFrames.length ? (
+                    filteredFrames.length ? (
                       <ol className="fux-machine__trace">
-                        {actorFrames.map((item) => (
+                        {filteredFrames.map((item) => (
                           <li key={item.id}>
                             <Control
                               pressed={frame?.id === item.id}
@@ -2795,7 +3092,11 @@ function MachineViewSurface({
                         ))}
                       </ol>
                     ) : (
-                      <p>No host observations.</p>
+                      <p>
+                        {actorFrames.length
+                          ? "No observations match this filter."
+                          : "No host observations."}
+                      </p>
                     )
                   ) : snapshot?.trace.length ? (
                     <ol className="fux-machine__trace">

@@ -5,6 +5,7 @@
   min-inline-size: 0;
   max-inline-size: 100%;
   overflow-wrap: anywhere;
+  container: outline-search / inline-size;
 }
 .fast-ux-outline-search__controls,
 .fast-ux-outline-search__note-controls,
@@ -88,6 +89,30 @@
 }
 .fast-ux-outline-search__additional-toggle {
   overflow-wrap: anywhere;
+}
+/* Keep the document readable when contextual actions share a narrow row. */
+@container outline-search (max-width: 28rem) {
+  .fast-ux-outline-search .fast-ux-outliner__row {
+    display: grid;
+    grid-template-columns: var(--outline-gutter) minmax(0, 1fr) auto;
+  }
+  .fast-ux-outline-search .fast-ux-outliner__gutter {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .fast-ux-outline-search .fast-ux-outliner__content {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .fast-ux-outline-search__row-actions {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    max-inline-size: 100%;
+  }
+  .fast-ux-outline-search .fast-ux-outliner__row > .fast-ux-outliner__toggle {
+    grid-column: 3;
+    grid-row: 1;
+  }
 }
 .fast-ux-outline-search__path {
   margin-block: 0 var(--fux-space-xs, 0.25rem);
