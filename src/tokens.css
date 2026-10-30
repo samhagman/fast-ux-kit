@@ -37,6 +37,7 @@
   --fux-control-surface: var(--fux-surface);
   --fux-control-weight: 550;
   --fux-outline-indent: 1rem;
+  --fux-outline-sticky-offset: 0px;
   --fux-outline-padding: 0.625rem;
   --fux-danger-surface: var(--fux-danger);
   --fux-quiet-text: var(--fux-text);

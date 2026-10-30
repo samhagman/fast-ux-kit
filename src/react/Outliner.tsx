@@ -22,6 +22,7 @@ import {
 import { RichContent, type RichContentProps } from "./RichContent.js";
 import type { RichDocument } from "../rich/index.js";
 import { OutlineBullet, OutlineCheck, OutlineChevron, OutlineFocus } from "./OutlineGlyph.js";
+import { useOutlineRowGesture } from "./outline-row-gesture.js";
 
 export interface OutlineRenderContext {
   /** Zero-based nesting level. */
@@ -51,6 +52,14 @@ type ReaderSectionProps = Omit<
 
 export interface OutlinerProps<T = unknown> extends ReaderSectionProps {
   readonly nodes: readonly OutlineNode<T>[];
+  /** Opt-in row folding and leading-bullet navigation; legacy controls remain the default. */
+  readonly interactionMode?: "controls" | "row";
+  /** Leaf activation only; never implies a document mutation. */
+  readonly onRowActivate?: (node: OutlineNode<T>) => void;
+  /** A request only. The host must validate current editing permission. */
+  readonly onEditRequest?: (node: OutlineNode<T>) => void;
+  /** Explicit permission for long-press/F2 requests. Omitted means no editing requests. */
+  readonly canEdit?: (node: OutlineNode<T>) => boolean;
   /** Controlled reader state. Supply a new set to update it; this set is never mutated. */
   readonly expandedIds?: ReadonlySet<string>;
   /** Initial reader state only. If omitted, every initial branch starts expanded. */
@@ -128,6 +137,10 @@ function readerFocusVisible(element: HTMLElement, section: HTMLElement): boolean
  */
 export function Outliner<T = unknown>({
   nodes,
+  interactionMode = "controls",
+  onRowActivate,
+  onEditRequest,
+  canEdit,
   expandedIds,
   defaultExpandedIds,
   onExpandedChange,
@@ -242,6 +255,24 @@ export function Outliner<T = unknown>({
     onExpandedChange?.(next, { id, isExpanded, affectedIds: ids, recursive });
   }
 
+  const rowInteraction = interactionMode === "row";
+  const gestureIdentity = useMemo(() => ({}), [nodes, activeHoist, expanded, interactionMode]);
+  const editable = (id: string) => {
+    const node = findOutlineNode(nodes, id)?.node;
+    return !!node && !!onEditRequest && canEdit?.(node) === true;
+  };
+  const requestEdit = (id: string) => {
+    const node = findOutlineNode(nodes, id)?.node;
+    if (node && editable(id)) onEditRequest?.(node);
+  };
+  const activateRow = (id: string, recursive = false) => {
+    const node = findOutlineNode(nodes, id)?.node;
+    if (!node) return;
+    if (node.children?.length) toggle(id, recursive);
+    else onRowActivate?.(node);
+  };
+  const rowGesture = useOutlineRowGesture(activateRow, requestEdit, editable, gestureIdentity);
+
   function renderList(
     items: readonly OutlineNode<T>[],
     depth: number,
@@ -265,6 +296,11 @@ export function Outliner<T = unknown>({
             const context = { depth, hasChildren, isExpanded, hoist: () => navigate(node.id) };
             const richDocument = getRichContent?.(node);
             const body = renderBody?.(node);
+            const plainTitle = !renderContent && !richDocument;
+            const actionableTitle = hasChildren || !!onRowActivate;
+            const disclosureLabel =
+              getDisclosureLabel?.(node, isExpanded) ??
+              `${isExpanded ? "Collapse" : "Expand"} ${node.text}`;
             const taskMark =
               node.checked !== undefined ? (
                 <span
@@ -305,36 +341,107 @@ export function Outliner<T = unknown>({
                 data-expanded={isExpanded}
                 data-checked={node.checked}
               >
-                <div className="fast-ux-outliner__row">
+                <div
+                  className="fast-ux-outliner__row"
+                  onPointerDown={
+                    rowInteraction ? (event) => rowGesture.onPointerDown(event, node.id) : undefined
+                  }
+                  onClick={
+                    rowInteraction ? (event) => rowGesture.onClick(event, node.id) : undefined
+                  }
+                >
                   <div className="fast-ux-outliner__gutter">
-                    {disclosurePosition === "start" && hasChildren ? (
+                    {rowInteraction && enableHoist ? (
+                      <Button
+                        type="button"
+                        className="fux-control fast-ux-outliner__hoist"
+                        data-hoist-id={node.id}
+                        aria-label={getHoistLabel?.(node) ?? `Focus on ${node.text}`}
+                        onPress={() => navigate(node.id)}
+                      >
+                        <OutlineBullet collapsed={hasChildren && !isExpanded} />
+                      </Button>
+                    ) : !rowInteraction && disclosurePosition === "start" && hasChildren ? (
                       disclosure
                     ) : (
                       <span className="fast-ux-outliner__marker">
-                        {taskMark ?? <OutlineBullet collapsed={hasChildren && !isExpanded} />}
+                        {(!rowInteraction && taskMark) || (
+                          <OutlineBullet collapsed={hasChildren && !isExpanded} />
+                        )}
                       </span>
                     )}
                   </div>
-                  <div className="fast-ux-outliner__content">
-                    {renderStatus?.(node)}
-                    {disclosurePosition === "start" && hasChildren && taskMark}
+                  {rowInteraction && !plainTitle && disclosure}
+                  <div
+                    className="fast-ux-outliner__content"
+                    data-row-interaction={rowInteraction || undefined}
+                  >
+                    {rowInteraction ? (
+                      <span data-outline-independent="">{renderStatus?.(node)}</span>
+                    ) : (
+                      renderStatus?.(node)
+                    )}
+                    {((rowInteraction && !(plainTitle && actionableTitle)) ||
+                      (!rowInteraction && disclosurePosition === "start" && hasChildren)) &&
+                      taskMark}
                     {renderContent ? (
-                      renderContent(node, context)
+                      rowInteraction ? (
+                        <div data-outline-independent="">{renderContent(node, context)}</div>
+                      ) : (
+                        renderContent(node, context)
+                      )
                     ) : richDocument ? (
-                      <RichContent
-                        document={richDocument}
-                        registry={richRegistry}
-                        allowMedia={allowMedia}
-                      />
+                      rowInteraction ? (
+                        <div data-outline-independent="">
+                          <RichContent
+                            document={richDocument}
+                            registry={richRegistry}
+                            allowMedia={allowMedia}
+                          />
+                        </div>
+                      ) : (
+                        <RichContent
+                          document={richDocument}
+                          registry={richRegistry}
+                          allowMedia={allowMedia}
+                        />
+                      )
+                    ) : rowInteraction && actionableTitle ? (
+                      <button
+                        type="button"
+                        className="fast-ux-outliner__row-action"
+                        data-outline-row-action=""
+                        data-disclosure-id={hasChildren ? node.id : undefined}
+                        data-row-action-id={node.id}
+                        aria-label={hasChildren ? disclosureLabel : node.text || "Untitled item"}
+                        aria-expanded={hasChildren ? isExpanded : undefined}
+                        aria-controls={hasChildren ? childListId : undefined}
+                      >
+                        {taskMark}
+                        <span className="fast-ux-outliner__label">
+                          {node.text || "Untitled item"}
+                        </span>
+                        {hasChildren && !isExpanded && (
+                          <span className="fast-ux-outliner__count" aria-hidden="true">
+                            {node.children!.length}
+                          </span>
+                        )}
+                      </button>
                     ) : (
                       <span className="fast-ux-outliner__label">{node.text}</span>
                     )}
-                    {renderSuffix?.(node)}
-                    {hasChildren && !isExpanded && (
-                      <span className="fast-ux-outliner__count" aria-hidden="true">
-                        {node.children!.length}
-                      </span>
+                    {rowInteraction ? (
+                      <span data-outline-independent="">{renderSuffix?.(node)}</span>
+                    ) : (
+                      renderSuffix?.(node)
                     )}
+                    {hasChildren &&
+                      !isExpanded &&
+                      !(rowInteraction && plainTitle && actionableTitle) && (
+                        <span className="fast-ux-outliner__count" aria-hidden="true">
+                          {node.children!.length}
+                        </span>
+                      )}
                     {body != null && typeof body !== "boolean" && (
                       <div className="fast-ux-outliner__body">{body}</div>
                     )}
@@ -342,8 +449,12 @@ export function Outliner<T = unknown>({
                       <div className="fast-ux-outliner__summary">{renderCollapsed(node)}</div>
                     )}
                   </div>
-                  {renderAccessory?.(node)}
-                  {enableHoist && (
+                  {rowInteraction ? (
+                    <span data-outline-independent="">{renderAccessory?.(node)}</span>
+                  ) : (
+                    renderAccessory?.(node)
+                  )}
+                  {!rowInteraction && enableHoist && (
                     <Button
                       type="button"
                       className="fux-control fast-ux-outliner__hoist"
@@ -354,7 +465,7 @@ export function Outliner<T = unknown>({
                       <OutlineFocus />
                     </Button>
                   )}
-                  {disclosurePosition === "end" && disclosure}
+                  {!rowInteraction && disclosurePosition === "end" && disclosure}
                 </div>
                 {hasChildren &&
                   (depth >= MAX_RENDER_DEPTH && isExpanded ? (
@@ -383,6 +494,40 @@ export function Outliner<T = unknown>({
       tabIndex={sectionProps.tabIndex ?? (visibleRoots.length ? 0 : -1)}
       onKeyDown={(event) => {
         sectionProps.onKeyDown?.(event);
+        const keyTarget = event.target as HTMLElement;
+        const ownRow = keyTarget.closest<HTMLElement>(".fast-ux-outliner__item");
+        const ownSurface =
+          keyTarget.closest(".fast-ux-outliner") === event.currentTarget &&
+          (keyTarget === ownRow ||
+            keyTarget.hasAttribute("data-row-action-id") ||
+            keyTarget.hasAttribute("data-disclosure-id") ||
+            keyTarget.hasAttribute("data-hoist-id"));
+        if (
+          rowInteraction &&
+          ownRow &&
+          ownSurface &&
+          !event.defaultPrevented &&
+          !event.nativeEvent.isComposing &&
+          event.keyCode !== 229 &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey &&
+          !event.shiftKey
+        ) {
+          const id = ownRow.dataset.nodeId!;
+          if (event.key === "F2" && editable(id)) {
+            event.preventDefault();
+            event.stopPropagation();
+            requestEdit(id);
+            return;
+          }
+          if (keyTarget === ownRow && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            event.stopPropagation();
+            activateRow(id);
+            return;
+          }
+        }
         if (
           event.defaultPrevented ||
           event.nativeEvent.isComposing ||
@@ -400,7 +545,9 @@ export function Outliner<T = unknown>({
         // their own keys. Only our section, rows and explicit row controls opt in.
         if (target.closest(".fast-ux-outliner") !== section) return;
         const ownControl =
-          target.hasAttribute("data-disclosure-id") || target.hasAttribute("data-hoist-id");
+          target.hasAttribute("data-disclosure-id") ||
+          target.hasAttribute("data-hoist-id") ||
+          target.hasAttribute("data-row-action-id");
         if (
           target !== section &&
           !target.classList.contains("fast-ux-outliner__item") &&
@@ -457,6 +604,7 @@ export function Outliner<T = unknown>({
       aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : "Outline")}
       aria-labelledby={ariaLabelledBy}
       data-read-only="true"
+      data-interaction-mode={interactionMode}
       data-disclosure-position={disclosurePosition}
       data-hoisted-id={activeHoist ?? undefined}
     >

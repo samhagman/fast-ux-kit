@@ -299,3 +299,52 @@ a failed registered renderer is retried when its block or component identity cha
 - Text popups listen to visual-viewport resize/scroll, so placement can react to a
   mobile keyboard. The coordinate contract is tested with mocks, not certified on
   an Android keyboard or browser zoom.
+
+## Browse-first interaction profile
+
+Existing controls and direct editing stay compatible by default. Opt in with
+`<Outliner interactionMode="row" enableHoist />` or
+`<OutlineEditor interactionMode="browse" readOnly={false} />`.
+
+In the row reader, the plain title/blank row folds its branch; the leading bullet
+focuses the subtree. There is no second right-hand disclosure or focus action.
+Leaf activation is an optional host `onRowActivate(node)` callback. Title buttons
+retain native Enter/Space, disclosure labels and `aria-expanded`; normal Up/Down
+row navigation and Alt recursive folding remain available. Trusted rich title
+renderers are not placed inside a button: they remain independent and use a
+separate start-side disclosure when needed. Body, suffix and accessory controls
+keep their own events, selection and native behavior.
+
+The browse-first editor retains its canonical document, view state and undo history
+between read/edit sessions. A permitted hold-and-release, F2 on an owned row/control,
+or the visible **Edit outline** action enters editing. `readOnly` and inherited locks
+still gate entry, and all actual updates pass the normal reducer/plugin/host policy.
+The reader itself never acquires write permission: its optional `onEditRequest`
+requires an explicit `canEdit(node)` capability and the host must validate it again.
+
+A held row press is recognized only after a primary, unmodified press lasting at
+least 550 ms releases without moving more than 8 px. Scrolling, selection, native
+context menus, drag, additional pointers, cancellation and source/view replacement
+cancel the gesture. Nothing suppresses native pointerdown/contextmenu or swaps the
+editing DOM under a held finger. On a platform where native selection/menu wins,
+use the visible Edit action or F2 instead. Physical touch acceptance remains a
+separate device gate.
+
+An empty outline can enter an insertion-only edit session without creating a node
+or changing history. An outline whose existing rows are all locked can likewise
+expose root insertion; those rows remain protected and normal insertion policy
+still applies. Done on an empty session restores the reader region.
+
+The editing action bar provides **Done**, Undo and Redo, including at narrow widths.
+Hosts with sticky chrome can set `--fux-outline-sticky-offset` on the editor or its
+container (default `0px`). The bar and owned title scroll margins use this inset;
+the documentation shell sets `56px` so its header cannot cover Done after scrolling.
+Done or an unowned Escape (including on the session controls) returns to reading
+and restores a surviving row owned by that reader, not a nested embedded outline;
+accepted title/note changes and history remain. Updates are immediate canonical
+transactions, not a deferred Save form. Done does **not** claim persistence or a
+successful remote save; the host owns both. Popups/plugins and native composition
+retain priority over Escape; embedded controls keep their own keys. Notes can use
+the existing typed adapter and independent Shift+Enter profile. Authoritative host
+replacement or a new read-only policy closes the edit session; an optimistic
+acknowledgement does not. Restoring write permission does not reopen editing.
