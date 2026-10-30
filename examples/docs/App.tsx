@@ -32,6 +32,9 @@ const ExperiencePage = lazy(() =>
 const OutlinerLab = lazy(() =>
   import("./outliner-lab.js").then((module) => ({ default: module.OutlinerLab })),
 );
+const OutlineSearchLab = lazy(() =>
+  import("./outline-search-lab.js").then((module) => ({ default: module.OutlineSearchLab })),
+);
 const MachineLab = lazy(() =>
   import("./machine-lab.js").then((module) => ({ default: module.MachineLab })),
 );
@@ -1016,6 +1019,8 @@ export function DocsApp() {
       <SystemCoverage />
     ) : active === "outliner-lab" ? (
       <OutlinerLab />
+    ) : active === "outline-search-lab" ? (
+      <OutlineSearchLab />
     ) : active === "machine-view" ? (
       <MachineLab />
     ) : experiencePages.some((item) => item.id === active) ? (

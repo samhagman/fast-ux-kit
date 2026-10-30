@@ -192,6 +192,12 @@ export type OutlineCommand<T = unknown> =
       readonly id: string;
       readonly parentId: string | null;
       readonly index?: number;
+    }
+  | {
+      /** A complete permutation of one immediate sibling list; never inserts or removes data. */
+      readonly type: "reorder";
+      readonly parentId: string | null;
+      readonly ids: readonly string[];
     };
 
 export type OutlineCommandFailure =
@@ -286,6 +292,7 @@ function subtreeLocked<T>(
  * Immutable document commands. A failed command always returns the exact original roots.
  * A move index is measured in destination siblings AFTER removing the source; omission appends.
  * Locked ancestors prevent edits; remove/move also protect every descendant of the source.
+ * Reorder accepts an exact sibling permutation and protects every displaced subtree.
  */
 export function applyOutlineCommand<T>(
   nodes: readonly OutlineNode<T>[],
@@ -312,7 +319,7 @@ export function applyOutlineCommand<T>(
   )
     return fail("invalid-command");
   if (
-    (command.type === "insert" || command.type === "move") &&
+    (command.type === "insert" || command.type === "move" || command.type === "reorder") &&
     command.parentId !== null &&
     typeof command.parentId !== "string"
   )
@@ -329,6 +336,47 @@ export function applyOutlineCommand<T>(
     item.ancestors.some(isLocked) || isLocked(item.node);
   const validIndex = (index: number, length: number) =>
     Number.isInteger(index) && index >= 0 && index <= length;
+  if (command.type === "reorder") {
+    const parent = command.parentId === null ? undefined : locate(nodes, command.parentId);
+    if (command.parentId !== null && !parent) return fail("not-found");
+    if (parent && protectedLocation(parent)) return fail("locked");
+    const siblings = parent ? (parent.node.children ?? []) : nodes;
+    const order: string[] = [];
+    const positions = new Map<string, number>();
+    // Validate own data entries before consuming any array methods. Holes, accessors,
+    // duplicates and a huge mismatched length must fail atomically, not throw or scan.
+    try {
+      const idsDescriptor = Object.getOwnPropertyDescriptor(command, "ids");
+      const requested = idsDescriptor && "value" in idsDescriptor ? idsDescriptor.value : undefined;
+      if (!Array.isArray(requested)) return fail("invalid-command");
+      const length = Object.getOwnPropertyDescriptor(requested, "length")?.value;
+      if (length !== siblings.length) return fail("invalid-command");
+      for (let index = 0; index < length; index++) {
+        const entry = Object.getOwnPropertyDescriptor(requested, String(index));
+        if (
+          !entry ||
+          !("value" in entry) ||
+          typeof entry.value !== "string" ||
+          positions.has(entry.value)
+        )
+          return fail("invalid-command");
+        order.push(entry.value);
+        positions.set(entry.value, index);
+      }
+    } catch {
+      return fail("invalid-command");
+    }
+    if (positions.size !== siblings.length || siblings.some((node) => !positions.has(node.id)))
+      return fail("invalid-command");
+    const changed = siblings.filter((node, index) => positions.get(node.id) !== index);
+    if (!changed.length) return { ok: true, nodes };
+    // Sorting may displace a protected sibling without naming it as a move source.
+    // Check every changed placement, including each root's protected descendants.
+    if (changed.some((node) => subtreeLocked(node, isLocked))) return fail("locked");
+    const byId = new Map(siblings.map((node) => [node.id, node]));
+    const reordered = order.map((id) => byId.get(id)!);
+    return { ok: true, nodes: replaceChildren(nodes, parent?.path ?? [], reordered) };
+  }
   if (command.type === "update" || command.type === "remove" || command.type === "move") {
     const source = locate(nodes, command.id);
     if (!source) return fail("not-found");
@@ -418,3 +466,6 @@ export * from "./text-intelligence.js";
 export * from "./keymap.js";
 
 export * from "./hover.js";
+
+export * from "./outline-productivity.js";
+export * from "./outline-search.js";

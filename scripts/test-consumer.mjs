@@ -24,6 +24,9 @@ try {
   assert.ok(paths.includes("dist/components/ark-advanced.css"));
   assert.ok(paths.includes("dist/core/machine/index.js"));
   assert.ok(paths.includes("dist/react/machine-view.css"));
+  assert.ok(paths.includes("dist/react/outline-search.css"));
+  assert.ok(paths.includes("dist/core/outline-search.d.ts"));
+  assert.ok(paths.includes("dist/core/outline-productivity.d.ts"));
   assert.ok(
     paths.every((path) => /^(dist\/|docs\/|README\.md$|NOTICE\.md$|package\.json$)/.test(path)),
     `Unexpected package files: ${paths}`,
@@ -46,7 +49,7 @@ try {
     join(fixture, "without-ark.mjs"),
     `import assert from 'node:assert/strict';
 import {validateOutline} from '@samhagman/fast-ux-kit/core';
-import {Outliner, MachineView} from '@samhagman/fast-ux-kit';
+import {Outliner, MachineView, OutlineSearch, searchOutline} from '@samhagman/fast-ux-kit';
 import {createMachineSnapshot} from '@samhagman/fast-ux-kit/machine';
 import {Button} from '@samhagman/fast-ux-kit/aria';
 import {Button as StyledButton, ColorPicker, DatePicker, Select, Primitives} from '@samhagman/fast-ux-kit/components/aria';
@@ -57,6 +60,8 @@ assert.match(renderToString(createElement(ColorPicker, {label:'Accent',defaultVa
 assert.ok(DatePicker && Select && Primitives.Table);
 assert.deepEqual(validateOutline([{id:'one',text:'One'}]),[]);
 assert.equal(typeof Outliner,'function');assert.ok(Button);
+assert.deepEqual(searchOutline([{id:'one',text:'One'}],'one').matchedIds,['one']);
+assert.match(renderToString(createElement(OutlineSearch,{nodes:[{id:'one',text:'One',data:{note:'Packed note'}}],defaultQuery:'note'})),/1 result/);
 const machine={version:1,rootId:'main',machines:[{id:'main',label:'Consumer machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
 assert.deepEqual(createMachineSnapshot(machine).activeIds,['idle']);
 assert.match(renderToString(createElement(MachineView,{value:machine,readOnly:true})),/Consumer machine/);
@@ -79,10 +84,17 @@ console.log('Core, React reader and RAC entry work with Ark absent.');`,
     join(fixture, "consumer.tsx"),
     `import {createElement, createRef} from 'react';
 import {renderToString} from 'react-dom/server';
-import {Outliner, OutlineEditor, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle, MachineView, type MachineDocument, createMachineSnapshot} from '@samhagman/fast-ux-kit';
+import {Outliner, OutlineEditor, OutlineSearch, RichContent, importMarkdownDocument, createReferenceCompletionProvider, createOutlineEditorState, reduceOutlineEditor, createOutlineJSONCodec, encodeOutline, decodeOutline, searchOutline, outlineTagInventory, projectOutline, applyOutlineSort, type OutlineNode, type OutlinePlugin, type OutlineCodec, type OutlineEditorHandle, type OutlineItemDetails, MachineView, type MachineDocument, createMachineSnapshot} from '@samhagman/fast-ux-kit';
 import {Button, Field, Pagination, ColorPicker, DatePicker, Table, componentManifest} from '@samhagman/fast-ux-kit/components';
 import {Pagination as AdvancedPagination} from '@samhagman/fast-ux-kit/ark';
 const nodes: readonly OutlineNode[] = [{id:'root',text:'Root',children:[{id:'child',text:'Child'}]}];
+const detailed: readonly OutlineNode<OutlineItemDetails>[] = [{id:'b',text:'Beta #review',data:{note:'Reusable note',completed:true,checkbox:false}},{id:'a',text:'Alpha'}];
+if(searchOutline(detailed,'has:note').matchedIds[0]!=='b') throw Error('Search export failed');
+if(outlineTagInventory(detailed)[0]?.key!=='#review') throw Error('Tag export failed');
+if(projectOutline(detailed,{hideCompleted:true}).length!==1) throw Error('View projection failed');
+const reordered=applyOutlineSort(createOutlineEditorState(detailed),{parentId:null,by:'title'},{readOnly:false});
+if(reordered.nodes[0]?.id!=='a'||reordered.history.past.length!==1) throw Error('Atomic sort failed');
+if(!renderToString(<OutlineSearch nodes={detailed} defaultQuery="note"/>).includes('1 result')) throw Error('Search SSR failed');
 const plugin: OutlinePlugin = {id:'consumer-plugin',beforeAction:action=>action,keymap:(event,context)=>event.key==='F2'?{type:'transaction',commands:[{type:'update',id:context.rowId,changes:{text:'Updated by extension'}}]}:undefined};
 const codec: OutlineCodec = createOutlineJSONCodec();
 if(decodeOutline(encodeOutline(nodes,codec),codec)[0]?.id!=='root') throw Error('Codec roundtrip failed');

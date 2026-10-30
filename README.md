@@ -200,6 +200,21 @@ See [editor API](docs/OUTLINER_API.md) and [behavior coverage](docs/PARITY.md) f
 exact supported semantics, optimistic host synchronization, tests and remaining
 platform gaps. No source pane is enabled merely by viewing a document.
 
+## Optional local search and productivity
+
+`OutlineSearch` adds a read-only local search surface without activating an editor
+or changing the canonical outline. It supports context and flat results, safe
+source-coordinate highlights, note display and completion filters. Portable
+`searchOutline`, `getOutlineItemDetails`, `outlineTagInventory`, `projectOutline`
+and `applyOutlineSort` keep query, metadata, view and mutation responsibilities
+separate. Sorting is an atomic authorized editor transaction; filtering is not.
+
+See [search reader contracts](docs/OUTLINE_SEARCH.md) and
+[portable productivity tools](docs/OUTLINE_PRODUCTIVITY.md). The optional
+`outline-search-lab` documentation route uses synthetic local state with explicit
+editing, lock refusals and undo. There is no workspace-wide search service,
+persistence, collaboration or relative-date parser implied by these APIs.
+
 ## Documentation playground
 
 `npm run docs:build` builds the documentation and live component playground into
