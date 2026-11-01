@@ -118,7 +118,7 @@ test("queries without filters go straight to the core (aliases included)", () =>
 
 test("hints complete the token being typed: operators, then their values", () => {
   const labels = (query) => mod.searchSuggestions(query, NOW).map((s) => s.label);
-  assert.deepEqual(labels("du"), ["due:"]);
+  assert.deepEqual(labels("du"), ["due:", "during:"], "due: first; during: (date spans) after it");
   assert.deepEqual(labels("#docs due:"), ["due:today", "due:overdue", "due:week", "due:tomorrow", "due:none"]);
   assert.deepEqual(labels("due:to"), ["due:today", "due:tomorrow"]);
   assert.deepEqual(labels("-due:o"), ["-due:overdue"]);

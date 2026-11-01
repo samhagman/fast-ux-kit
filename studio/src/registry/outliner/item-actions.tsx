@@ -11,7 +11,9 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Kanban,
   Link2,
+  List,
   ListOrdered,
   MousePointerClick,
   MoveRight,
@@ -27,6 +29,9 @@ import { cn } from "@/lib/utils";
 import { useOutlinerContext, usePlatformKeys } from "./context";
 import { COLOR_STYLES, OUTLINE_COLORS, type OutlineItem } from "./types";
 import type { OutlinerRow } from "./use-outliner";
+import { isBoard } from "./board";
+import { primaryShortcut, type ShortcutId } from "./keymap";
+import type { OutlinerItemCommand } from "./seams";
 
 /**
  * The ONE definition of what you can do to an item. The ⋯ dropdown, the right-click context
@@ -71,9 +76,11 @@ export function deleteItems({ ol, ui }: ReturnType<typeof useOutlinerContext>, i
 }
 
 export function useItemActions(ids: readonly string[], row: OutlinerRow): readonly ItemEntry[] {
-  const { modKey, shift, alt } = usePlatformKeys();
+  const { isMac } = usePlatformKeys();
   const context = useOutlinerContext();
   const { ol, ui } = context;
+  // Menu hints follow the active keyboard profile and remaps.
+  const keys = (id: ShortcutId) => primaryShortcut(ui.keymap, id, isMac);
   const L = ui.labels;
   const editable = !ol.readOnly && !row.locked;
   const many = ids.length > 1;
@@ -97,7 +104,7 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
       id: "complete",
       label: row.completed ? L.markIncomplete : L.complete,
       icon: <CircleCheck />,
-      shortcut: `${modKey}↵`,
+      shortcut: keys("complete"),
       disabled: !editable,
       run: () => ui.announceToggle(ol.commands.toggleComplete(ids)),
     },
@@ -106,7 +113,7 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
       id: "checkbox",
       label: row.details.checkbox ? L.removeCheckbox : L.addCheckbox,
       icon: <CheckSquare />,
-      shortcut: `${shift}${modKey}C`,
+      shortcut: keys("checkbox"),
       disabled: !editable,
       run: () => ol.commands.toggleCheckbox(ids),
     },
@@ -115,7 +122,7 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
       id: "note",
       label: row.details.note ? L.editNote : L.addNote,
       icon: <StickyNote />,
-      shortcut: `${shift}↵`,
+      shortcut: isMac ? "⇧↵" : "Shift ↵",
       disabled: !editable,
       run: () => {
         ol.dispatch({ type: "focus", id: row.id, field: "note", start: (row.details.note ?? "").length });
@@ -136,12 +143,12 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
             id: `h${level}`,
             label: L.heading(level),
             icon: headingIcon(level),
-            shortcut: `${alt}${modKey}${level}`,
+            shortcut: keys(`heading${level}`),
             current: row.details.heading === level,
             run: () => ol.commands.setHeading(ids, row.details.heading === level ? undefined : level),
           }),
         ),
-        { kind: "action", id: "h0", label: L.normalText, icon: <Text />, shortcut: `${alt}${modKey}0`, run: () => ol.commands.setHeading(ids, undefined) },
+        { kind: "action", id: "h0", label: L.normalText, icon: <Text />, shortcut: keys("heading0"), run: () => ol.commands.setHeading(ids, undefined) },
         sep("f1"),
         {
           kind: "action",
@@ -186,11 +193,27 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
           { kind: "action", id: "sort-done", label: L.sortCompletion, run: () => ol.commands.sortChildren(row.id, "completion") },
           { kind: "action", id: "sort-date", label: L.sortDate, run: () => ol.commands.sortChildren(row.id, "date") },
           { kind: "action", id: "sort-date-desc", label: L.sortDateDesc, run: () => ol.commands.sortChildren(row.id, "date", "descending") },
+          { kind: "action", id: "sort-created", label: L.sortCreatedDesc, run: () => ol.commands.sortChildren(row.id, "created", "descending") },
+          { kind: "action", id: "sort-created-asc", label: L.sortCreated, run: () => ol.commands.sortChildren(row.id, "created") },
+          { kind: "action", id: "sort-edited", label: L.sortEditedDesc, run: () => ol.commands.sortChildren(row.id, "edited", "descending") },
           { kind: "action", id: "sort-reverse", label: L.sortReverse, run: () => ol.commands.sortChildren(row.id, "reverse") },
         ],
       },
     sep("s2"),
-    !many && { kind: "action", id: "zoom", label: L.zoomIn, icon: <Focus />, shortcut: `${modKey}]`, run: () => ol.dispatch({ type: "hoist", id: row.id }) },
+    !many && { kind: "action", id: "zoom", label: L.zoomIn, icon: <Focus />, shortcut: keys("zoomIn"), run: () => ol.dispatch({ type: "hoist", id: row.id }) },
+    !many && {
+      kind: "action",
+      id: "view",
+      label: isBoard(row.node) ? L.viewAsList : L.viewAsBoard,
+      icon: isBoard(row.node) ? <List /> : <Kanban />,
+      disabled: !editable,
+      run: () => {
+        const board = !isBoard(row.node);
+        ol.commands.setView([row.id], board ? "board" : "list");
+        // Turning an item into a board opens it: the board is what you asked to see.
+        if (board) ol.dispatch({ type: "hoist", id: row.id });
+      },
+    },
     row.hasChildren &&
       !many && {
         kind: "action",
@@ -214,7 +237,7 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
       id: "move",
       label: L.moveTo,
       icon: <MoveRight />,
-      shortcut: `${shift}${modKey}M`,
+      shortcut: keys("moveTo"),
       disabled: !editable,
       run: () => openPalette(context, ids, "move"),
     },
@@ -232,10 +255,10 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
       id: "link",
       label: L.copyLink,
       icon: <Link2 />,
-      run: async () => {
-        await navigator.clipboard?.writeText(ol.commands.linkTo(row.id));
-        toast.success(L.copiedLink);
-      },
+      shortcut: keys("copyLink"),
+      // A deep link (`?zoom=<id>`, or the host's `linkFor`); pasted into a title it becomes an
+      // item link again.
+      run: () => ui.copyLink(row.id),
     },
     {
       kind: "action",
@@ -243,10 +266,12 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
       label: L.copyMarkdown,
       icon: <ClipboardCopy />,
       run: async () => {
-        await navigator.clipboard?.writeText(ol.commands.exportAs("markdown", ids));
+        await navigator.clipboard?.writeText(ol.commands.copyMarkdown(ids));
         toast.success(L.copiedMarkdown);
       },
     },
+    // Integrations: the host's own actions on these items (SEAMS.md).
+    ...hostCommands(ui.host.itemCommands?.(ids) ?? [], ids),
     sep("s3"),
     {
       kind: "action",
@@ -260,6 +285,21 @@ export function useItemActions(ids: readonly string[], row: OutlinerRow): readon
     },
   ];
   return entries.filter(Boolean) as ItemEntry[];
+}
+
+function hostCommands(commands: readonly OutlinerItemCommand[], ids: readonly string[]): ItemEntry[] {
+  if (!commands.length) return [];
+  return [
+    sep("host"),
+    ...commands.map((command): ItemEntry => ({
+      kind: "action",
+      id: `host-${command.id}`,
+      label: command.label,
+      icon: command.icon,
+      disabled: command.disabled,
+      run: () => command.run(ids),
+    })),
+  ];
 }
 
 function openPalette({ ol, ui }: ReturnType<typeof useOutlinerContext>, ids: readonly string[], mode: "move" | "mirror") {

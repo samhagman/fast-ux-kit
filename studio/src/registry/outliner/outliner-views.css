@@ -1,0 +1,85 @@
+/* Article, mind map and print: rules utilities can't express. */
+
+/* Mind-map edges: hairline curves; first-level branches a touch stronger. */
+.ol-mindmap .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--foreground) 22%, transparent);
+  stroke-width: 1.25;
+  fill: none;
+}
+.ol-mindmap .ol-mind-edge-branch .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--foreground) 34%, transparent);
+  stroke-width: 1.5;
+}
+.ol-mindmap .react-flow__node {
+  /* Nodes draw their own focus ring (the map is one tab stop). */
+  outline: none;
+}
+.ol-mindmap .react-flow__pane {
+  cursor: grab;
+}
+.ol-mindmap .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+/* ───────── Print / Save as PDF ───────── */
+/* The print copy exists only while printing, and only on paper. */
+.ol-print-root {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 16mm 15mm 18mm;
+  }
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body > :not(.ol-print-root) {
+    display: none !important;
+  }
+  .ol-print-root {
+    display: block;
+    /* Paper is light whatever the screen theme (sRGB mixes only: no hue shift on neutrals). */
+    --background: #fff;
+    --surface: #fff;
+    --foreground: #16171d;
+    --muted: #f2f3f5;
+    --muted-foreground: #5d6170;
+    --border: #d9dbe0;
+    --hairline: #e4e6ea;
+    --signal: #2f4fc4;
+    --signal-foreground: #fff;
+    --signal-muted: rgb(47 79 196 / 0.1);
+    color-scheme: light;
+    color: var(--foreground);
+    background: #fff;
+    font-family: var(--font-sans);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .ol-print-root a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  }
+  /* Headings stay with what follows; figures, tables and code never split mid-line. */
+  .ol-print-root h1,
+  .ol-print-root h2,
+  .ol-print-root h3,
+  .ol-print-root h4,
+  .ol-print-root h5 {
+    break-after: avoid-page;
+  }
+  .ol-print-root [data-code-block],
+  .ol-print-root table,
+  .ol-print-root img,
+  .ol-print-root [data-math="block"] {
+    break-inside: avoid;
+  }
+  .ol-print-root pre {
+    white-space: pre-wrap;
+    overflow: visible;
+  }
+}

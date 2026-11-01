@@ -4,16 +4,38 @@ import { mirrorOf } from "./mirrors";
 import { OUTLINE_COLORS, type OutlineExportFormat, type OutlineItem, type OutlineItemData } from "./types";
 
 /**
- * Lossless-where-possible interchange. Markdown and OPML carry title, note, checkbox,
- * completion and heading; colors and numbering survive only in JSON (and OPML attributes).
+ * Lossless-where-possible interchange.
+ *
+ *   JSON      everything (the outline as stored)
+ *   OPML      title, note, checkbox, completion, heading, colour, view (attributes)
+ *   Markdown  title, note, checkbox, completion, heading; view, colour, numbering and the
+ *             created / edited times ride in an HTML comment at the end of the item's line,
+ *             invisible where Markdown is rendered:
+ *               - [x] Ship it <!-- ol view=board color=red numbered created=2026-10-31T09:00:00.000Z -->
+ *   Text      title, note, checkbox, completion, heading; one tab per level, note lines one
+ *             level deeper and quoted:
+ *               Plan
+ *               \t> a note line
+ *               \tChild
+ *
+ * A title that would read back as markup ("[x] literal", "# not a heading", "~~struck~~",
+ * "> not a note", "- not a bullet") is written with a leading backslash, which the import removes again, so
+ * plain titles always come back as written. Markdown drops blank lines at the very start of
+ * a note; mirrors are written once, as links to their source. Markdown copied to the clipboard
+ * for other apps leaves the metadata comments out (the outliner's own clipboard flavour is JSON).
  */
-export function exportOutline(nodes: readonly OutlineItem[], format: OutlineExportFormat): string {
+export function exportOutline(
+  nodes: readonly OutlineItem[],
+  format: OutlineExportFormat,
+  /** `metadata: false`: Markdown for other apps' clipboards, without the metadata comments. */
+  options: { readonly metadata?: boolean } = {},
+): string {
   switch (format) {
     case "json":
       // Lossless: mirrors keep `mirrorOf` and their copies (a paste re-links or keeps the content).
       return exportOutlineJSON(nodes);
     case "markdown":
-      return toMarkdown(mirrorsAsLinks(nodes));
+      return toMarkdown(mirrorsAsLinks(nodes), 0, options.metadata !== false);
     case "opml":
       return toOpml(mirrorsAsLinks(nodes));
     case "text":
@@ -102,32 +124,94 @@ function completed(node: OutlineItem) {
   return node.checked === true || node.data?.completed === true;
 }
 
-function toMarkdown(nodes: readonly OutlineItem[], depth = 0): string {
+/** A title that an import would read as markup: a checkbox, heading, strike, quoted note or bullet. */
+const TITLE_MARKUP = /^\\*(?:\[[ xX]\][ \t]|#{1,6}[ \t]|~~.+~~$|>|[-*+][ \t]|\d+[.)][ \t])/;
+const escapeTitle = (title: string) => (TITLE_MARKUP.test(title) ? `\\${title}` : title);
+const unescapeTitle = (title: string) => (title.startsWith("\\") && TITLE_MARKUP.test(title) ? title.slice(1) : title);
+/** The item metadata comment (Markdown); `$` anchored, so only the line's last comment counts. */
+const META = /[ \t]*<!-- ol((?: [a-z]+(?:=[^\s>]+)?)*) -->$/;
+const ISO = (ms: number) => new Date(ms).toISOString();
+function metaComment(node: OutlineItem): string {
+  const data = node.data;
+  const parts: string[] = [];
+  if (data?.view && data.view !== "list") parts.push(`view=${data.view}`);
+  if (data?.color) parts.push(`color=${data.color}`);
+  if (data?.numbered) parts.push("numbered");
+  if (typeof data?.createdAt === "number" && Number.isFinite(data.createdAt)) parts.push(`created=${ISO(data.createdAt)}`);
+  if (typeof data?.editedAt === "number" && Number.isFinite(data.editedAt)) parts.push(`edited=${ISO(data.editedAt)}`);
+  // A title that itself ends like a comment gets an (empty) one after it, so it stays the title's.
+  if (!parts.length && !META.test(node.text)) return "";
+  return ` <!-- ol${parts.map((part) => ` ${part}`).join("")} -->`;
+}
+/** Read (and strip) the metadata comment at the end of a line. */
+function readMeta(line: string): { readonly line: string; readonly data: OutlineItemData } {
+  const match = META.exec(line);
+  if (!match) return { line, data: {} };
+  const data: { -readonly [K in keyof OutlineItemData]: OutlineItemData[K] } = {};
+  for (const part of match[1]!.trim().split(" ").filter(Boolean)) {
+    const [key, value = ""] = part.split("=");
+    if (key === "view" && (value === "board" || value === "article" || value === "mindmap")) data.view = value;
+    else if (key === "color" && (OUTLINE_COLORS as readonly string[]).includes(value)) data.color = value as OutlineItemData["color"];
+    else if (key === "numbered") data.numbered = true;
+    else if (key === "created" || key === "edited") {
+      const ms = Date.parse(value);
+      if (Number.isFinite(ms)) data[key === "created" ? "createdAt" : "editedAt"] = ms;
+    }
+  }
+  return { line: line.slice(0, match.index), data };
+}
+
+/** The checkbox, heading and title of an item's line, as Markdown and text both write it. */
+function itemLine(node: OutlineItem): string {
+  const box = node.checked !== undefined ? (node.checked ? "[x] " : "[ ] ") : "";
+  const heading = node.data?.heading ? "#".repeat(node.data.heading) + " " : "";
+  const text = escapeTitle(node.text);
+  const title = completed(node) && node.checked === undefined ? `~~${text}~~` : text;
+  return `${box}${heading}${title}`;
+}
+
+function toMarkdown(nodes: readonly OutlineItem[], depth = 0, metadata = true): string {
   const lines: string[] = [];
   for (const node of nodes) {
     const pad = "  ".repeat(depth);
-    const box = node.checked !== undefined ? (node.checked ? "[x] " : "[ ] ") : "";
-    const heading = node.data?.heading ? "#".repeat(node.data.heading) + " " : "";
-    const title = completed(node) && node.checked === undefined ? `~~${node.text}~~` : node.text;
-    lines.push(`${pad}- ${box}${heading}${title}`);
-    for (const line of (node.data?.note ?? "").split("\n").filter(Boolean))
-      lines.push(`${pad}  ${line}`);
-    if (node.children?.length) lines.push(toMarkdown(node.children, depth + 1));
+    lines.push(`${pad}- ${itemLine(node)}${metadata ? metaComment(node) : ""}`);
+    // Rich notes keep their shape: blank lines, inner indentation (code, nested lists) and list
+    // markers (escaped, so they stay note lines instead of becoming child items on import).
+    const note = (node.data?.note ?? "").replace(/\s+$/, "");
+    if (note) for (const line of note.split("\n")) lines.push(line.trim() ? `${pad}  ${escapeNoteLine(line)}` : "");
+    const children = node.children?.length ? toMarkdown(node.children, depth + 1, metadata) : "";
+    if (children) lines.push(children);
   }
-  return lines.filter(Boolean).join("\n");
+  return lines.join("\n");
+}
+
+/** A note line that reads as a list item (`- x`, `1. x`) gets one more leading backslash. */
+const NOTE_BULLET = /^\\*[ \t]*(?:[-*+]|\d+[.)])[ \t]+\S/;
+const escapeNoteLine = (line: string) => (NOTE_BULLET.test(line) ? `\\${line}` : line);
+const unescapeNoteLine = (line: string) => (line.startsWith("\\") && NOTE_BULLET.test(line) ? line.slice(1) : line);
+
+/** Remove up to `columns` of leading indentation (a tab counts four). */
+function dedent(raw: string, columns: number): string {
+  let at = 0,
+    width = 0;
+  while (at < raw.length && width < columns && (raw[at] === " " || raw[at] === "\t")) {
+    width += raw[at] === "\t" ? 4 : 1;
+    at++;
+  }
+  return raw.slice(at);
 }
 
 function toText(nodes: readonly OutlineItem[], depth = 0): string {
-  return nodes
-    .map((node) =>
-      [
-        "\t".repeat(depth) + node.text,
-        node.children?.length ? toText(node.children, depth + 1) : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    )
-    .join("\n");
+  const lines: string[] = [];
+  for (const node of nodes) {
+    const pad = "\t".repeat(depth);
+    // A title ending like a metadata comment keeps it: an empty one follows (see metaComment).
+    lines.push(pad + itemLine(node) + (META.test(node.text) ? " <!-- ol -->" : ""));
+    const note = (node.data?.note ?? "").replace(/\s+$/, "");
+    if (note) for (const line of note.split("\n")) lines.push(`${pad}\t>${line ? ` ${line}` : ""}`);
+    if (node.children?.length) lines.push(toText(node.children, depth + 1));
+  }
+  return lines.join("\n");
 }
 
 const xml = (value: string) => value.replace(/[&<>"'\n\r\t]/g, (char) => `&#${char.charCodeAt(0)};`);
@@ -144,6 +228,7 @@ function toOpml(nodes: readonly OutlineItem[]): string {
           node.checked !== undefined ? `_checkbox="true"` : "",
           node.data?.color ? `colorLabel="${node.data.color}"` : "",
           node.data?.heading ? `_heading="${node.data.heading}"` : "",
+          node.data?.view && node.data.view !== "list" ? `_view="${node.data.view}"` : "",
         ]
           .filter(Boolean)
           .join(" ");
@@ -184,6 +269,8 @@ function fromOpml(source: string, createId: () => string): OutlineItem[] {
     if (color && (OUTLINE_COLORS as readonly string[]).includes(color)) data.color = color as OutlineItemData["color"];
     const heading = Number(element.getAttribute("_heading"));
     if (heading === 1 || heading === 2 || heading === 3) data.heading = heading;
+    const view = element.getAttribute("_view");
+    if (view === "board" || view === "article" || view === "mindmap") data.view = view;
     const checkbox = element.getAttribute("_checkbox") === "true";
     const complete = element.getAttribute("_complete") === "true";
     if (complete && !checkbox) data.completed = true;
@@ -209,20 +296,40 @@ function fromOpml(source: string, createId: () => string): OutlineItem[] {
 function fromIndented(source: string, createId: () => string): OutlineItem[] {
   type Mutable = { id: string; text: string; checked?: boolean; data?: OutlineItemData; children: Mutable[] };
   const roots: Mutable[] = [];
-  const stack: { indent: number; node: Mutable; bulleted: boolean }[] = [];
+  const stack: { indent: number; content: number; node: Mutable; bulleted: boolean }[] = [];
+  let blanks = 0;
   for (const raw of source.replace(/\r\n?/g, "\n").split("\n")) {
-    if (!raw.trim()) continue;
+    if (!raw.trim()) {
+      blanks++;
+      continue;
+    }
+    const gap = blanks;
+    blanks = 0;
     const indent = raw.match(/^[\t ]*/)![0].replace(/\t/g, "    ").length;
     let line = raw.trim();
     const bullet = /^(?:[-*+]|\d+[.)])\s+/.exec(line);
-    if (!bullet && stack.length && indent > stack.at(-1)!.indent && stack.at(-1)!.bulleted) {
-      // Continuation lines under a bullet become that item's note.
+    // Text export's note lines: quoted, one level under a plain (unbulleted) item.
+    if (!bullet && stack.length && indent > stack.at(-1)!.indent && !stack.at(-1)!.bulleted && /^>(?: |$)/.test(line)) {
       const owner = stack.at(-1)!.node;
-      owner.data = { ...owner.data, note: [owner.data?.note, line].filter(Boolean).join("\n") };
+      const text = raw.trimStart().replace(/^> ?/, "").trimEnd();
+      const previous = owner.data?.note;
+      owner.data = { ...owner.data, note: previous !== undefined ? previous + "\n" + text : text };
+      continue;
+    }
+    if (!bullet && stack.length && indent > stack.at(-1)!.indent && stack.at(-1)!.bulleted) {
+      // Continuation lines under a bullet become that item's note, keeping their indentation
+      // past the item's text column and the blank lines between them (rich notes).
+      const top = stack.at(-1)!;
+      const owner = top.node;
+      const text = unescapeNoteLine(dedent(raw, top.content).trimEnd());
+      const previous = owner.data?.note;
+      owner.data = { ...owner.data, note: previous ? previous + "\n".repeat(gap + 1) + text : text };
       continue;
     }
     if (bullet) line = line.slice(bullet[0].length);
-    const node: Mutable = { id: createId(), text: line, children: [] };
+    const meta = readMeta(line);
+    line = meta.line;
+    const node: Mutable = { id: createId(), text: line, children: [], ...(Object.keys(meta.data).length ? { data: meta.data } : {}) };
     const box = /^\[( |x|X)\]\s+/.exec(line);
     if (box) {
       node.checked = box[1] !== " ";
@@ -230,7 +337,7 @@ function fromIndented(source: string, createId: () => string): OutlineItem[] {
     }
     const heading = /^(#{1,3})\s+/.exec(node.text);
     if (heading) {
-      node.data = { heading: heading[1]!.length as 1 | 2 | 3 };
+      node.data = { ...node.data, heading: heading[1]!.length as 1 | 2 | 3 };
       node.text = node.text.slice(heading[0].length);
     }
     // A wholly struck-through title is how Markdown export writes "done" without a checkbox.
@@ -239,9 +346,11 @@ function fromIndented(source: string, createId: () => string): OutlineItem[] {
       node.data = { ...node.data, completed: true };
       node.text = struck[1]!;
     }
+    // "\[x] literal", "\# not a heading": the backslash only kept the markup literal.
+    node.text = unescapeTitle(node.text);
     while (stack.length && stack.at(-1)!.indent >= indent) stack.pop();
     (stack.at(-1)?.node.children ?? roots).push(node);
-    stack.push({ indent, node, bulleted: !!bullet });
+    stack.push({ indent, content: indent + (bullet?.[0].length ?? 0), node, bulleted: !!bullet });
   }
   const freeze = (items: Mutable[]): OutlineItem[] =>
     items.map(({ children, ...rest }) => ({
@@ -283,18 +392,32 @@ function inlineHtml(source: string, resolveRef?: (id: string) => string | null):
           return `<code>${text}</code>`;
         case "highlight":
           return `<mark>${text}</mark>`;
+        case "math":
+          // TeX stays TeX between dollars (what math-aware editors paste back as a formula).
+          return `$${text}$`;
         case "link":
         case "url":
           return segment.href && SAFE_HREF.test(segment.href) ? `<a href="${esc(segment.href)}">${text}</a>` : text;
         case "date": {
           if (!segment.date) return text;
-          const token = formatDateToken(segment.date.value, segment.date.hasTime).slice(2, -1);
+          // The time as written (a wall time in a daylight-saving gap is not the instant's clock).
+          const token = formatDateToken(segment.date.value, segment.date.hasTime, undefined, { time: segment.date.time }).slice(2, -1);
           // Absolute text (a pasted "Tomorrow" would be wrong tomorrow); the rule rides along.
           const repeat = segment.date.repeat ? ` data-repeat="${esc(formatRepeatToken(segment.date.repeat))}"` : "";
+          if (segment.date.end) {
+            // A range: the start is the <time>, its end rides along (and reads after an arrow).
+            const end = { value: segment.date.end, hasTime: !!segment.date.endHasTime };
+            const endToken = formatDateToken(end.value, end.hasTime).slice(2, -1).replace(" ", "T");
+            return `<time datetime="${esc(token.replace(" ", "T"))}" data-end="${esc(endToken)}">${esc(absoluteDate(segment.date))} → ${esc(absoluteDate(end))}</time>`;
+          }
           return `<time datetime="${esc(token.replace(" ", "T"))}"${repeat}>${esc(absoluteDate(segment.date))}</time>`;
         }
         case "ref":
-          return esc((segment.refId && resolveRef?.(segment.refId)) || segment.display);
+          // An internal link stays a link (`#<item id>`, which a host can route), labelled with
+          // the target's current title.
+          return segment.refId
+            ? `<a href="#${esc(encodeURIComponent(segment.refId))}">${esc(resolveRef?.(segment.refId) || segment.display)}</a>`
+            : esc(segment.display);
         default:
           return text;
       }
@@ -370,6 +493,9 @@ function inlineMarkup(node: Node, styled = false): string {
     const value = el.getAttribute("datetime") ?? "";
     const date = parseDateToken(`!(${value.replace("T", " ").slice(0, 16)})`) ?? parseDateToken(`!(${value.slice(0, 10)})`);
     const repeat = parseRepeat(el.getAttribute("data-repeat") ?? "") ?? undefined;
+    const endValue = el.getAttribute("data-end") ?? "";
+    const end = endValue ? (parseDateToken(`!(${endValue.replace("T", " ").slice(0, 16)})`) ?? parseDateToken(`!(${endValue.slice(0, 10)})`)) : null;
+    if (date && end && end.value >= date.value) return formatDateToken(date.value, date.hasTime, undefined, { end: end.value, endHasTime: end.hasTime });
     if (date) return formatDateToken(date.value, date.hasTime, repeat);
   }
   const inner = [...el.childNodes].map((child) => inlineMarkup(child, styled || !!markOf(el))).join("");

@@ -3,6 +3,9 @@ import { useApplePlatform } from "@/lib/platform";
 import type { OutlinerController } from "./use-outliner";
 import type { OutlinerLabels } from "./labels";
 import type { DateRepeat } from "./inline";
+import type { OutlinerSettings } from "./settings";
+import type { Keymap, ReservedShortcut } from "./keymap";
+import type { OutlineAttachHandler, OutlinerItemCommands } from "./seams";
 
 export type PaletteMode = "all" | "move" | "mirror";
 
@@ -48,6 +51,87 @@ export interface OutlinerUi {
   readonly returnFocus: (event: Event | null, selectId?: string | null) => void;
   /** Recurring-date and completion feedback for any complete action (row, menu, key, swipe). */
   readonly announceToggle: (summary: import("./use-outliner").ToggleSummary) => void;
+  /** What a host plugged in (a workspace: documents in ⌘K, a title editor, search scope). */
+  readonly host: OutlinerHostSlots;
+  /** The reader's preferences (settings.ts); the settings panel is their one editor. */
+  readonly settings: OutlinerSettings;
+  readonly updateSettings: (patch: Partial<OutlinerSettings>) => void;
+  /** Active shortcuts: the keyboard profile plus remaps (keymap.ts). */
+  readonly keymap: Keymap;
+  readonly settingsOpen: boolean;
+  readonly setSettingsOpen: (open: boolean) => void;
+  readonly findOpen: boolean;
+  readonly setFindOpen: (open: boolean) => void;
+  /** Copy a deep link to an item (host `linkFor`, else `?zoom=`), with a toast. */
+  readonly copyLink: (id: string) => void;
+}
+
+/** One extra ⌘K entry a host contributes (e.g. "Open document · Roadmap"). */
+export interface OutlinerPaletteCommand {
+  readonly id: string;
+  readonly label: string;
+  /** Extra words cmdk matches on (never shown). */
+  readonly keywords?: string;
+  readonly icon?: React.ReactNode;
+  /** Right-aligned, muted (an item count, a shortcut). */
+  readonly hint?: string;
+  readonly run: () => void;
+}
+export interface OutlinerPaletteGroup {
+  readonly heading: string;
+  readonly commands: readonly OutlinerPaletteCommand[];
+}
+
+/**
+ * Search scope a host can offer (a workspace: this document or all documents). While the scope
+ * is "all", the outliner's body shows `renderResults(query)` instead of its own rows.
+ */
+export interface OutlinerSearchScope {
+  readonly value: "document" | "all";
+  readonly onChange: (scope: "document" | "all") => void;
+  readonly renderResults: (query: string) => React.ReactNode;
+  /** Matches across every document, for the count in the search field. */
+  readonly count?: (query: string) => number;
+  /** Told whenever this outline's query changes (a workspace keeps its tag pane in step). */
+  readonly onQueryChange?: (query: string) => void;
+}
+
+/** Starred documents in the bookmarks menu (a workspace host). */
+export interface OutlinerStarredDocuments {
+  readonly items: readonly { readonly id: string; readonly title: string }[];
+  readonly open: (id: string) => void;
+  readonly unstar: (id: string) => void;
+  /** Whether the document this outliner shows is starred, and how to toggle it. */
+  readonly current: boolean;
+  readonly toggleCurrent: () => void;
+}
+
+export interface OutlinerHostSlots {
+  /** Rendered first in the toolbar (a workspace's documents button). */
+  readonly headerStart?: React.ReactNode;
+  /** Makes the document title editable in place. */
+  readonly onTitleChange?: (title: string) => void;
+  readonly paletteGroups?: readonly OutlinerPaletteGroup[];
+  readonly searchScope?: OutlinerSearchScope;
+  /** Extra entries at the top of the ⋯ view menu (a phone's way to host features: Find document…). */
+  readonly menuCommands?: readonly OutlinerPaletteCommand[];
+  /**
+   * Rows dragged out of the outline onto an element marked `data-outline-drop="<target>"` (a
+   * workspace's documents): the host moves them. Return true when it took them.
+   */
+  readonly onExternalDrop?: (ids: readonly string[], target: string) => boolean;
+  /** Starred documents of a workspace, listed in the bookmarks menu beside starred items. */
+  readonly starredDocuments?: OutlinerStarredDocuments;
+  /** A share/deep link for an item (see SEAMS.md); default: this page with `?zoom=<id>`. */
+  readonly linkFor?: (id: string) => string;
+  /** Files pasted or dropped into a field: the host stores them and returns links. */
+  readonly onAttach?: OutlineAttachHandler;
+  /** Opens the host's version history ("Version history…" in ⌘K and the ⋯ menu). */
+  readonly onHistory?: () => void;
+  /** Host actions on items, shown in every item menu and the phone sheet. */
+  readonly itemCommands?: OutlinerItemCommands;
+  /** Keys the host uses itself: remapping refuses them (beyond the outliner's own list). */
+  readonly reservedShortcuts?: readonly ReservedShortcut[];
 }
 
 export interface ActionSheetRequest {
@@ -66,6 +150,11 @@ export interface DatePickerRequest {
   readonly value: Date;
   readonly hasTime: boolean;
   readonly repeat?: DateRepeat;
+  /** The token is a range (`!(start → end)`): its end. */
+  readonly rangeEnd?: Date;
+  readonly rangeEndHasTime?: boolean;
+  /** The time of day as written (see InlineDate.time). */
+  readonly time?: readonly [number, number];
   readonly rect: DOMRect;
 }
 

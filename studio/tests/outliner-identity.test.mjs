@@ -1,4 +1,4 @@
-// Outliner parity and identity: items leaving a mirror keep their id, indented-text import,
+// Outliner identity: items leaving a mirror keep their id, indented-text import,
 // interchange round trips, recurrence anchors, balanced-paren URLs, edit history search and
 // the controlled veto notice.
 //

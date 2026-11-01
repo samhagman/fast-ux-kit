@@ -35,6 +35,9 @@ studio/src
   absolute boxes and orthogonal edge routes with label boxes.
 - **Simulation.** Explicit and local. Guards and actions resolve only through the host's
   `runtime` map; no document string is executed.
+- **Outliner ⇄ host app.** Sharing and permissions, offline sync, version history, file
+  attachments and integrations plug in through typed props, callbacks and the `ref` handle.
+  See [`src/registry/outliner/SEAMS.md`](src/registry/outliner/SEAMS.md).
 
 ## Run
 

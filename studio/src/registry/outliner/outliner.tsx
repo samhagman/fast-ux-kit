@@ -1,11 +1,14 @@
 import * as React from "react";
 import "./outliner.css";
-import { AnimatePresence, LayoutGroup, MotionConfig, motion, useAnimate, useMotionValue, useTransform, animate as animateValue, type PanInfo } from "motion/react";
+import { AnimatePresence, LayoutGroup, MotionConfig, motion, useAnimate, useMotionValue, useMotionValueEvent, useTransform, animate as animateValue } from "motion/react";
 import {
   CalendarDays,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  EyeOff,
+  IndentDecrease,
+  IndentIncrease,
   CircleCheck,
   Command,
   CornerDownRight,
@@ -16,6 +19,12 @@ import {
   Keyboard,
   ListTree,
   Ban,
+  Files,
+  Kanban,
+  Printer,
+  Replace,
+  Settings2,
+  History,
   Lock,
   MoreHorizontal,
   Plus,
@@ -30,7 +39,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createOutlineId, findOutlineNode, getOutlinePath, planOutlineDrop } from "@fux/core";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { textareaAtVisualBoundary, textareaCaretRect } from "@fux/text-geometry";
 import { cn } from "@/lib/utils";
 import { DirectionScope, useResolvedDirection, type Dir } from "@/lib/direction";
@@ -39,33 +48,38 @@ import { motionTokens } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { InlineText, inlineToLabel, inlineToPlain, inlineToSpeech, sourceOffsetFromPoint } from "./inline";
 import { AutocompletePopover, useAutocomplete } from "./autocomplete";
-import { OutlinerContext, useOutlinerContext, usePlatformKeys, type OutlinerUi, type PaletteMode, type ActionSheetRequest } from "./context";
+import {
+  OutlinerContext,
+  useOutlinerContext,
+  usePlatformKeys,
+  type ActionSheetRequest,
+  type OutlinerHostSlots,
+  type OutlinerPaletteCommand,
+  type OutlinerPaletteGroup,
+  type OutlinerStarredDocuments,
+  type OutlinerSearchScope,
+  type OutlinerUi,
+  type PaletteMode,
+} from "./context";
 import type { OutlinerController } from "./use-outliner";
-import { useOutliner, type OutlinerRow, type ToggleSummary, type UseOutlinerOptions } from "./use-outliner";
+import { carryIds, useOutliner, type OutlinerRow, type ToggleSummary, type UseOutlinerOptions } from "./use-outliner";
 import { COLOR_STYLES, type OutlineExportFormat, type OutlineItem } from "./types";
 import { resolveLabels, type OutlinerLabels } from "./labels";
 import { mirrorOf } from "./mirrors";
-import { htmlHasStructure } from "./interchange";
+import { exportOutline, htmlHasStructure } from "./interchange";
+import { isBoard } from "./board";
+import { OutlinerBoard, type BoardParts } from "./outliner-board";
+import { RichContentProvider, RichNote, type OutlineRenderers } from "./rich-note-view";
+import { OutlinerArticle, type ArticleParts } from "./outliner-article";
+import { OutlinerPrintHost, requestPrint } from "./outliner-print";
+import { MindMapSlot, ViewSwitcher, printCurrent, shownView } from "./outliner-views";
 import { searchSuggestions } from "./search-filters";
+import { ResultSortControl } from "./result-sort";
+import { reportImport } from "./outliner-import-report";
 import {
   ItemMenuContent,
   OutlinerActionSheet,
@@ -77,6 +91,19 @@ import {
   OutlinerShortcuts,
   deleteItems,
 } from "./outliner-chrome";
+import { resolveSettings, settingsStyle, type OutlinerSettings } from "./settings";
+import { buildKeymap, isComposingKey, matchShortcut, primaryShortcut, type ReservedShortcut, type ShortcutId } from "./keymap";
+import { useApplePlatform } from "@/lib/platform";
+import { FORMAT_MARKS, runGlobalShortcut, runItemShortcut, showLevels } from "./shortcut-actions";
+import { deepLinkTarget, itemFromHref, itemHref, writeLinkToClipboard } from "./permalink";
+import { attachmentMarkup, type OutlineAttachHandler, type OutlinerItemCommands } from "./seams";
+import { copyDropCommands } from "./copy-drop";
+import { swipeIntent } from "./gestures";
+import { FindReplaceBar } from "./outliner-find-replace";
+import { OutlinerSettingsPanel } from "./outliner-settings";
+import { FoldTasks } from "./outliner-fold-tasks";
+import { ResponsiveMenu, type MenuEntry } from "./outliner-menu";
+import "./outliner-settings.css";
 
 export interface OutlinerProps extends UseOutlinerOptions {
   /** Zoomed item (controlled). Pair with onHoistChange to sync zoom with the URL. */
@@ -94,6 +121,44 @@ export interface OutlinerProps extends UseOutlinerOptions {
   readonly labels?: Partial<OutlinerLabels>;
   /** Imperative handle (React 19 ref-as-prop; same contract forwardRef gave). */
   readonly ref?: React.Ref<OutlinerHandle>;
+  /** Rendered first in the toolbar (e.g. a documents switcher button). */
+  readonly headerStart?: React.ReactNode;
+  /** Makes the document title editable in place; called with the new title. */
+  readonly onTitleChange?: (title: string) => void;
+  /** Extra ⌘K groups (e.g. "Open document"). */
+  readonly paletteGroups?: readonly OutlinerPaletteGroup[];
+  /** Offer a wider search scope (all documents); see OutlinerSearchScope. */
+  readonly searchScope?: OutlinerSearchScope;
+  /** Extra ⋯ view menu entries (see OutlinerHostSlots.menuCommands). */
+  readonly menuCommands?: readonly OutlinerPaletteCommand[];
+  /** Rows dragged onto a `data-outline-drop` target outside the outline (see OutlinerHostSlots). */
+  readonly onExternalDrop?: (ids: readonly string[], target: string) => boolean;
+  /** Starred documents for the bookmarks menu (see OutlinerHostSlots.starredDocuments). */
+  readonly starredDocuments?: OutlinerStarredDocuments;
+  /**
+   * Trusted embeds in notes: a fenced block whose info string is a key here (```embed:video)
+   * renders through the host's own React component. See rich-note-view.tsx.
+   */
+  readonly renderers?: OutlineRenderers;
+  /**
+   * The reader's preferences (density, text size, bullet click, keyboard profile, note display,
+   * remapped shortcuts). Controlled with `settings` + `onSettingsChange`, or seeded with
+   * `defaultSettings`. The outliner never stores them; the settings panel edits them.
+   */
+  readonly settings?: Partial<OutlinerSettings>;
+  readonly defaultSettings?: Partial<OutlinerSettings>;
+  readonly onSettingsChange?: (settings: OutlinerSettings) => void;
+  /* Host seams (SEAMS.md). */
+  /** A deep or share link for an item; default: this page with `?zoom=<id>` (`?doc=` in a workspace). */
+  readonly linkFor?: (id: string) => string;
+  /** Store files pasted or dropped into an item; the links you return are added to its note. */
+  readonly onAttach?: OutlineAttachHandler;
+  /** Adds "Version history…" to ⌘K and the ⋯ menu; restore through `ref.replace(nodes)`. */
+  readonly onHistory?: () => void;
+  /** Integrations: host actions in every item menu and the phone sheet. */
+  readonly itemCommands?: OutlinerItemCommands;
+  /** Keys the host uses itself; shortcut remapping refuses them. */
+  readonly reservedShortcuts?: readonly ReservedShortcut[];
 }
 
 /** What a host can do from outside: `const ref = useRef<OutlinerHandle>(null)`. */
@@ -104,6 +169,11 @@ export interface OutlinerHandle {
   focusItem(id: string, options?: { readonly edit?: boolean }): boolean;
   /** Zoom into an item (null: the document root). */
   zoomTo(id: string | null): void;
+  /**
+   * Open a deep link to an item: zoom into it when it has children; a leaf opens its parent's
+   * zoom with the leaf selected (never an empty page). False when the item does not exist.
+   */
+  openLink(id: string): boolean;
   /** The current document, including edits a controlled host has not echoed yet. */
   getValue(): readonly OutlineItem[];
   undo(): void;
@@ -111,14 +181,88 @@ export interface OutlinerHandle {
   /** Set the search query (opens the field); "" clears it. */
   search(query: string): void;
   exportAs(format: OutlineExportFormat): string;
+  /** Print / Save as PDF: the article of the current zoom (or the whole document), no chrome. */
+  print(): void;
+  /**
+   * Append whole items (with children) at the top level as one undo step; an id that is free
+   * here is kept (a move between documents keeps its links). Returns the ids it inserted.
+   */
+  insertItems(nodes: readonly OutlineItem[]): readonly string[];
+  /** Remove items and their subtrees as one undo step. False when refused (locked, read-only). */
+  removeItems(ids: readonly string[]): boolean;
+  /**
+   * Replace the whole document as ONE undo step (a restored version, a remote merge, a move
+   * between documents). `carried`: ids that arrive intact from elsewhere, so not stamped as edits.
+   */
+  replace(nodes: readonly OutlineItem[], options?: { readonly carried?: ReadonlySet<string> }): boolean;
+  /** The entries an undo and a redo would travel now (opaque; compare by identity). */
+  history(): { readonly undo: unknown; readonly redo: unknown };
+  /** Open find and replace, optionally with a query. */
+  find(query?: string): void;
 }
+
+/** Item shortcuts that need no row, so they also work with focus outside the tree. */
+const ROWLESS_SHORTCUTS: ReadonlySet<ShortcutId> = new Set<ShortcutId>(["levels1", "levels2", "levels3", "levelsAll", "hideCompleted", "zoomOut"]);
 
 /** Indentation per level comes from --ol-indent (22px, 16px on narrow screens). */
 const indentPx = (el?: Element | null) =>
   parseFloat(getComputedStyle(el ?? document.documentElement).getPropertyValue("--ol-indent")) || 22;
 
-export function Outliner({ title = "Untitled", className, toolbar = true, placeholder, hoistedId, onHoistChange, dir, labels: labelOverrides, ref, ...options }: OutlinerProps) {
+export function Outliner({
+  title = "Untitled",
+  className,
+  toolbar = true,
+  placeholder,
+  hoistedId,
+  onHoistChange,
+  dir,
+  labels: labelOverrides,
+  ref,
+  headerStart,
+  onTitleChange,
+  paletteGroups,
+  searchScope,
+  renderers,
+  menuCommands,
+  onExternalDrop,
+  starredDocuments,
+  settings: settingsProp,
+  defaultSettings,
+  onSettingsChange,
+  linkFor,
+  onAttach,
+  onHistory,
+  itemCommands,
+  reservedShortcuts,
+  ...options
+}: OutlinerProps) {
   const ol = useOutliner(options);
+  /* ── Preferences: controlled (`settings`) or owned (`defaultSettings`); never stored here ── */
+  const [ownSettings, setOwnSettings] = React.useState(() => resolveSettings(defaultSettings));
+  const settings = React.useMemo(() => (settingsProp ? resolveSettings(settingsProp) : ownSettings), [settingsProp, ownSettings]);
+  const settingsRef = React.useRef(settings);
+  settingsRef.current = settings;
+  const onSettingsChangeRef = React.useRef(onSettingsChange);
+  onSettingsChangeRef.current = onSettingsChange;
+  const controlledSettings = settingsProp !== undefined;
+  const updateSettings = React.useCallback(
+    (patch: Partial<OutlinerSettings>) => {
+      const next = resolveSettings({ ...settingsRef.current, ...patch });
+      settingsRef.current = next;
+      if (!controlledSettings) setOwnSettings(next);
+      onSettingsChangeRef.current?.(next);
+    },
+    [controlledSettings],
+  );
+  const keymap = React.useMemo(() => buildKeymap(settings.keyboard, settings.shortcuts), [settings.keyboard, settings.shortcuts]);
+  // The note display setting is the session's starting point; the view menu writes it back.
+  React.useLayoutEffect(() => {
+    ol.setView((view) => (view.noteDisplay === settings.noteDisplay ? view : { ...view, noteDisplay: settings.noteDisplay }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.noteDisplay]);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [findOpen, setFindOpen] = React.useState(false);
+  const [findSeed, setFindSeed] = React.useState<{ readonly query: string } | null>(null);
   // Zoom is reader state the host may own (e.g. ?zoom= in the URL for Back/Forward).
   const reported = React.useRef(ol.state.hoistedId);
   React.useEffect(() => {
@@ -148,8 +292,47 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
   const direction = useResolvedDirection(rootRef, dir);
   const searchHelpId = React.useId();
   const labels = React.useMemo(() => resolveLabels(labelOverrides), [labelOverrides]);
-  const live = React.useRef({ ol, labels });
-  live.current = { ol, labels };
+  const host = React.useMemo<OutlinerHostSlots>(
+    () => ({ headerStart, onTitleChange, paletteGroups, searchScope, menuCommands, onExternalDrop, starredDocuments, linkFor, onAttach, onHistory, itemCommands, reservedShortcuts }),
+    [headerStart, onTitleChange, paletteGroups, searchScope, menuCommands, onExternalDrop, starredDocuments, linkFor, onAttach, onHistory, itemCommands, reservedShortcuts],
+  );
+  // ⌘K "Outline" group: find and replace, levels, settings (and the host's version history).
+  const apple = useApplePlatform();
+  const paletteHost = React.useMemo<OutlinerHostSlots>(() => {
+    const hint = (id: ShortcutId) => primaryShortcut(keymap, id, apple);
+    const levels = ([1, 2, 3, "all"] as const).map((n) => ({
+      id: `levels-${n}`,
+      label: labels.showLevels(n === "all" ? 0 : n),
+      keywords: "fold depth expand collapse levels",
+      icon: <ListTree />,
+      hint: hint(n === "all" ? "levelsAll" : (`levels${n}` as ShortcutId)),
+      run: () => showLevels(live.current.ol, uiRef.current, n),
+    }));
+    const group: OutlinerPaletteGroup = {
+      heading: "Outline",
+      commands: [
+        { id: "find-replace", label: labels.findReplace, keywords: "find replace substitute rename", icon: <Replace />, hint: hint("findReplace"), run: () => uiRef.current.setFindOpen(true) },
+        ...levels,
+        { id: "settings", label: labels.settings, keywords: "preferences density font size bullet keyboard profile shortcuts remap", icon: <Settings2 />, hint: hint("settings"), run: () => uiRef.current.setSettingsOpen(true) },
+        ...(onHistory ? [{ id: "history", label: labels.versionHistory, keywords: "versions restore revisions", icon: <History />, run: onHistory }] : []),
+      ],
+    };
+    return { ...host, paletteGroups: [...(host.paletteGroups ?? []), group] };
+  }, [host, keymap, apple, labels, onHistory]);
+  const live = React.useRef({ ol, labels, keymap, host });
+  live.current = { ol, labels, keymap, host };
+  /** Deep link to an item, as rich and plain text, with a toast that shows it. */
+  const copyLink = React.useCallback((rawId: string) => {
+    const { ol, labels, host } = live.current;
+    const id = ol.commands.identityOf(rawId);
+    const href = host.linkFor ? host.linkFor(id) : itemHref(id, ol.external?.qualify(id), window.location.href);
+    const node = findOutlineNode(ol.latestNodes(), id)?.node;
+    const title = inlineToPlain(node?.text ?? "") || labels.untitled;
+    void writeLinkToClipboard(href, title).then(
+      () => toast.success(labels.copiedLink, { description: <span className="block truncate font-mono text-[11px]" dir="ltr">{href}</span> }),
+      () => toast(href),
+    );
+  }, []);
 
   /*
    * an Undo offer is bound to the history entry it was made at. Any undo, redo or new edit
@@ -209,6 +392,7 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
         const anchor = live.current.ol.state.selectionAnchor;
         const target =
           (anchor && root?.querySelector<HTMLElement>(`[data-row="${CSS.escape(anchor)}"] [data-row-actions]`)) ||
+          root?.querySelector<HTMLElement>("[data-view-menu-trigger]") ||
           root?.querySelector<HTMLElement>("[data-slot=outliner] > div button:not(:disabled)");
         target?.focus({ preventScroll: true });
       });
@@ -269,29 +453,50 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
       setSheet,
       returnFocus,
       announceToggle,
+      host: paletteHost,
+      settings,
+      updateSettings,
+      keymap,
+      settingsOpen,
+      setSettingsOpen,
+      findOpen,
+      setFindOpen,
+      copyLink,
     }),
-    [editing, paletteOpen, paletteMode, shortcutsOpen, searchOpen, datePicker, head, searchHelpId, labels, offerUndo, scrollToRow, registerScroller, sheet, returnFocus, announceToggle],
+    [editing, paletteOpen, paletteMode, shortcutsOpen, searchOpen, datePicker, head, searchHelpId, labels, offerUndo, scrollToRow, registerScroller, sheet, returnFocus, announceToggle, paletteHost, settings, updateSettings, keymap, settingsOpen, findOpen, copyLink],
   );
 
+  /** Reveal (unfold, zoom out if needed), select and scroll to an item; `edit` puts the caret in it. */
+  const focusItem = (id: string, opts?: { readonly edit?: boolean }) => {
+    const { ol } = live.current;
+    const path = getOutlinePath(ol.latestNodes(), id);
+    if (!path.length) return false;
+    if (ol.state.hoistedId && !path.some((node) => node.id === ol.state.hoistedId)) ol.dispatch({ type: "hoist", id: null });
+    ol.dispatch({ type: "reveal", id });
+    if (opts?.edit && !ol.readOnly) {
+      ol.dispatch({ type: "focus", id, start: path.at(-1)!.text.length });
+      setEditing(true);
+    } else {
+      ol.dispatch({ type: "select", id });
+      setEditing(false);
+      requestAnimationFrame(() => listRef.current?.focus({ preventScroll: true }));
+    }
+    requestAnimationFrame(() => scrollToRow(id, "center"));
+    return true;
+  };
   React.useImperativeHandle(
     ref,
     (): OutlinerHandle => ({
       focus: () => listRef.current?.focus({ preventScroll: true }),
-      focusItem: (id, opts) => {
+      focusItem: (id, opts) => focusItem(id, opts),
+      openLink: (id) => {
         const { ol } = live.current;
-        const path = getOutlinePath(ol.latestNodes(), id);
-        if (!path.length) return false;
-        if (ol.state.hoistedId && !path.some((node) => node.id === ol.state.hoistedId)) ol.dispatch({ type: "hoist", id: null });
-        ol.dispatch({ type: "reveal", id });
-        if (opts?.edit && !ol.readOnly) {
-          ol.dispatch({ type: "focus", id, start: path.at(-1)!.text.length });
-          setEditing(true);
-        } else {
-          ol.dispatch({ type: "select", id });
-          setEditing(false);
-          requestAnimationFrame(() => listRef.current?.focus({ preventScroll: true }));
-        }
-        requestAnimationFrame(() => scrollToRow(id, "center"));
+        const target = deepLinkTarget(ol.latestNodes(), id);
+        if (!target) return false;
+        if (ol.state.hoistedId !== target.zoom) ol.dispatch({ type: "hoist", id: target.zoom });
+        // After the zoom lands (its own effect picks a cursor row): the leaf wins.
+        const select = target.select;
+        if (select) requestAnimationFrame(() => focusItem(select));
         return true;
       },
       zoomTo: (id) => live.current.ol.dispatch({ type: "hoist", id }),
@@ -303,9 +508,41 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
         setSearchOpen(!!query);
       },
       exportAs: (format) => live.current.ol.commands.exportAs(format),
+      print: () => requestPrint(rootRef, live.current.ol.state.hoistedId),
+      insertItems: (nodes) => {
+        const { ol } = live.current;
+        if (!nodes.length || ol.readOnly) return [];
+        const roots = ol.latestNodes();
+        const before = new Set(roots.map((node) => node.id));
+        // After the last top-level item (never inside a zoomed one): the end of the document.
+        const last = roots.at(-1);
+        ol.commands.importJSON(exportOutline(nodes, "json"), last && last.id !== ol.state.hoistedId ? last.id : undefined);
+        return ol.latestNodes().filter((node) => !before.has(node.id)).map((node) => node.id);
+      },
+      removeItems: (ids) => {
+        const { ol } = live.current;
+        if (!ids.length) return false;
+        const before = ol.latestNodes();
+        const next = ol.dispatch({ type: "delete", ids });
+        return !next.refusal && next.nodes !== before;
+      },
+      replace: (nodes, opts) => {
+        const { ol } = live.current;
+        const before = ol.latestNodes();
+        if (opts?.carried) carryIds(nodes, opts.carried);
+        const next = ol.dispatch({ type: "replace", nodes });
+        return !next.refusal && next.nodes !== before;
+      },
+      history: () => live.current.ol.historyStacks(),
+      find: (query) => {
+        setFindSeed(query === undefined ? null : { query });
+        setFindOpen(true);
+      },
     }),
     [scrollToRow],
   );
+  const uiRef = React.useRef(ui);
+  uiRef.current = ui;
 
   // Surface refusals (locked, read-only) as a quiet toast rather than a silent no-op.
   const refusal = ol.state.refusal;
@@ -326,9 +563,8 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
   const rejection = ol.rejection;
   React.useEffect(() => {
     if (!rejection) return;
-    const text = labels.changeRejected(rejection.count);
-    announce(text);
-    toast(text, { id: "outliner-veto", icon: <Ban className="size-3.5" /> });
+    // One live channel: the toast region speaks it (announcing it here too read it twice).
+    toast(labels.changeRejected(rejection.count), { id: "outliner-veto", icon: <Ban className="size-3.5" /> });
   }, [rejection, labels]);
 
   // ⌘K / ⌘F / ⌘/ also work when focus has fallen back to <body> (after a dialog, Back, etc).
@@ -342,19 +578,17 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
     };
     const onKey = (event: KeyboardEvent) => {
       if (document.activeElement !== document.body || !lastActive.current) return;
+      // A workspace keeps other documents mounted but inert: they never answer the keyboard.
+      if (rootRef.current?.closest("[inert]")) return;
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       if (mod && (key === "z" || (key === "y" && event.ctrlKey && !event.metaKey))) {
         // Focus fell back to <body> after something inside the outliner: undo still works.
         event.preventDefault();
         live.current.ol.dispatch({ type: key === "y" || event.shiftKey ? "redo" : "undo" });
-      } else if (mod && (key === "k" || key === "f" || key === "/")) {
+      } else if (matchShortcut(live.current.keymap, event, "global")) {
         event.preventDefault();
-        if (key === "k") {
-          setPaletteMode("all");
-          setPaletteOpen(true);
-        } else if (key === "f") setSearchOpen(true);
-        else setShortcutsOpen(true);
+        runGlobalShortcut(matchShortcut(live.current.keymap, event, "global")!, { ui: uiRef.current });
       } else if (!mod && (key === "arrowdown" || key === "arrowup" || key === "j" || key === "k")) {
         listRef.current?.focus();
       }
@@ -409,25 +643,21 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
       if (target.tagName === "INPUT" || (target.isContentEditable ?? false)) return;
       event.preventDefault();
       ol.dispatch({ type: key === "y" || event.shiftKey ? "redo" : "undo" });
-    } else if (mod && key === "k") {
-      event.preventDefault();
-      setPaletteMode("all");
-      setPaletteOpen(true);
-    } else if (mod && key === "f") {
-      event.preventDefault();
-      setSearchOpen(true);
-    } else if (mod && key === "/") {
-      event.preventDefault();
-      setShortcutsOpen(true);
-    } else if (mod && event.shiftKey && key === "m") {
-      event.preventDefault();
-      setPaletteMode("move");
-      setPaletteOpen(true);
+    } else if (!event.defaultPrevented) {
+      // ⌘K, ⌘F, ⌘/, ⌘⇧M, ⌥⌘F … whatever the keymap says (remaps included).
+      const action = matchShortcut(keymap, event, "global");
+      if (action && runGlobalShortcut(action, { ui })) event.preventDefault();
+      else if (target.tagName !== "TEXTAREA" && target.tagName !== "INPUT") {
+        // From the toolbar, the zoomed title, a menu button: the actions that need no row.
+        const rowless = matchShortcut(keymap, event, "row");
+        if (rowless && ROWLESS_SHORTCUTS.has(rowless) && runItemShortcut(rowless, { ol, ui, ids: [], rowId: null })) event.preventDefault();
+      }
     }
   };
 
   return (
     <OutlinerContext.Provider value={{ ol, ui }}>
+      <RichContentProvider renderers={renderers}>
       <DirectionScope dir={direction}>
       <MotionConfig reducedMotion="user">
       <div
@@ -443,12 +673,18 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
           });
         }}
         data-slot="outliner"
+        data-density={settings.density}
+        data-font-size={settings.fontSize}
+        data-keyboard={settings.keyboard}
+        style={settingsStyle(settings) as React.CSSProperties}
         className={cn(
           "group/outliner relative flex min-h-0 flex-col overflow-hidden rounded-xl border bg-surface text-ui text-foreground [--ol-indent:22px] max-sm:[--ol-indent:16px]",
           className,
         )}
       >
         {toolbar && <OutlinerHeader title={title} />}
+        <FindReplaceBar seed={findSeed} />
+        <OutlinerSettingsPanel />
         <SearchHelp />
         <OutlinerErrorBoundary>
           <OutlinerBody title={title} placeholder={placeholder} />
@@ -466,6 +702,7 @@ export function Outliner({ title = "Untitled", className, toolbar = true, placeh
       </div>
       </MotionConfig>
       </DirectionScope>
+      </RichContentProvider>
     </OutlinerContext.Provider>
   );
 }
@@ -503,7 +740,8 @@ function OutlinerHeader({ title }: { readonly title: string }) {
   const narrow = useMediaQuery("(max-width: 639px)");
   const phoneSearch = narrow && (ui.searchOpen || !!ol.view.query);
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-2">
+    <div data-outliner-toolbar="" className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-2 coarse:gap-0 coarse:px-1">
+      {ui.host.headerStart && <div className={cn("flex shrink-0 items-center", phoneSearch && "hidden")}>{ui.host.headerStart}</div>}
       <nav aria-label="Breadcrumb" className={cn("flex min-w-0 flex-1 items-center", phoneSearch && "hidden")}>
         <AnimatePresence initial={false}>
           {crumbs.length > 0 && (
@@ -648,11 +886,15 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
   React.useEffect(() => {
     if (ui.searchOpen) input.current?.focus();
   }, [ui.searchOpen]);
+  const reportQuery = ui.host.searchScope?.onQueryChange;
+  React.useEffect(() => reportQuery?.(ol.view.query), [reportQuery, ol.view.query]);
   // A half-typed operator ("due:") is unfinished, not wrong: the help strip offers completions.
   const completing = React.useMemo(() => searchSuggestions(ol.view.query).length > 0, [ol.view.query]);
   const diagnostics = completing ? [] : (ol.search?.diagnostics ?? []);
-  const count = ol.search?.matchedIds.length ?? 0;
-  const dated = /(?:^|\s)-?(?:due|before|after):|has:dates?\b/i.test(ol.view.query);
+  const scope = ui.host.searchScope;
+  const everywhere = scope?.value === "all";
+  const count = everywhere && scope.count ? scope.count(ol.view.query) : (ol.search?.matchedIds.length ?? 0);
+  const dated = /(?:^|\s)-?(?:due|before|after|during):|has:dates?\b/i.test(ol.view.query);
   const setMode = (mode: "filter" | "flat" | "agenda") =>
     ol.setView((view) => ({ ...view, searchMode: view.searchMode === mode ? "filter" : mode }));
   const iconButton =
@@ -680,6 +922,7 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
               dir="auto"
               onChange={(event) => ol.setView((view) => ({ ...view, query: event.target.value }))}
               onKeyDown={(event) => {
+                if (isComposingKey(event)) return;
                 const completion = event.key === "Tab" && !event.shiftKey ? searchSuggestions(ol.view.query)[0] : undefined;
                 if (completion) {
                   // Tab completes the operator or value being typed (shown in the help strip).
@@ -693,6 +936,10 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
                 } else if (event.key === "Enter" && event.shiftKey) {
                   event.preventDefault();
                   setMode("flat");
+                } else if ((event.key === "ArrowDown" || event.key === "Enter") && everywhere) {
+                  // All documents: into the results list (the host's), first result.
+                  event.preventDefault();
+                  ui.rootRef.current?.querySelector<HTMLElement>("[data-scope-results] [data-scope-result]")?.focus();
                 } else if (event.key === "ArrowDown" || event.key === "Enter") {
                   event.preventDefault();
                   const first = ol.rows.find((row) => !row.context);
@@ -713,7 +960,23 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
                 {completing ? <span className="font-sans text-ui text-muted-foreground/80">…</span> : diagnostics.length ? "invalid" : `${count}${ol.search?.truncated ? "+" : ""}`}
               </span>
             )}
-            {dated && (
+            {scope && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-pressed={everywhere}
+                    aria-label={`${L.searchScope}: ${everywhere ? L.allDocuments : L.thisDocument}`}
+                    onClick={() => scope.onChange(everywhere ? "document" : "all")}
+                    className={cn(iconButton, everywhere && "bg-signal-muted text-signal hover:bg-signal-muted hover:text-signal")}
+                  >
+                    <Files className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{everywhere ? L.allDocuments : L.thisDocument}</TooltipContent>
+              </Tooltip>
+            )}
+            {dated && !everywhere && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -729,7 +992,7 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
                 <TooltipContent>{L.agenda}</TooltipContent>
               </Tooltip>
             )}
-            <Tooltip>
+            {!everywhere && <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
@@ -744,7 +1007,7 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
               <TooltipContent>
                 {ol.view.searchMode === "flat" ? L.showInOutline : L.flatResults} <Kbd dir="ltr">⇧↵</Kbd>
               </TooltipContent>
-            </Tooltip>
+            </Tooltip>}
             <button
               type="button"
               aria-label={L.closeSearch}
@@ -780,6 +1043,8 @@ function ViewMenu() {
   const { isMac, modKey } = usePlatformKeys();
   const { ol, ui } = useOutlinerContext();
   const fileInput = React.useRef<HTMLInputElement>(null);
+  const coarse = useMediaQuery("(pointer: coarse)");
+  const narrow = useMediaQuery("(max-width: 639px)");
   const download = (format: "markdown" | "opml" | "json") => {
     const text = ol.commands.exportAs(format);
     const blob = new Blob([text], { type: format === "opml" ? "text/x-opml" : "text/plain" });
@@ -789,126 +1054,116 @@ function ViewMenu() {
     link.click();
     URL.revokeObjectURL(link.href);
   };
+  const hint = (id: ShortcutId) => primaryShortcut(ui.keymap, id, isMac);
+  const entries: MenuEntry[] = [
+    // A phone has no ⌘K and no room for the Commands button: the palette (jump to item,
+    // move to, every action) opens from here.
+    ...(coarse || narrow
+      ? [{ kind: "item", id: "commands", label: ui.labels.commands, icon: <Command />, surface: true, run: () => (ui.setPaletteMode("all"), ui.setPaletteOpen(true)) } satisfies MenuEntry]
+      : []),
+    ...(ui.host.menuCommands ?? []).map((command): MenuEntry => ({ kind: "item", id: `host-${command.id}`, label: command.label, icon: command.icon, hint: command.hint, surface: true, run: command.run })),
+    ...(coarse || narrow || ui.host.menuCommands?.length ? [{ kind: "separator", id: "sep-host" } satisfies MenuEntry] : []),
+    { kind: "label", id: "label-view", label: "View" },
+    { kind: "item", id: "expand-all", label: "Expand all", icon: <ChevronsUpDown />, run: () => ol.dispatch({ type: "expand-all", expanded: true }) },
+    { kind: "item", id: "collapse-all", label: "Collapse all", icon: <ChevronsDownUp />, run: () => ol.dispatch({ type: "expand-all", expanded: false }) },
+    {
+      kind: "page",
+      id: "levels",
+      label: ui.labels.levelsMenu,
+      icon: <ListTree />,
+      entries: ([1, 2, 3, "all"] as const).map((levels): MenuEntry => ({
+        kind: "item",
+        id: `levels-${levels}`,
+        label: ui.labels.showLevels(levels === "all" ? 0 : levels),
+        hint: hint(levels === "all" ? "levelsAll" : `levels${levels}`),
+        run: () => showLevels(ol, ui, levels),
+      })),
+    },
+    {
+      kind: "item",
+      id: "hide-completed",
+      label: "Hide completed",
+      icon: <EyeOff />,
+      checked: ol.view.hideCompleted,
+      hint: hint("hideCompleted"),
+      run: () => ol.setView((view) => ({ ...view, hideCompleted: !view.hideCompleted })),
+    },
+    {
+      kind: "page",
+      id: "notes",
+      label: "Notes",
+      icon: <StickyNote />,
+      // The settings own the note display: the menu and the panel stay one value.
+      radio: { value: ol.view.noteDisplay, onChange: (value) => ui.updateSettings({ noteDisplay: value as typeof ol.view.noteDisplay }) },
+      entries: [
+        { kind: "item", id: "show", label: "Show full notes", run: () => undefined },
+        { kind: "item", id: "first-line", label: "First line only", run: () => undefined },
+        { kind: "item", id: "hide", label: "Hide notes", run: () => undefined },
+      ],
+    },
+    { kind: "separator", id: "sep-document" },
+    { kind: "label", id: "label-document", label: "Document" },
+    {
+      kind: "page",
+      id: "export",
+      label: "Export",
+      icon: <FileDown />,
+      entries: [
+        {
+          kind: "item",
+          id: "copy-markdown",
+          label: "Copy as Markdown",
+          run: async () => {
+            await navigator.clipboard.writeText(ol.commands.copyMarkdown());
+            toast.success("Copied as Markdown");
+          },
+        },
+        { kind: "item", id: "download-md", label: "Download .md", run: () => download("markdown") },
+        { kind: "item", id: "download-opml", label: "Download .opml", run: () => download("opml") },
+        { kind: "item", id: "download-json", label: "Download .json", run: () => download("json") },
+      ],
+    },
+    { kind: "item", id: "print", label: ui.labels.print, icon: <Printer />, run: () => window.setTimeout(() => printCurrent(ol, ui), 180) },
+    { kind: "item", id: "import", label: ui.labels.importFile, icon: <FileUp />, disabled: ol.readOnly, run: () => fileInput.current?.click() },
+    { kind: "item", id: "find-replace", label: ui.labels.findReplace, icon: <Replace />, hint: hint("findReplace"), surface: true, run: () => ui.setFindOpen(true) },
+    ...(ui.host.onHistory ? [{ kind: "item", id: "history", label: ui.labels.versionHistory, icon: <History />, surface: true, run: () => ui.host.onHistory?.() } satisfies MenuEntry] : []),
+    { kind: "separator", id: "sep-settings" },
+    { kind: "item", id: "settings", label: ui.labels.settings, icon: <Settings2 />, hint: hint("settings"), surface: true, run: () => ui.setSettingsOpen(true) },
+    { kind: "item", id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard />, hint: hint("shortcuts") ?? `${modKey}/`, surface: true, run: () => ui.setShortcutsOpen(true) },
+  ];
   return (
     <>
       <input
         ref={fileInput}
         type="file"
-        accept=".opml,.xml,.md,.txt,.json"
+        accept=".opml,.xml,.md,.txt,.json,.html,.htm"
         className="hidden"
         onChange={async (event) => {
           const file = event.target.files?.[0];
           if (!file) return;
-          const count = ol.commands.importText(await file.text(), ol.rows.at(-1)?.id);
-          toast.success(`Imported ${count} item${count === 1 ? "" : "s"}`);
+          const text = await file.text();
+          // A saved web page or doc export reads through the inert HTML importer.
+          const html = /\.html?$/i.test(file.name);
+          const count = html ? ol.commands.importHtml(text, ol.rows.at(-1)?.id) : ol.commands.importText(text, ol.rows.at(-1)?.id);
+          // The count, plus what did not survive (unknown OPML attributes, images, embeds …).
+          // Items counted with their children (the command reports the top-level ones).
+          reportImport(text, html ? { format: "html", items: count } : {});
           event.target.value = "";
         }}
       />
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={ui.labels.viewOptions}>
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent>View &amp; document</TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent align="end" className="w-60" onCloseAutoFocus={(event) => ui.returnFocus(event)}>
-          {/* a phone has no ⌘K and no room for the Commands button: the palette (jump to
-              item, move to, every action) opens from here. */}
-          <DropdownMenuItem
-            className="sm:hidden"
-            onSelect={() => {
-              ui.setPaletteMode("all");
-              ui.setPaletteOpen(true);
-            }}
-          >
-            <Command /> {ui.labels.commands}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator className="sm:hidden" />
-          <DropdownMenuLabel className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">View</DropdownMenuLabel>
-          <DropdownMenuGroup>
-            <DropdownMenuItem onSelect={() => ol.dispatch({ type: "expand-all", expanded: true })}>
-              <ChevronsUpDown /> Expand all
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => ol.dispatch({ type: "expand-all", expanded: false })}>
-              <ChevronsDownUp /> Collapse all
-            </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <ListTree /> Expand to level
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {[1, 2, 3].map((depth) => (
-                  <DropdownMenuItem
-                    key={depth}
-                    onSelect={() => {
-                      ol.dispatch({ type: "expand-all", expanded: false });
-                      ol.dispatch({ type: "expand-all", expanded: true, depth });
-                    }}
-                  >
-                    Level {depth}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuCheckboxItem
-              checked={ol.view.hideCompleted}
-              onCheckedChange={(hideCompleted) => ol.setView((view) => ({ ...view, hideCompleted }))}
-            >
-              Hide completed
-              <DropdownMenuShortcut>{isMac ? "⌥⌘H" : "Ctrl Alt H"}</DropdownMenuShortcut>
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <StickyNote /> Notes
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuRadioGroup
-                  value={ol.view.noteDisplay}
-                  onValueChange={(value) =>
-                    ol.setView((view) => ({ ...view, noteDisplay: value as typeof view.noteDisplay }))
-                  }
-                >
-                  <DropdownMenuRadioItem value="show">Show full notes</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="first-line">First line only</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="hide">Hide notes</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">Document</DropdownMenuLabel>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <FileDown /> Export
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                onSelect={async () => {
-                  await navigator.clipboard.writeText(ol.commands.exportAs("markdown"));
-                  toast.success("Copied as Markdown");
-                }}
-              >
-                Copy as Markdown
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => download("markdown")}>Download .md</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => download("opml")}>Download .opml</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => download("json")}>Download .json</DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuItem disabled={ol.readOnly} onSelect={() => fileInput.current?.click()}>
-            <FileUp /> {ui.labels.importFile}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => ui.setShortcutsOpen(true)}>
-            <Keyboard /> Keyboard shortcuts
-            <DropdownMenuShortcut>{modKey}/</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ResponsiveMenu
+        touch={coarse}
+        title={ui.labels.viewOptionsTitle}
+        backLabel={ui.labels.back}
+        tooltip="View & document"
+        trigger={
+          <Button variant="ghost" size="icon-sm" aria-label={ui.labels.viewOptions} data-view-menu-trigger="">
+            <MoreHorizontal />
+          </Button>
+        }
+        onCloseAutoFocus={(event) => ui.returnFocus(event)}
+        entries={entries}
+      />
     </>
   );
 }
@@ -1055,14 +1310,20 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
     startDrag: drag.start,
     resolveRef: (id) => {
       const node = findOutlineNode(ol.state.nodes, id)?.node;
-      return node ? inlineToPlain(node.text) || "Untitled" : null;
+      if (node) return inlineToPlain(node.text) || "Untitled";
+      const external = ol.external?.resolve(id);
+      return external === undefined || external === null ? null : inlineToPlain(external) || "Untitled";
     },
     refSource: (id) => {
       const node = findOutlineNode(ol.state.nodes, id)?.node;
-      return node ? node.text || "Untitled" : null;
+      if (node) return node.text || "Untitled";
+      const external = ol.external?.resolve(id);
+      return external === undefined || external === null ? null : external || "Untitled";
     },
     revealItem: (id, title) => {
-      if (id) revealItem(ol, ui, id);
+      // `[[label|doc/item]]` in a workspace: the host opens that document at the item.
+      if (id && !findOutlineNode(ol.latestNodes(), id) && ol.external?.resolve(id) !== undefined) ol.external!.open(id);
+      else if (id) revealItem(ol, ui, id);
       else ol.setView((view) => ({ ...view, query: `"${title}"` }));
     },
   };
@@ -1115,7 +1376,7 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
       selected={!ui.editing && selection.has(row.id)}
       cursor={!ui.editing && cursorId === row.id && selection.has(row.id)}
       litLevels={litLevelsFor(row)}
-      dragging={drag.state?.ids.includes(row.id) ?? false}
+      dragging={(!drag.state?.copy && drag.state?.ids.includes(row.id)) ?? false}
       flat={searching && ol.view.searchMode === "flat"}
       readOnly={ol.readOnly}
       noteDisplay={ol.view.noteDisplay}
@@ -1130,20 +1391,57 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
 
   const searching = !!ol.view.query.trim();
   const empty = ol.rows.length === 0;
+  // All documents (a workspace host): its results replace this document's rows while searching.
+  const scoped = searching && ui.host.searchScope?.value === "all";
+  // A zoomed item in board view shows its children as columns (search shows the outline).
+  // The view shown: the document's, or a read-only reader's own local choice (outliner-views.tsx).
+  const shown = hoisted ? shownView(ol, hoisted) : "list";
+  const board = !searching && hoisted && shown === "board" ? hoisted : null;
+  // Article and mind map views of the zoomed item (outliner-views.tsx); search shows the outline.
+  const article = !searching && hoisted && shown === "article" ? hoisted : null;
+  const mindmap = !searching && hoisted && shown === "mindmap" ? hoisted : null;
+  const articleParts: ArticleParts = {
+    TaskCheckbox,
+    reveal: (id, title) => live.current.revealItem(id, title),
+    refSource: (id) => live.current.refSource(id),
+  };
 
   return (
-    <div ref={setScrollEl} data-outliner-scroll className="relative min-h-0 flex-1 scroll-pb-20 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
-      <AncestorStrip scrollEl={scrollEl} />
-      <div className="mx-auto w-full max-w-[52rem] px-3 pt-4 pb-24 sm:px-6 sm:pt-5">
+    <div
+      ref={setScrollEl}
+      data-outliner-scroll
+      className={cn(
+        "relative min-h-0 flex-1 scroll-pb-20 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
+        mindmap && "flex flex-col",
+      )}
+    >
+      <OutlinerPrintHost owner={ui.rootRef} title={title} parts={articleParts} />
+      {!board && !mindmap && !article && !scoped && <AncestorStrip scrollEl={scrollEl} />}
+      <div data-outliner-content={board ? "board" : mindmap ? "mindmap" : article ? "article" : "list"} className={cn("mx-auto w-full px-3 pt-4 sm:px-6 sm:pt-5", board ? "max-w-none pb-2" : mindmap ? "max-w-none shrink-0 pb-3" : "max-w-[52rem] pb-24")}>
         {/* Zoom crossfade only for animated (small) documents: a virtual list must never be
             mounted twice (both copies would fight over the shared list and scroll refs). */}
         {/* Zoom transition animates this one stable node in place; the list (and any virtual
             window inside it) is never mounted twice. */}
         <div ref={zoomScope}>
             <DocumentTitle title={title} />
+            {scoped ? (
+              <div data-scope-results="">{ui.host.searchScope!.renderResults(ol.view.query)}</div>
+            ) : board || mindmap ? null : article ? (
+              <motion.div key={article.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={motionTokens.base} className="mt-5">
+                <OutlinerArticle items={article.children ?? []} parts={articleParts} />
+              </motion.div>
+            ) : (
+            <>
             {searching && ol.view.searchMode === "flat" && (
-              <div className="mb-1 ps-[30px] text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-                {ol.rows.length} result{ol.rows.length === 1 ? "" : "s"}
+              <div className="mb-1 flex items-center gap-2 ps-[30px] text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+                <span className="me-auto">{ol.rows.length} result{ol.rows.length === 1 ? "" : "s"}</span>
+                {ol.rows.length > 1 && (
+                  <ResultSortControl
+                    value={ol.view.resultSort ?? "outline"}
+                    options={["outline", "date", "title"]}
+                    onChange={(resultSort) => ol.setView((view) => ({ ...view, resultSort }))}
+                  />
+                )}
               </div>
             )}
             <div
@@ -1155,7 +1453,8 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
               tabIndex={ui.editing ? -1 : 0}
               onFocus={(event) => {
                 // Keyboard entry: the tree is one tab stop; landing on it selects a row.
-                if (event.target !== event.currentTarget || selection.size || !ol.rows.length) return;
+                // (The newest selection: a click that selected and then focused must not be undone.)
+                if (event.target !== event.currentTarget || ol.latestSelection().size || !ol.rows.length) return;
                 const first = ol.rows.find((row) => row.id === ol.state.selectionAnchor) ?? ol.rows[0]!;
                 ol.dispatch({ type: "select", id: first.id });
               }}
@@ -1170,7 +1469,7 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
                   </AnimatePresence>
                 </LayoutGroup>
               ) : (
-                <VirtualRows rows={ol.rows} renderRow={renderRow} scrollEl={scrollEl} listRef={ui.listRef} focusId={caretId ?? cursorId} editing={ui.editing} register={ui.registerScroller} />
+                <VirtualRows rows={ol.rows} renderRow={renderRow} scrollEl={scrollEl} listRef={ui.listRef} focusId={caretId ?? cursorId} editing={ui.editing} register={ui.registerScroller} pinnedId={ui.sheet?.rowId ?? null} />
               )}
               </LiveContext.Provider>
               <DropIndicator drag={drag.state} />
@@ -1184,14 +1483,22 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
                   ol.dispatch({ type: "focus", id });
                   ui.setEditing(true);
                 }}
-                className="group/add mt-1 flex h-7 items-center gap-2 rounded-md ps-[26px] pe-2 text-muted-foreground/70 transition-colors hover:text-foreground coarse:h-9"
+                className="group/add mt-1 flex h-7 items-center gap-2 rounded-md ps-[26px] pe-2 text-muted-foreground/70 transition-colors hover:text-foreground coarse:h-11"
               >
                 <Plus className="size-3.5 transition-transform group-hover/add:rotate-90" />
                 <span className="text-ui">{ui.labels.addItem}</span>
               </button>
             )}
+            </>
+            )}
         </div>
       </div>
+      {board && (
+        <motion.div key={board.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={motionTokens.base} className="pb-20">
+          <OutlinerBoard board={board} parts={{ ...BOARD_PARTS, reveal: (id) => revealItem(ol, ui, id) }} />
+        </motion.div>
+      )}
+      {mindmap && <MindMapSlot key={mindmap.id} root={mindmap} />}
     </div>
   );
 }
@@ -1256,7 +1563,9 @@ function AncestorStrip({ scrollEl }: { readonly scrollEl: HTMLDivElement | null 
   const key = chain.map((row) => row.id).join("/");
   // The phone sheet lifts its target to the top: the strip must not cover it.
   const visible = chain.length > 0 && !ui.sheet;
-  const shown = chain.length > 3 ? chain.slice(-3) : chain;
+  // A phone has room for one readable crumb: the nearest parent in full, the rest folded into "…".
+  const narrow = useMediaQuery("(max-width: 639px)");
+  const shown = chain.length > (narrow ? 1 : 3) ? chain.slice(narrow ? -1 : -3) : chain;
   // The strip overlays the list, so keep the cursor row clear of it (WCAG 2.4.11): every
   // scrollIntoView and the virtualizer honour the container's top scroll padding.
   const navRef = React.useRef<HTMLElement>(null);
@@ -1305,7 +1614,7 @@ function AncestorStrip({ scrollEl }: { readonly scrollEl: HTMLDivElement | null 
                     title={inlineToPlain(row.node.text) || ui.labels.untitled}
                     className={cn(
                       "h-6 max-w-[16rem] truncate rounded-[5px] px-1.5 transition-colors hover:bg-muted hover:text-foreground coarse:h-9",
-                      index === shown.length - 1 && "text-foreground/80",
+                      index === shown.length - 1 && "text-foreground/80 max-sm:max-w-none",
                     )}
                   >
                     <span dir="auto">{inlineToLabel(row.node.text) || inlineToPlain(row.node.text) || ui.labels.untitled}</span>
@@ -1320,6 +1629,8 @@ function AncestorStrip({ scrollEl }: { readonly scrollEl: HTMLDivElement | null 
   );
 }
 const STRIP_HEIGHT = 28;
+/** What the board borrows from the outline (passed down, so the modules never import each other). */
+const BOARD_PARTS: Omit<BoardParts, "reveal"> = { RowField, TaskCheckbox };
 
 /** Row exit: collapse calmly, or at once when a veto rolls the row back (`custom` = rollback). */
 const ROW_PRESENCE = {
@@ -1362,9 +1673,11 @@ function DocumentTitle({ title }: { readonly title: string }) {
   const ratio = tasks.total ? tasks.done / tasks.total : 0;
   return (
     <header className="mb-3 ps-[30px]">
-      {hoisted ? <ZoomTitle /> : <h2 className="text-[22px] leading-8 font-semibold tracking-[-0.015em] text-balance">{title}</h2>}
+      {hoisted ? <ZoomTitle /> : <RootTitle title={title} />}
       {hoisted?.data?.note && (
-        <p dir="auto" className="mt-0.5 text-ui whitespace-pre-wrap text-muted-foreground">{hoisted.data.note}</p>
+        <div dir="auto" className="mt-0.5 text-ui text-muted-foreground">
+          <RichNote source={hoisted.data.note} />
+        </div>
       )}
       {hoisted && <ZoomConnections item={hoisted} />}
       {tasks.total > 0 && (
@@ -1386,11 +1699,55 @@ function DocumentTitle({ title }: { readonly title: string }) {
   );
 }
 
+/** The document's own title; editable in place when the host passes `onTitleChange` (a workspace). */
+function RootTitle({ title }: { readonly title: string }) {
+  const { ol, ui } = useOutlinerContext();
+  const onChange = ui.host.onTitleChange;
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const className = "block w-full text-[22px] leading-8 font-semibold tracking-[-0.015em]";
+  if (!onChange || ol.readOnly) return <h2 className={cn(className, "text-balance")}>{title}</h2>;
+  if (draft === null)
+    return (
+      <h2 className={cn(className, "cursor-text text-balance")} onClick={() => setDraft(title)}>
+        {title || <span className="text-muted-foreground/60">{ui.labels.untitledDocument}</span>}
+      </h2>
+    );
+  const commit = () => {
+    const next = draft.replace(/\s+/g, " ").trim();
+    setDraft(null);
+    if (next !== title) onChange(next);
+  };
+  return (
+    <input
+      autoFocus
+      aria-label={ui.labels.documentTitle}
+      value={draft}
+      dir="auto"
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (isComposingKey(event)) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+          ui.focusList();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          setDraft(null);
+        }
+      }}
+      className={cn(className, "border-0 bg-transparent p-0 caret-signal outline-none placeholder:text-muted-foreground/60")}
+      placeholder={ui.labels.untitledDocument}
+    />
+  );
+}
+
 /** Syntax chips shown under an empty search field (core grammar + the outliner's task/date filters). */
 function searchHints(now = new Date()) {
   const week = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
   const iso = `${week.getFullYear()}-${String(week.getMonth() + 1).padStart(2, "0")}-${String(week.getDate()).padStart(2, "0")}`;
-  return ["is:todo", "due:today", "due:overdue", "due:week", `before:${iso}`, "#tag", "@person", '"exact phrase"', "-exclude", "a OR b", "is:done", "has:date", "has:note", "color:red", "heading:2", "parent:goals", "in:title"];
+  return ["is:todo", "due:today", "due:overdue", "due:week", `before:${iso}`, "created:week", "#tag", "@person", '"exact phrase"', "-exclude", "a OR b", "is:done", "has:date", "has:note", "color:red", "heading:2", "parent:goals", "in:title"];
 }
 
 /**
@@ -1513,6 +1870,7 @@ function ZoomTitle() {
       onChange={(event) => ol.dispatch({ type: "text", id: hoisted.id, text: event.target.value, time: Date.now() })}
       onBlur={() => setEditing(false)}
       onKeyDown={(event) => {
+        if (isComposingKey(event)) return;
         if (event.key === "Escape") setEditing(false);
         if (event.key === "Enter") {
           event.preventDefault();
@@ -1564,6 +1922,7 @@ function ZoomTitle() {
         </span>
       )}
       <div className="min-w-0 flex-1">{title}</div>
+      <ViewSwitcher item={hoisted} disabled={!editable} />
       <Tooltip>
         <TooltipTrigger asChild>
           <button
@@ -1572,7 +1931,7 @@ function ZoomTitle() {
             aria-label={starred ? ui.labels.removeBookmark : ui.labels.bookmark}
             onClick={() => ui.announce(ol.commands.toggleBookmark(hoisted.id) ? ui.labels.bookmarked : ui.labels.bookmarkRemoved)}
             className={cn(
-              "relative ms-2 mt-1.5 grid size-6 shrink-0 place-items-center rounded-[5px] text-muted-foreground/70 transition-colors after:absolute after:-inset-1 hover:bg-muted hover:text-foreground coarse:size-9",
+              "relative ms-2 mt-1.5 grid size-6 shrink-0 place-items-center rounded-[5px] text-muted-foreground/70 transition-colors after:absolute after:-inset-1 hover:bg-muted hover:text-foreground coarse:ms-0 coarse:mt-0 coarse:size-11",
               starred && "text-warning hover:text-warning",
             )}
           >
@@ -1620,7 +1979,8 @@ function ZoomConnections({ item }: { readonly item: OutlineItem }) {
   const sources = React.useMemo(() => ol.commands.backlinks(item.id), [nodes, item.id, ol.commands]);
   const mirrors = React.useMemo(() => ol.commands.mirrorsOf(item.id), [nodes, item.id, ol.commands]);
   const mirrorSource = mirrorOf(item);
-  if (!sources.length && !mirrors.length && !mirrorSource) return null;
+  const elsewhere = React.useMemo(() => ol.external?.backlinks(ol.commands.identityOf(item.id)) ?? [], [ol.external, item.id, ol.commands, nodes]);
+  if (!sources.length && !mirrors.length && !mirrorSource && !elsewhere.length) return null;
   const titleOf = (id: string) => {
     const node = findOutlineNode(nodes, id)?.node;
     return node ? inlineToPlain(node.text) || L.untitled : L.untitled;
@@ -1678,6 +2038,26 @@ function ZoomConnections({ item }: { readonly item: OutlineItem }) {
             )}
           </div>
           <ul>{sources.slice(0, 6).map((id) => entry(id, <CornerDownRight />))}</ul>
+        </>
+      )}
+      {elsewhere.length > 0 && (
+        <>
+          <div className="px-1.5 pt-1 font-mono text-[10.5px] tracking-wide text-muted-foreground uppercase">{L.linkedFromElsewhere(elsewhere.length)}</div>
+          <ul>
+            {elsewhere.slice(0, 6).map((ref) => (
+              <li key={ref.id}>
+                <button
+                  type="button"
+                  onClick={() => ol.external?.open(ref.id)}
+                  className="group/link flex w-full min-w-0 items-baseline gap-2 rounded-md px-1.5 py-1 text-start transition-colors hover:bg-muted coarse:min-h-11 coarse:items-center"
+                >
+                  <span className="translate-y-px text-muted-foreground/70 [&>svg]:size-3"><Files /></span>
+                  <span dir="auto" className="min-w-0 truncate text-ui text-foreground/90">{inlineToPlain(ref.title) || L.untitled}</span>
+                  <span dir="auto" className="ms-auto max-w-[45%] shrink-0 truncate font-mono text-[10.5px] text-muted-foreground">{ref.context}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </>
       )}
       {mirrors.length > 0 && (
@@ -1738,7 +2118,7 @@ function OutlinerStatusBar() {
         ) : ol.search?.diagnostics.length ? (
           <span className="text-destructive">{L.invalidQuery}</span>
         ) : (
-          <span className="text-signal">{ol.view.searchMode === "agenda" ? "agenda view" : ol.view.searchMode === "flat" ? "flat results" : "filtered outline"}</span>
+          <span className="text-signal">{ui.host.searchScope?.value === "all" ? L.allDocuments.toLowerCase() : ol.view.searchMode === "agenda" ? "agenda view" : ol.view.searchMode === "flat" ? "flat results" : "filtered outline"}</span>
         ))}
       {ol.view.hideCompleted && (
         <button type="button" className="text-signal hover:underline" onClick={() => ol.setView((view) => ({ ...view, hideCompleted: false }))}>
@@ -1986,12 +2366,19 @@ const OutlineRowView = React.memo(function OutlineRowView({
         style={{ paddingInlineStart: `calc(var(--ol-indent) * ${row.depth})` }}
         onClick={(event) => {
           const { ol, ui } = live.current;
-          if (ui.editing || readOnly) return;
-          if (event.shiftKey || event.metaKey || event.ctrlKey) {
-            event.preventDefault();
-            ol.dispatch({ type: "select", id: row.id, extend: event.shiftKey, toggle: event.metaKey || event.ctrlKey });
-            ui.focusList();
+          if (readOnly || !(event.shiftKey || event.metaKey || event.ctrlKey)) return;
+          event.preventDefault();
+          if (ui.editing) {
+            // ⌘/Ctrl- or ⇧-click while editing: the row being edited becomes the selection's first
+            // member, then the clicked row joins it (one click, not two).
+            const editingId = ol.state.caret?.id;
+            if (editingId === row.id) return;
+            ui.setEditing(false);
+            if (editingId) ol.dispatch({ type: "select", id: editingId });
           }
+          ol.dispatch({ type: "select", id: row.id, extend: event.shiftKey, toggle: event.metaKey || event.ctrlKey });
+          ui.setHead(row.id);
+          ui.focusList();
         }}
       >
         {/* Colour label: a start stripe at the item's own indent (plus the faintest tint), so a
@@ -2026,7 +2413,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
         ))}
 
         {/* Disclosure */}
-        <div className="relative flex h-7 w-[22px] shrink-0 items-center justify-center coarse:h-9 coarse:w-7">
+        <div className="relative flex h-[var(--ol-line)] w-[22px] shrink-0 items-center justify-center coarse:w-7">
           {row.hasChildren && !flat && (
             <button
               type="button"
@@ -2039,7 +2426,8 @@ const OutlineRowView = React.memo(function OutlineRowView({
                 else ol.dispatch({ type: "toggle", id: row.id });
               }}
               className={cn(
-                "grid size-5 place-items-center rounded-[5px] text-muted-foreground/80 transition-[opacity,background-color,color] hover:bg-muted hover:text-foreground coarse:size-8",
+                // Touch: the hit area also covers the empty indent to its start (44 × 44 to the finger).
+                "relative grid size-5 place-items-center rounded-[5px] text-muted-foreground/80 transition-[opacity,background-color,color] hover:bg-muted hover:text-foreground coarse:size-8 coarse:after:absolute coarse:after:-start-4 coarse:after:end-0 coarse:after:top-1/2 coarse:after:h-11 coarse:after:-translate-y-1/2",
                 row.expanded ? "opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 coarse:opacity-60" : "opacity-60 group-hover/row:opacity-100",
               )}
             >
@@ -2051,7 +2439,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
         </div>
 
         {/* Bullet (or ordinal): click zooms in, drag moves. */}
-        <div className={cn("relative flex h-7 min-w-[18px] shrink-0 items-center justify-center coarse:h-9 coarse:min-w-7", details.checkbox && "coarse:hidden")}>
+        <div className={cn("relative flex h-[var(--ol-line)] min-w-[18px] shrink-0 items-center justify-center coarse:min-w-7", details.checkbox && "coarse:hidden")}>
           <button
             type="button"
             tabIndex={-1}
@@ -2061,8 +2449,23 @@ const OutlineRowView = React.memo(function OutlineRowView({
             onClick={(event) => {
               event.stopPropagation();
               const { ol, ui } = live.current;
-              ol.dispatch({ type: "hoist", id: row.id });
-              ui.setEditing(false);
+              // ⌘/⇧-click a bullet selects, like anywhere else on the row.
+              if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                if (readOnly) return;
+                ui.setEditing(false);
+                ol.dispatch({ type: "select", id: row.id, extend: event.shiftKey, toggle: event.metaKey || event.ctrlKey });
+                ui.setHead(row.id);
+                ui.focusList();
+                return;
+              }
+              // The setting picks what a click does; ⌥/Alt-click does the other. A leaf has
+              // nothing to fold, so it always zooms.
+              const fold = (ui.settings.bulletClick === "fold") !== event.altKey;
+              if (fold && row.hasChildren) ol.dispatch({ type: "toggle", id: row.id });
+              else {
+                ol.dispatch({ type: "hoist", id: row.id });
+                ui.setEditing(false);
+              }
             }}
             className={cn(
               "group/bullet grid h-[18px] min-w-[18px] cursor-grab touch-none place-items-center rounded-full active:cursor-grabbing coarse:h-7 coarse:min-w-7",
@@ -2088,7 +2491,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
         </div>
 
         {details.checkbox && (
-          <div className="flex h-7 w-6 shrink-0 items-center justify-center coarse:h-9 coarse:w-9">
+          <div className="flex h-[var(--ol-line)] w-6 shrink-0 items-center justify-center coarse:w-11">
             <TaskCheckbox
               checked={row.completed}
               disabled={!editable}
@@ -2108,7 +2511,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
         )}
 
         {/* Content */}
-        <div className="min-w-0 flex-1 py-[3px] pe-1 coarse:py-[7px]">
+        <div className="min-w-0 flex-1 py-[var(--ol-row-pad)] pe-1">
           {flat && row.path && row.path.length > 0 && (
             <div className="mb-px truncate text-2xs text-muted-foreground">{row.path.join(" › ")}</div>
           )}
@@ -2126,8 +2529,9 @@ const OutlineRowView = React.memo(function OutlineRowView({
                   event.stopPropagation();
                   beginEdit(event, "title", node.text, titleRef.current);
                 }}
+                data-ol-title=""
                 className={cn(
-                  "block min-h-[22px] cursor-text transition-colors duration-200",
+                  "block min-h-[var(--ol-leading)] cursor-text transition-colors duration-200",
                   !editable && "cursor-default",
                   row.completed && "text-muted-foreground line-through decoration-muted-foreground/60",
                 )}
@@ -2150,6 +2554,9 @@ const OutlineRowView = React.memo(function OutlineRowView({
                         value: segment.date.value,
                         hasTime: segment.date.hasTime,
                         repeat: segment.date.repeat,
+                        rangeEnd: segment.date.end,
+                        rangeEndHasTime: segment.date.endHasTime,
+                        time: segment.date.time,
                         rect: el.getBoundingClientRect(),
                       })
                     }
@@ -2160,7 +2567,20 @@ const OutlineRowView = React.memo(function OutlineRowView({
                 {row.locked && <Lock aria-hidden className="ms-1.5 inline size-3 -translate-y-px text-muted-foreground" />}
                 <RowBadges row={row} starred={starred} />
                 {row.summary && row.summary.descendants > 0 && (
-                  <FoldSummary summary={row.summary} onExpand={() => live.current.ol.dispatch({ type: "toggle", id: row.id })} />
+                  <FoldTasks
+                    node={row.node}
+                    summary={row.summary}
+                    disabled={!editable}
+                    coarse={coarse}
+                    labels={labels}
+                    onExpand={() => live.current.ol.dispatch({ type: "toggle", id: row.id })}
+                    onToggle={(id) => {
+                      const { ol, ui } = live.current;
+                      ui.announceToggle(ol.commands.toggleComplete([id]));
+                    }}
+                    isLocked={(id) => live.current.ol.isItemLocked(id)}
+                    onClose={(event) => live.current.ui.returnFocus(event, coarse ? null : row.id)}
+                  />
                 )}
               </span>
             )}
@@ -2186,7 +2606,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
         </div>
 
         {/* Trailing meta + actions */}
-        <div className="flex h-7 shrink-0 items-center gap-1 ps-1 coarse:h-9">
+        <div className="flex h-[var(--ol-line)] shrink-0 items-center gap-1 ps-1">
           {coarse ? (
             <button
               type="button"
@@ -2198,7 +2618,8 @@ const OutlineRowView = React.memo(function OutlineRowView({
                 openSheet();
               }}
               className={cn(
-                "grid size-9 place-items-center rounded-[5px] text-muted-foreground opacity-0 transition-opacity group-focus-within/row:opacity-60 active:bg-muted",
+                // 44 × 44: on touch the row's first line is 44 px tall (outliner-settings.css).
+                "grid h-[var(--ol-line)] w-11 place-items-center rounded-[5px] text-muted-foreground opacity-0 transition-opacity group-focus-within/row:opacity-60 active:bg-muted",
                 selected && "opacity-60",
                 rangeMode && selected && !cursor && "invisible",
               )}
@@ -2248,7 +2669,7 @@ const identityOfRow = (row: OutlinerRow) =>
 const OUTLINE_MIME = "application/x-fast-outline+json";
 /** Three flavors: lossless JSON (us), nested-list HTML (doc editors, note apps, mail), Markdown (everyone). */
 function writeClipboard(data: DataTransfer, ol: OutlinerController, ids: readonly string[]) {
-  data.setData("text/plain", ol.commands.exportAs("markdown", ids));
+  data.setData("text/plain", ol.commands.copyMarkdown(ids));
   data.setData("text/html", ol.commands.exportHtml(ids));
   data.setData(OUTLINE_MIME, ol.commands.exportAs("json", ids));
 }
@@ -2262,6 +2683,8 @@ function readClipboard(data: DataTransfer, ol: OutlinerController, afterId?: str
   const html = data.getData("text/html");
   if (html && htmlHasStructure(html)) {
     const count = ol.commands.importHtml(html, afterId);
+    // A paste stays quiet unless something was lost (images, embeds, tables …).
+    if (count) reportImport(html, { format: "html", quiet: true, items: count });
     if (count) return count;
   }
   const text = data.getData("text/plain");
@@ -2281,6 +2704,7 @@ function VirtualRows({
   focusId,
   editing = false,
   register,
+  pinnedId = null,
 }: {
   readonly rows: readonly OutlinerRow[];
   readonly renderRow: (row: OutlinerRow) => React.ReactNode;
@@ -2290,6 +2714,8 @@ function VirtualRows({
   /** Entering edit mode on a row scrolled out of the window must bring it back (its editor mounts there). */
   readonly editing?: boolean;
   readonly register: OutlinerUi["registerScroller"];
+  /** A row that stays mounted whatever the window (the phone sheet's target: it is lifted into view and its ⋯ takes focus back). */
+  readonly pinnedId?: string | null;
 }) {
   const [margin, setMargin] = React.useState(0);
   React.useLayoutEffect(() => {
@@ -2305,6 +2731,11 @@ function VirtualRows({
     // The sticky ancestor strip pads the top while shown; keyboard scrolling must clear it.
     scrollPaddingStart: Number.parseFloat(scrollEl?.style.scrollPaddingTop || "0") || 0,
     getItemKey: (index) => rows[index]!.id,
+    rangeExtractor: (range) => {
+      const indexes = defaultRangeExtractor(range);
+      const pinned = pinnedId ? rows.findIndex((row) => row.id === pinnedId) : -1;
+      return pinned < 0 || indexes.includes(pinned) ? indexes : [...indexes, pinned].sort((a, b) => a - b);
+    },
   });
   // ui.scrollToRow reaches rows outside the window (delete's new selection, links, crumbs).
   const rowsRef = React.useRef(rows);
@@ -2364,38 +2795,61 @@ const LiveContext = React.createContext<React.RefObject<LiveHandle> | null>(null
 const useLive = () => React.useContext(LiveContext)!;
 
 /**
- * Touch-only swipe actions: right completes, left deletes (with undo). The action is
- * revealed under the row as it moves; past the threshold the icon commits with a nudge.
+ * Touch-only swipe actions, two stages each way (gestures.ts): toward the inline end completes,
+ * further indents; toward the start deletes (with undo), further outdents. The action is
+ * revealed under the row as it moves; crossing a stage swaps the icon with a haptic tick.
  */
 function SwipeRow({ row, disabled, children }: { readonly row: OutlinerRow; readonly disabled: boolean; readonly children: React.ReactNode }) {
   const live = useLive();
   const coarse = useMediaQuery("(pointer: coarse)");
   const x = useMotionValue(0);
-  const completeOpacity = useTransform(x, [0, 24, 72], [0, 0.6, 1]);
-  const deleteOpacity = useTransform(x, [-72, -24, 0], [1, 0.6, 0]);
-  const iconScale = useTransform(x, [-96, -72, 0, 72, 96], [1.15, 1, 0.8, 1, 1.15]);
+  const host = React.useRef<HTMLDivElement>(null);
+  const [intent, setIntent] = React.useState<ReturnType<typeof swipeIntent>>(null);
+  // Clip only while the row is off its resting place: at rest, hit areas that reach past the
+  // row's edge (the fold chevron's 44px target in the gutter) must stay tappable.
+  const [moving, setMoving] = React.useState(false);
+  useMotionValueEvent(x, "change", (v) => setMoving(v !== 0));
+  const forwardOpacity = useTransform(x, (v) => Math.min(1, Math.abs(Math.max(0, rtlSign(host.current) * v)) / 30));
+  const backOpacity = useTransform(x, (v) => Math.min(1, Math.abs(Math.min(0, rtlSign(host.current) * v)) / 30));
+  const iconScale = useTransform(x, [-120, -36, 0, 36, 120], [1.12, 1, 0.8, 1, 1.12]);
+  useMotionValueEvent(x, "change", (v) => {
+    const next = swipeIntent(v, rtlSign(host.current) < 0);
+    if (next === intent) return;
+    if (next) navigator.vibrate?.(next === "indent" || next === "outdent" ? 10 : 5);
+    setIntent(next);
+  });
   if (!coarse || disabled) return <>{children}</>;
-  const onDragEnd = (_: unknown, info: PanInfo) => {
-    const { ol } = live.current;
-    const offset = info.offset.x;
-    if (offset > 72) {
-      live.current.ui.announceToggle(ol.commands.toggleComplete([row.id]));
+  const onDragEnd = () => {
+    const { ol, ui } = live.current;
+    const L = ui.labels;
+    const what = swipeIntent(x.get(), rtlSign(host.current) < 0);
+    if (what === "complete") {
+      ui.announceToggle(ol.commands.toggleComplete([row.id]));
       navigator.vibrate?.(6);
-    } else if (offset < -72) {
-      deleteItems(live.current, [row.id]);
+    } else if (what === "delete") deleteItems(live.current, [row.id]);
+    else if (what === "indent" || what === "outdent") {
+      const outcome = ol.commands.shift([row.id], what);
+      if (outcome === "moved") ui.announce(what === "indent" ? L.indented : L.outdented);
+      else if (outcome === "noop") toast(what === "indent" ? L.cannotIndent : L.cannotOutdent, { id: "outliner-swipe" });
     }
     animateValue(x, 0, motionTokens.layout);
   };
+  const L = live.current.ui.labels;
+  const forward = intent === "indent" ? { label: L.swipeIndent, Icon: IndentIncrease, tone: "bg-signal/15 text-signal" } : { label: L.swipeComplete, Icon: CircleCheck, tone: "bg-success/15 text-success" };
+  const back = intent === "outdent" ? { label: L.swipeOutdent, Icon: IndentDecrease, tone: "bg-muted text-foreground" } : { label: L.swipeDelete, Icon: Trash2, tone: "bg-destructive/12 text-destructive" };
   return (
-    <div className="relative overflow-hidden rounded-md">
-      <motion.div aria-hidden style={{ opacity: completeOpacity }} className="absolute inset-0 flex items-center bg-success/15 ps-4 text-success">
-        <motion.span style={{ scale: iconScale }}>
-          <CircleCheck className="size-5" />
+    <div ref={host} className={cn("relative rounded-md", moving && "overflow-hidden")} data-swipe-row={row.id} data-swipe-moving={moving || undefined} data-swipe-intent={intent ?? undefined}>
+      <motion.div aria-hidden style={{ opacity: forwardOpacity }} className={cn("absolute inset-0 flex items-center gap-2 ps-4 text-[13px] font-medium transition-colors duration-150", forward.tone)}>
+        <motion.span style={{ scale: iconScale }} key={forward.label} initial={{ opacity: 0.4 }} animate={{ opacity: 1 }} transition={motionTokens.quick}>
+          <forward.Icon className="size-5 rtl:-scale-x-100" />
         </motion.span>
+        {/* Words only at the long stage, where the row has moved far enough to show them. */}
+        <span className={cn("whitespace-nowrap transition-opacity", intent === "indent" ? "opacity-100" : "opacity-0")}>{forward.label}</span>
       </motion.div>
-      <motion.div aria-hidden style={{ opacity: deleteOpacity }} className="absolute inset-0 flex items-center justify-end bg-destructive/12 pe-4 text-destructive">
-        <motion.span style={{ scale: iconScale }}>
-          <Trash2 className="size-5" />
+      <motion.div aria-hidden style={{ opacity: backOpacity }} className={cn("absolute inset-0 flex items-center justify-end gap-2 pe-4 text-[13px] font-medium transition-colors duration-150", back.tone)}>
+        <span className={cn("whitespace-nowrap transition-opacity", intent === "outdent" ? "opacity-100" : "opacity-0")}>{back.label}</span>
+        <motion.span style={{ scale: iconScale }} key={back.label} initial={{ opacity: 0.4 }} animate={{ opacity: 1 }} transition={motionTokens.quick}>
+          <back.Icon className="size-5 rtl:-scale-x-100" />
         </motion.span>
       </motion.div>
       <motion.div
@@ -2414,14 +2868,18 @@ function SwipeRow({ row, disabled, children }: { readonly row: OutlinerRow; read
   );
 }
 
+/** +1 in LTR, −1 in RTL: swipe offsets are read toward the inline end. */
+const rtlSign = (el: Element | null) => (el && getComputedStyle(el).direction === "rtl" ? -1 : 1);
+
 function headingClass(heading?: 1 | 2 | 3) {
+  // Sized from the settings' type scale (--ol-text / --ol-leading, see settings.ts).
   return heading === 1
-    ? "text-[17px] leading-[26px] font-semibold tracking-[-0.01em]"
+    ? "text-[length:calc(var(--ol-text)+3px)] leading-[calc(var(--ol-leading)+4px)] font-semibold tracking-[-0.01em]"
     : heading === 2
-      ? "text-[15px] leading-[22px] font-semibold"
+      ? "text-[length:calc(var(--ol-text)+1px)] leading-[var(--ol-leading)] font-semibold"
       : heading === 3
-        ? "text-[14px] leading-[22px] font-semibold text-foreground/85"
-        : "text-[14px] leading-[22px]";
+        ? "text-[length:var(--ol-text)] leading-[var(--ol-leading)] font-semibold text-foreground/85"
+        : "text-[length:var(--ol-text)] leading-[var(--ol-leading)]";
 }
 
 function NoteDisplay({
@@ -2440,18 +2898,19 @@ function NoteDisplay({
   return (
     <span
       ref={ref}
+      data-ol-note=""
       onMouseDown={(event) => !readOnly && event.preventDefault()}
       onClick={(event) => {
         event.stopPropagation();
         onEdit(event, ref.current);
       }}
       className={cn(
-        "block cursor-text pt-px text-[13px] leading-5 text-muted-foreground",
+        "block cursor-text pt-px text-[length:var(--ol-note)] leading-[var(--ol-note-leading)] text-muted-foreground",
         firstLine && "truncate",
         row.completed && "opacity-70",
       )}
     >
-      <InlineText source={firstLine ? note.split("\n")[0]! : note} marks={row.match?.noteRanges} />
+      {firstLine ? <InlineText source={note.split("\n")[0]!} marks={row.match?.noteRanges} /> : <RichNote source={note} marks={row.match?.noteRanges} />}
     </span>
   );
 }
@@ -2464,12 +2923,32 @@ function RowBadges({ row, starred }: { readonly row: OutlinerRow; readonly starr
   const live = useLive();
   const labels = live.current.ui.labels;
   const source = row.mirror && row.mirror !== "copy" ? row.mirror : null;
-  if (!starred && !source && !row.backlinks) return null;
+  const board = isBoard(row.node);
+  if (!starred && !source && !row.backlinks && !board) return null;
   const chip =
     "relative ms-1.5 inline-flex h-[18px] translate-y-[-1px] items-center gap-1 rounded-[5px] px-1 align-middle font-mono text-[10.5px] text-muted-foreground no-underline transition-colors after:absolute after:-inset-1 hover:bg-muted hover:text-foreground coarse:after:-inset-3";
   return (
     <>
       {starred && <Star aria-hidden className="ms-1.5 inline size-3 -translate-y-px fill-current text-warning/80" />}
+      {board && (
+        <button
+          type="button"
+          tabIndex={-1}
+          title={labels.board}
+          aria-label={`${labels.board}: ${labels.zoomIn}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => {
+            event.stopPropagation();
+            live.current.ol.dispatch({ type: "hoist", id: row.id });
+            live.current.ui.setEditing(false);
+          }}
+          className={cn(chip, "border border-hairline")}
+        >
+          <Kanban className="size-3" />
+          <bdi className="tabular-nums">{row.node.children?.length ?? 0}</bdi>
+        </button>
+      )}
       {source && (
         <button
           type="button"
@@ -2510,40 +2989,6 @@ function RowBadges({ row, starred }: { readonly row: OutlinerRow; readonly starr
   );
 }
 
-function FoldSummary({ summary, onExpand }: { readonly summary: NonNullable<OutlinerRow["summary"]>; readonly onExpand: () => void }) {
-  const progress = summary.tasks ? summary.done / summary.tasks : 0;
-  return (
-    <button
-      type="button"
-      tabIndex={-1}
-      onClick={(event) => {
-        event.stopPropagation();
-        onExpand();
-      }}
-      onMouseDown={(event) => event.preventDefault()}
-      aria-label={`Expand ${summary.descendants} hidden item${summary.descendants === 1 ? "" : "s"}${summary.tasks ? `, ${summary.done} of ${summary.tasks} tasks done` : ""}`}
-      title={summary.tasks ? `${summary.done} of ${summary.tasks} tasks done · ${summary.descendants} hidden` : `${summary.descendants} hidden`}
-      className="relative ms-2 inline-flex h-[18px] translate-y-[-1px] items-center gap-1.5 rounded-[5px] border border-hairline bg-muted/50 px-1.5 align-middle after:absolute after:-inset-1 coarse:after:-inset-3 font-mono text-[10.5px] text-muted-foreground tabular-nums no-underline transition-colors hover:border-border hover:text-foreground"
-    >
-      {summary.tasks > 0 && (
-        <span className="flex items-center gap-1.5">
-          <span className="relative h-[3px] w-4 overflow-hidden rounded-full bg-foreground/15" aria-hidden>
-            <motion.span
-              className="absolute inset-y-0 start-0 rounded-full"
-              initial={false}
-              animate={{ width: `${progress * 100}%`, backgroundColor: progress >= 1 ? "var(--success)" : "var(--signal)" }}
-              transition={motionTokens.base}
-            />
-          </span>
-          {summary.done}/{summary.tasks}
-          {summary.descendants > summary.tasks && <span className="text-muted-foreground/60">+{summary.descendants - summary.tasks}</span>}
-        </span>
-      )}
-      {summary.tasks === 0 && <span>{summary.descendants}</span>}
-    </button>
-  );
-}
-
 function TaskCheckbox({
   checked,
   disabled,
@@ -2574,7 +3019,7 @@ function TaskCheckbox({
         onToggle();
       }}
       className={cn(
-        "relative grid size-[15px] place-items-center rounded-[4px] border transition-[background-color,border-color,transform] duration-150 outline-none after:absolute after:-inset-1.5 focus-visible:ring-3 focus-visible:ring-signal/30 active:scale-90 disabled:opacity-60 coarse:size-5 coarse:after:-inset-3",
+        "relative grid size-[15px] place-items-center rounded-[4px] border transition-[background-color,border-color,transform] duration-150 outline-none after:absolute after:-inset-1.5 focus-visible:ring-3 focus-visible:ring-signal/30 active:scale-90 disabled:opacity-60 coarse:size-5 coarse:after:-inset-[13px]",
         checked ? "border-signal bg-signal text-signal-foreground" : "border-foreground/30 bg-background hover:border-foreground/55",
         className,
       )}
@@ -2598,9 +3043,25 @@ function TaskCheckbox({
 
 /* ───────────────────────────── Editing field ───────────────────────────── */
 
+/** A mouse/trackpad device (read once): see Enter in RowField. */
+const FINE_POINTER = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: fine)").matches;
 const NATIVE_FIELD_SIZING = typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content");
 
-function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "title" | "note" }) {
+/**
+ * A board card's field keeps the board's shape: ↑/↓ at an edge go to the neighbouring card in
+ * the column, Enter at the end adds the next card, Tab and merges (which would nest or fold cards
+ * into each other out of sight) do nothing, and Backspace in an empty card deletes it.
+ */
+export interface BoardFieldNav {
+  /** The card above/below in this column (null at the ends). */
+  readonly step: (id: string, direction: "up" | "down") => string | null;
+  /** Add the next card after `id` and edit it. */
+  readonly addAfter: (id: string) => void;
+  /** Delete the empty card `id`, landing on `next`. */
+  readonly removeEmpty: (id: string, next: string | null) => void;
+}
+
+export function RowField({ row, field, board }: { readonly row: OutlinerRow; readonly field: "title" | "note"; readonly board?: BoardFieldNav }) {
   const { ol, ui } = useOutlinerContext();
   const ref = React.useRef<HTMLTextAreaElement>(null);
   /** Set when a handled key moves the caret elsewhere; React's synthetic select for the same
@@ -2653,7 +3114,8 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = event.currentTarget;
-    if (event.nativeEvent.isComposing) return;
+    // IME: the Enter (or Tab) that picks a candidate never splits, indents or submits.
+    if (isComposingKey(event)) return;
     if (ac.onKeyDown(event)) {
       suppressSelect.current = true;
       return;
@@ -2689,9 +3151,36 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
       ui.setHead(row.id);
       return;
     }
+    const wrap = (open: string, close = open) => {
+      prevent();
+      const selected = value.slice(start, end);
+      const next = value.slice(0, start) + open + selected + close + value.slice(end);
+      dispatch({ type: field === "note" ? "note" : "text", id: row.id, text: next, caret: end + open.length });
+      requestAnimationFrame(() => el.setSelectionRange(start + open.length, end + open.length));
+    };
+    // Remappable shortcuts: the keyboard profile plus the reader's remaps decide what a key means.
+    const action = matchShortcut(ui.keymap, event, "text");
+    if (action) {
+      const marks = FORMAT_MARKS[action];
+      if (marks) return wrap(marks);
+      if (runItemShortcut(action, { ol, ui, ids: [row.id], rowId: row.id })) return prevent();
+    }
     if (key === "Enter" && mod) {
       prevent();
-      ui.announceToggle(ol.commands.toggleComplete([row.id]));
+      // ⌘⇧↵ is a line break in a note (the power profile's way to write one; standard too).
+      if (field === "note" && event.shiftKey) {
+        const next = value.slice(0, start) + "\n" + value.slice(end);
+        dispatch({ type: "note", id: row.id, text: next, caret: start + 1 });
+        requestAnimationFrame(() => el.setSelectionRange(start + 1, start + 1));
+      }
+      return;
+    }
+    if (field === "note" && key === "Enter" && !event.shiftKey && !event.altKey && ui.settings.keyboard === "power") {
+      // Power profile: Enter in a note finishes it and starts the next item.
+      prevent();
+      const id = createOutlineId();
+      const next = dispatch({ type: "insert", id, afterId: row.id, text: "" });
+      if (!next.refusal) dispatch({ type: "focus", id, start: 0 });
       return;
     }
     if (key === "Enter" && event.shiftKey && !mod) {
@@ -2699,6 +3188,30 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
       if (field === "title") dispatch({ type: "focus", id: row.id, field: "note", start: (row.details.note ?? "").length });
       else dispatch({ type: "focus", id: row.id, start: row.node.text.length });
       return;
+    }
+    if (board && field === "title") {
+      const bare = !mod && !event.shiftKey && !event.altKey;
+      if (key === "Tab") return prevent();
+      if (key === "Enter" && bare) {
+        prevent();
+        if (start === value.length && end === value.length) board.addAfter(row.id);
+        else dispatch({ type: "split", id: row.id, start, end, newId: createOutlineId() });
+        return;
+      }
+      if ((key === "ArrowUp" || key === "ArrowDown") && bare && textareaAtVisualBoundary(el, key === "ArrowUp" ? "up" : "down")) {
+        const target = board.step(row.id, key === "ArrowUp" ? "up" : "down");
+        if (!target) return;
+        prevent();
+        const text = ol.rowOf(target)?.node.text ?? "";
+        dispatch({ type: "focus", id: target, start: key === "ArrowUp" ? text.length : 0 });
+        return;
+      }
+      if (key === "Backspace" && bare && start === 0 && end === 0) {
+        prevent();
+        if (!value && !row.hasChildren) board.removeEmpty(row.id, board.step(row.id, "up") ?? board.step(row.id, "down"));
+        return;
+      }
+      if (key === "Delete" && bare && start === value.length && end === value.length) return prevent();
     }
     if (field === "note") {
       // Notes are multiline: plain Enter inserts a newline. Arrow keys leave at the edges.
@@ -2716,7 +3229,13 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
     }
     if (key === "Enter") {
       prevent();
-      dispatch({ type: "split", id: row.id, start, end, newId: createOutlineId() });
+      // Let go of focus while the DOM is still clean: the commit then removes an unfocused field
+      // (removing the focused one cost ~20 ms at 4× CPU on 2,740 rows) and the new row's field
+      // takes focus once. Touch keeps focus throughout, so the on-screen keyboard never drops.
+      if (FINE_POINTER) el.blur();
+      const next = dispatch({ type: "split", id: row.id, start, end, newId: createOutlineId() });
+      // Refused (a locked source behind a mirror): keep typing where you were.
+      if (next.refusal || next.caret?.id === row.id) el.focus({ preventScroll: true });
       return;
     }
     if (key === "Tab") {
@@ -2738,10 +3257,21 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
       dispatch({ type: "merge", id: row.id, direction: "forward" });
       return;
     }
-    if ((event.altKey && event.shiftKey) || (mod && event.shiftKey)) {
-      if (key === "ArrowUp" || key === "ArrowDown") {
+    if ((key === "ArrowUp" || key === "ArrowDown") && event.shiftKey && !mod && !event.altKey && field === "title" && !board) {
+      // ⇧↑/⇧↓ at a title's visual edge (or once the text selection reaches it) grows a row
+      // selection: the edited row and its neighbour, then ⇧↑/⇧↓ keep going in the tree.
+      const up = key === "ArrowUp";
+      const focusEnd = el.selectionDirection === "backward" ? start : end;
+      const atEdge = (start === end && textareaAtVisualBoundary(el, up ? "up" : "down")) || focusEnd === (up ? 0 : value.length);
+      if (atEdge) {
         prevent();
-        dispatch({ type: "move", direction: key === "ArrowUp" ? "up" : "down", ids: [row.id] });
+        const index = ol.rows.findIndex((candidate) => candidate.id === row.id);
+        const target = ol.rows[index + (up ? -1 : 1)];
+        ui.setEditing(false);
+        dispatch({ type: "select", id: row.id });
+        if (target) dispatch({ type: "select", id: target.id, extend: true });
+        ui.setHead(target?.id ?? row.id);
+        ui.focusList();
         return;
       }
     }
@@ -2755,37 +3285,6 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
       moveVertical(row.id, "down", el);
       return;
     }
-    if (mod && key === ".") {
-      prevent();
-      if (row.hasChildren) dispatch({ type: "toggle", id: row.id });
-      return;
-    }
-    if (mod && key === "]") {
-      prevent();
-      dispatch({ type: "hoist", id: row.id });
-      return;
-    }
-    if (mod && key === "[") {
-      prevent();
-      const crumbs = ol.breadcrumbs;
-      dispatch({ type: "hoist", id: crumbs.at(-2)?.id ?? null });
-      return;
-    }
-    if (mod && event.shiftKey && lower === "c") {
-      prevent();
-      ol.commands.toggleCheckbox([row.id]);
-      return;
-    }
-    if (mod && event.altKey && ["1", "2", "3", "0"].includes(key)) {
-      prevent();
-      ol.commands.setHeading([row.id], key === "0" ? undefined : (Number(key) as 1 | 2 | 3));
-      return;
-    }
-    if (mod && event.altKey && lower === "h") {
-      prevent();
-      ol.setView((view) => ({ ...view, hideCompleted: !view.hideCompleted }));
-      return;
-    }
     if (mod && lower === "a" && start === 0 && end === value.length) {
       prevent();
       ui.setEditing(false);
@@ -2793,21 +3292,44 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
       ui.focusList();
       return;
     }
-    const wrap = (open: string, close = open) => {
-      prevent();
-      const selected = value.slice(start, end);
-      const next = value.slice(0, start) + open + selected + close + value.slice(end);
-      dispatch({ type: field === "note" ? "note" : "text", id: row.id, text: next, caret: end + open.length });
-      requestAnimationFrame(() => el.setSelectionRange(start + open.length, end + open.length));
-    };
-    if (mod && !event.shiftKey && lower === "b") return wrap("**");
-    if (mod && !event.shiftKey && lower === "i") return wrap("__");
-    if (mod && !event.shiftKey && lower === "e") return wrap("`");
-    if (mod && event.shiftKey && lower === "x") return wrap("~~");
-    if (mod && event.shiftKey && lower === "h") return wrap("==");
+  };
+
+  /** Hand files to the host's `onAttach`; what it stored is appended to the note (one undo step). */
+  const attachFiles = (files: readonly File[]) => {
+    const handler = ui.host.onAttach;
+    if (!handler || ol.readOnly || row.locked) return;
+    void Promise.resolve(handler(files, { itemId: row.id, field })).then((attachments) => {
+      const markup = attachmentMarkup(attachments);
+      if (!markup) return;
+      const node = findOutlineNode(ol.latestNodes(), row.id)?.node as OutlineItem | undefined;
+      if (!node) return;
+      const note = node.data?.note ? `${node.data.note}\n${markup}` : markup;
+      ol.dispatch({ type: "transaction", commands: [{ type: "update", id: row.id, changes: { data: { ...node.data, note } } }] });
+      ui.announce(ui.labels.attached(attachments.length));
+    });
+  };
+  /** `https://…?zoom=<id>` of this page (or `?doc=…` of this workspace): insert `[[title|id]]`. */
+  const pasteItemLink = (text: string, el: HTMLTextAreaElement): boolean => {
+    const target = itemFromHref(text, window.location.href);
+    if (!target) return false;
+    const external = ol.external;
+    const here = external ? external.qualify("").slice(0, -1) : null;
+    const local = !target.doc || target.doc === here;
+    const id = local ? target.id : `${target.doc}/${target.id}`;
+    const title = local ? findOutlineNode(ol.latestNodes(), id)?.node.text : external?.resolve(id);
+    if (title === undefined || title === null) return false;
+    const label = inlineToPlain(title).replace(/[[\]|]/g, "").trim() || ui.labels.untitled;
+    const link = `[[${label}|${id}]]`;
+    const start = el.selectionStart,
+      end = el.selectionEnd;
+    const next = value.slice(0, start) + link + value.slice(end);
+    ol.dispatch({ type: "text", id: row.id, text: next, caret: start + link.length });
+    return true;
   };
 
   const moveVertical = (id: string, direction: "up" | "down", el: HTMLTextAreaElement) => {
+    // A card's note never walks into the outline's rows (they are not on screen).
+    if (board) return;
     const index = ol.rows.findIndex((candidate) => candidate.id === id);
     const target = ol.rows[direction === "up" ? index - 1 : index + 1];
     if (!target) return;
@@ -2864,8 +3386,26 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
       }}
       onFocus={() => ui.setEditing(true)}
       onKeyDown={onKeyDown}
+      onDrop={(event) => {
+        const files = [...(event.dataTransfer?.files ?? [])];
+        if (!files.length || !ui.host.onAttach) return;
+        event.preventDefault();
+        attachFiles(files);
+      }}
       onPaste={(event) => {
+        // Files (a screenshot, a PDF): the host stores them and the links land in the note.
+        const files = [...(event.clipboardData.files ?? [])];
+        if (files.length && ui.host.onAttach) {
+          event.preventDefault();
+          attachFiles(files);
+          return;
+        }
         const text = event.clipboardData.getData("text/plain");
+        // A deep link to an item of this outline pastes as an item link (`[[title|id]]`).
+        if (field === "title" && pasteItemLink(text, event.currentTarget)) {
+          event.preventDefault();
+          return;
+        }
         const rich = event.clipboardData.types.includes(OUTLINE_MIME) || htmlHasStructure(event.clipboardData.getData("text/html"));
         if (field === "note" || (!text.includes("\n") && !rich)) return;
         // One parser for every paste path (row, list, file import): lossless JSON flavor first,
@@ -2880,7 +3420,7 @@ function RowField({ row, field }: { readonly row: OutlinerRow; readonly field: "
       dir="auto"
       className={cn(
         "block w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none [field-sizing:content] placeholder:text-muted-foreground/50",
-        field === "title" ? "min-h-[22px] caret-signal" : "pt-px text-[13px] leading-5 text-muted-foreground caret-signal",
+        field === "title" ? "min-h-[var(--ol-leading)] caret-signal" : "pt-px text-[length:var(--ol-note)] leading-[var(--ol-note-leading)] text-muted-foreground caret-signal",
         field === "title" && row.completed && "text-muted-foreground",
       )}
     />
@@ -2908,15 +3448,20 @@ function onSelectionKey(event: React.KeyboardEvent, ol: ReturnType<typeof useOut
     ui.setHead(target.id);
     ui.listRef.current?.querySelector(`[data-row="${CSS.escape(target.id)}"]`)?.scrollIntoView({ block: "nearest" });
   };
+  // Remappable shortcuts first (profile + remaps): moving, folding, zoom, levels, complete …
+  const action = mod || event.altKey ? matchShortcut(ui.keymap, event, "row") : null;
+  if (action && runItemShortcut(action, { ol, ui, ids: selection.length ? selection : anchor ? [anchor] : [], rowId: anchor ?? selection.at(-1) ?? null })) {
+    prevent();
+    return;
+  }
   if (mod && key.toLowerCase() === "z") {
     prevent();
     ol.dispatch({ type: event.shiftKey ? "redo" : "undo" });
   } else if (key === "ArrowDown" && (event.altKey || mod) && event.shiftKey) {
+    // A remapped move key no longer moves; it must not fall through to plain travel either.
     prevent();
-    ol.dispatch({ type: "move", direction: "down", ids: selection });
   } else if (key === "ArrowUp" && (event.altKey || mod) && event.shiftKey) {
     prevent();
-    ol.dispatch({ type: "move", direction: "up", ids: selection });
   } else if (key === "ArrowDown") {
     prevent();
     go(index < 0 ? 0 : index + 1, event.shiftKey);
@@ -2939,15 +3484,13 @@ function onSelectionKey(event: React.KeyboardEvent, ol: ReturnType<typeof useOut
     const row = rows[index];
     if (row?.hasChildren && row.expanded) ol.dispatch({ type: "toggle", id: row.id });
     else if (row?.parentId) go(rows.findIndex((candidate) => candidate.id === row.parentId));
-  } else if (key === "Enter" && anchor && !ol.readOnly) {
+  } else if (key === "Enter" && anchor && !ol.readOnly && !mod) {
     prevent();
-    if (mod) ui.announceToggle(ol.commands.toggleComplete(selection));
-    else {
-      const row = rows[index];
-      ol.dispatch({ type: "focus", id: anchor, start: row?.node.text.length ?? 0 });
-      ui.setEditing(true);
-    }
-  } else if (key === " " && selection.length) {
+    const row = rows[index];
+    ol.dispatch({ type: "focus", id: anchor, start: row?.node.text.length ?? 0 });
+    ui.setEditing(true);
+  } else if (key === " " && selection.length && !mod && !event.altKey) {
+    // Plain Space only: ⌘⇧Space (quick capture) must not also complete the selection.
     prevent();
     ui.announceToggle(ol.commands.toggleComplete(selection));
   } else if (key === "Tab" && selection.length) {
@@ -2966,15 +3509,6 @@ function onSelectionKey(event: React.KeyboardEvent, ol: ReturnType<typeof useOut
   } else if (mod && key.toLowerCase() === "a") {
     prevent();
     ol.dispatch({ type: "select-all" });
-  } else if (mod && key === "]" && anchor) {
-    prevent();
-    ol.dispatch({ type: "hoist", id: anchor });
-  } else if (mod && key === "[") {
-    prevent();
-    ol.dispatch({ type: "hoist", id: ol.breadcrumbs.at(-2)?.id ?? null });
-  } else if (mod && key === "." && anchor) {
-    prevent();
-    ol.dispatch({ type: "toggle", id: anchor });
   }
 }
 
@@ -3002,6 +3536,16 @@ interface DragState {
   readonly valid: boolean;
   /** A folded row the pointer rests on: it opens after HOVER_EXPAND_MS (list-relative box). */
   readonly hover: { readonly id: string; readonly top: number; readonly height: number } | null;
+  /** Over a host drop target outside the outline (no drop line is drawn). */
+  readonly external?: boolean;
+  /** ⌥/Alt held: the drop copies (fresh ids) instead of moving. */
+  readonly copy?: boolean;
+}
+
+/** A `data-outline-drop` element under the pointer that is not part of this outline's list. */
+function outsideDropTarget(x: number, y: number, list: HTMLElement): HTMLElement | null {
+  const hit = document.elementFromPoint?.(x, y)?.closest<HTMLElement>("[data-outline-drop]") ?? null;
+  return hit && !list.contains(hit) ? hit : null;
 }
 
 /** How long the pointer rests on a folded row during a drag before it opens. */
@@ -3043,6 +3587,16 @@ function useRowDrag() {
       const opened: string[] = [];
       let hoverId: string | null = null;
       let hoverTimer: number | undefined;
+      /** The host drop target under the pointer (marked `data-drop-over` while it is). */
+      let overTarget: HTMLElement | null = null;
+      /** ⌥/Alt-drag copies; the key can be pressed or released at any point of the drag. */
+      let copy = event.altKey;
+      const setCopy = (next: boolean) => {
+        if (next === copy) return;
+        copy = next;
+        document.documentElement.toggleAttribute("data-outline-copy-drag", active && copy);
+        if (active) update(pointer.x, pointer.y);
+      };
       const clearHover = () => {
         window.clearTimeout(hoverTimer);
         hoverTimer = undefined;
@@ -3061,6 +3615,7 @@ function useRowDrag() {
         frame = requestAnimationFrame(tick);
       };
       const onKey = (key: KeyboardEvent) => {
+        if (key.key === "Alt") setCopy(key.type === "keydown");
         if (key.key === "Escape" && active) {
           key.preventDefault();
           key.stopPropagation();
@@ -3073,6 +3628,8 @@ function useRowDrag() {
         active = true;
         frame = requestAnimationFrame(tick);
         window.addEventListener("keydown", onKey, true);
+        window.addEventListener("keyup", onKey, true);
+        document.documentElement.toggleAttribute("data-outline-copy-drag", copy);
         target.setPointerCapture?.(pointerId);
         navigator.vibrate?.(8);
         ui.setEditing(false);
@@ -3082,6 +3639,20 @@ function useRowDrag() {
       const update = (x: number, y: number) => {
         const list = ui.listRef.current;
         if (!list) return;
+        // Over a host drop target outside the list (a workspace's document): that wins.
+        const external = ui.host.onExternalDrop ? outsideDropTarget(x, y, list) : null;
+        if (external !== overTarget) {
+          overTarget?.removeAttribute("data-drop-over");
+          external?.setAttribute("data-drop-over", "");
+          overTarget = external;
+        }
+        if (external) {
+          clearHover();
+          const next: DragState = { ids, label, pointer: { x, y }, gap: 0, depth: 0, top: -9999, left: 0, valid: true, hover: null, external: true, copy };
+          live.current = next;
+          setState(next);
+          return;
+        }
         const rows = latest.current.rows;
         const rowEls = [...list.querySelectorAll<HTMLElement>("[data-row]")].filter((el) => !moving.has(el.dataset.row!));
         const listBox = list.getBoundingClientRect();
@@ -3137,6 +3708,7 @@ function useRowDrag() {
           left: depth * unit + 30,
           valid: !!plan && plan.depth >= baseDepth,
           hover: hoverId && over?.id === hoverId ? over : null,
+          copy,
         };
         live.current = next;
         setState(next);
@@ -3154,13 +3726,20 @@ function useRowDrag() {
           activate();
         }
         move.preventDefault();
+        if (move.altKey !== copy) {
+          copy = move.altKey;
+          document.documentElement.toggleAttribute("data-outline-copy-drag", copy);
+        }
         pointer = { x: move.clientX, y: move.clientY };
         update(move.clientX, move.clientY);
       };
       const onUp = () => {
         const final = live.current;
         let landedIn: string | null = null;
-        if (active && final?.valid) {
+        const target = overTarget?.dataset.outlineDrop;
+        if (active && final?.external && target) {
+          ui.host.onExternalDrop?.(ids, target);
+        } else if (active && final?.valid) {
           const current = latest.current;
           const allVisible = current.rows.map((r) => r.id);
           const list = ui.listRef.current!;
@@ -3169,7 +3748,19 @@ function useRowDrag() {
           const gapInAll = final.gap < visibleIds.length ? allVisible.indexOf(visibleIds[final.gap]!) : allVisible.length;
           const remainingBefore = allVisible.slice(0, gapInAll).filter((id) => !moving.has(id)).length;
           const plan = planOutlineDrop(current.state.nodes, allVisible, ids, remainingBefore, final.depth + baseDepth);
-          if (plan) {
+          if (plan && final.copy) {
+            // ⌥-drag: copies with fresh ids land at the drop line; the originals stay (one undo step).
+            const { commands, created } = copyDropCommands(current.latestNodes(), ids, plan);
+            const result = commands.length ? current.dispatch({ type: "transaction", commands }) : null;
+            if (result && !result.refusal) {
+              landedIn = plan.parentId;
+              if (plan.parentId) current.dispatch({ type: "expand", ids: [plan.parentId], expanded: true });
+              current.dispatch({ type: "select", id: created[0]! });
+              for (const id of created.slice(1)) current.dispatch({ type: "select", id, toggle: true });
+              ui.offerUndo(ui.labels.copiedHere(created.length));
+              ui.announce(ui.labels.copiedHere(created.length));
+            }
+          } else if (plan) {
             current.dispatch({ type: "drop", ids, parentId: plan.parentId, index: plan.index });
             landedIn = plan.parentId;
           }
@@ -3191,9 +3782,13 @@ function useRowDrag() {
         clearHover();
         cancelAnimationFrame(frame);
         window.removeEventListener("keydown", onKey, true);
+        window.removeEventListener("keyup", onKey, true);
+        document.documentElement.removeAttribute("data-outline-copy-drag");
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onCancel);
+        overTarget?.removeAttribute("data-drop-over");
+        overTarget = null;
         if (opened.length) {
           const current = latest.current;
           const keep = new Set(landedIn ? getOutlinePath(current.state.nodes, landedIn).map((node) => node.id) : []);
@@ -3214,6 +3809,7 @@ function useRowDrag() {
 }
 
 function DropIndicator({ drag }: { readonly drag: DragState | null }) {
+  const { ui } = useOutlinerContext();
   return (
     <AnimatePresence>
       {drag?.hover && (
@@ -3236,7 +3832,7 @@ function DropIndicator({ drag }: { readonly drag: DragState | null }) {
           />
         </motion.div>
       )}
-      {drag && (
+      {drag && !drag.external && (
         <motion.div
           aria-hidden
           initial={{ opacity: 0 }}
@@ -3245,7 +3841,13 @@ function DropIndicator({ drag }: { readonly drag: DragState | null }) {
           transition={{ top: { duration: 0.08 }, insetInlineStart: { duration: 0.08 }, opacity: motionTokens.quick }}
           className="pointer-events-none absolute inset-e-0 z-10 h-0.5 rounded-full bg-signal"
         >
-          <span className="absolute -top-[3px] -start-1 size-2 rounded-full border-2 border-signal bg-surface" />
+          {drag.copy ? (
+            <span data-drop-copy="" className="absolute -top-[7px] -start-2 grid size-4 place-items-center rounded-full bg-signal text-signal-foreground">
+              <Plus className="size-3" strokeWidth={3} />
+            </span>
+          ) : (
+            <span className="absolute -top-[3px] -start-1 size-2 rounded-full border-2 border-signal bg-surface" />
+          )}
         </motion.div>
       )}
       {drag && (
@@ -3260,7 +3862,13 @@ function DropIndicator({ drag }: { readonly drag: DragState | null }) {
           style={{ position: "fixed", left: drag.pointer.x + 14, top: drag.pointer.y + 14 }}
           className="pointer-events-none z-50 flex max-w-64 items-center gap-2 rounded-md border bg-popover px-2 py-1 text-ui shadow-[0_8px_24px_-8px_rgb(0_0_0/0.25)]"
         >
-          <span className="size-1.5 shrink-0 rounded-full bg-signal" />
+          {drag.copy ? (
+            <span className="flex shrink-0 items-center gap-0.5 rounded-[4px] bg-signal px-1 font-mono text-[10px] leading-4 text-signal-foreground">
+              <Plus className="size-2.5" strokeWidth={3} /> {ui.labels.dragCopy}
+            </span>
+          ) : (
+            <span className="size-1.5 shrink-0 rounded-full bg-signal" />
+          )}
           <span className="truncate">{drag.label}</span>
           {!drag.valid && <span className="shrink-0 font-mono text-[10px] text-destructive">can't drop</span>}
         </motion.div>

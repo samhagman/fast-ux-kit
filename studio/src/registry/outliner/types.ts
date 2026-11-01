@@ -13,7 +13,15 @@ export interface OutlineItemData {
   readonly editedAt?: number;
   /** This item mirrors another (live copy). See mirrors.ts. */
   readonly mirrorOf?: string;
+  /**
+   * How the item shows its children when zoomed in: "board" lays children out as columns and
+   * grandchildren as cards (see board.ts); "article" reads the branch as flowing prose
+   * (article.ts); "mindmap" draws it as a map (mindmap.ts). Absent means the outline (list) view.
+   */
+  readonly view?: OutlineItemView;
 }
+
+export type OutlineItemView = "list" | "board" | "article" | "mindmap";
 
 export type OutlineItem = OutlineNode<OutlineItemData>;
 
@@ -56,3 +64,64 @@ export interface OutlineSavedSearch {
   readonly label?: string;
 }
 export const NO_BOOKMARKS: OutlineBookmarks = { items: [], searches: [] };
+
+/**
+ * One document of a multi-document workspace (`OutlinerWorkspace`). Plain data: the host stores
+ * it however it likes. Cross-document links are written `[[label|documentId/itemId]]`.
+ */
+export interface OutlineDocument {
+  readonly id: string;
+  readonly title: string;
+  readonly nodes: readonly OutlineItem[];
+  /** The folder it lives in (`OutlineWorkspaceLayout.folders`); absent or unknown: top level. */
+  readonly folderId?: string;
+}
+
+/** A folder of documents. Nested by `parentId`; siblings keep their array order. */
+export interface OutlineFolder {
+  readonly id: string;
+  readonly title: string;
+  readonly parentId?: string;
+}
+
+/**
+ * How a workspace's documents are organised, as plain data the host stores beside them (see
+ * library.ts): folders, starred documents and the inbox quick capture files into. Which folders
+ * are open is the reader's own state and never part of it.
+ */
+export interface OutlineWorkspaceLayout {
+  readonly folders: readonly OutlineFolder[];
+  /** Starred (bookmarked) document ids, in star order. */
+  readonly starred: readonly string[];
+  /** The document quick capture files into; null or missing: one is made on first capture. */
+  readonly inboxId?: string | null;
+}
+
+/** A link target or backlink source in another document, for chips, panels and autocomplete. */
+export interface OutlineExternalRef {
+  /** The link id as written in `[[label|id]]` (`documentId/itemId`). */
+  readonly id: string;
+  /** The item's title source (inline markup; rendered or flattened by the caller). */
+  readonly title: string;
+  /** Where it lives, plain text: "Document › Parent › Item's parent". */
+  readonly context: string;
+}
+
+/**
+ * Links that leave this document, resolved by a multi-document host (OutlinerWorkspace builds
+ * one per document). The outliner only reads it: it never touches other documents itself.
+ */
+export interface OutlineExternalLinks {
+  /** A link target's title source; null when it was deleted; undefined when `id` is not external. */
+  resolve(id: string): string | null | undefined;
+  /** Follow an external link (switch document, reveal the item). */
+  open(id: string): void;
+  /** Items in OTHER documents that link to `itemId` of this one. */
+  backlinks(itemId: string): readonly OutlineExternalRef[];
+  /** Backlink counts per item id of this document; a new Map identity means "something changed". */
+  readonly counts: ReadonlyMap<string, number>;
+  /** Link targets in other documents whose title contains `query` (for `[[` autocomplete). */
+  suggest(query: string, limit: number): readonly OutlineExternalRef[];
+  /** The id other documents use to link to `itemId` of this one (`documentId/itemId`). */
+  qualify(itemId: string): string;
+}

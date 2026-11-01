@@ -13,6 +13,7 @@ import {
   ListOrdered,
   StickyNote,
   Text,
+  Files,
 } from "lucide-react";
 import { textareaCaretRect } from "@fux/text-geometry";
 import { cn } from "@/lib/utils";
@@ -173,6 +174,18 @@ export function useAutocomplete(
           }
         };
         walk(ol.state.nodes);
+        // Other documents (a workspace host): `[[label|doc/item]]`, labelled with where they live.
+        if (ol.external && out.length < 8)
+          for (const ref of ol.external.suggest(token.query, 8 - out.length)) {
+            const text = inlineToPlain(ref.title);
+            out.push({
+              id: ref.id,
+              label: text,
+              hint: ref.context.split(" › ")[0],
+              icon: <Files />,
+              insert: `[[${text.replace(/[#@][\p{L}\p{N}_-]+/gu, "").replace(/[\[\]|]/g, "").replace(/\s+/g, " ").trim()}|${ref.id}]] `,
+            });
+          }
         return out;
       }
       case "slash": {

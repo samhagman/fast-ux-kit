@@ -288,17 +288,31 @@ function rescueEscapedCopies(
   for (const entry of before?.mirrors ?? []) mirrorIds.add(entry.node.id);
   if (!mirrorIds.size) return { ok: true, nodes: after, renames };
   const escaped: { readonly entry: Located; readonly prefix: string; readonly mirrorId: string }[] = [];
+  const crossed: { readonly id: string; readonly prefix: string; readonly mirrorId: string; readonly into: string }[] = [];
+  const topMirrors = new Set(now.mirrors.map((entry) => entry.node.id));
   for (const entry of now.byId.values()) {
     const at = entry.node.id.indexOf(MIRROR_SEPARATOR);
-    if (entry.inCopy || at <= 0) continue;
+    if (at <= 0) continue;
     const mirrorId = entry.node.id.slice(0, at);
     if (!mirrorIds.has(mirrorId)) continue;
     const prefix = prefixOf(mirrorId);
     // Only the root of a moved subtree (its descendants travel with it).
     if (entry.path.some((id) => id.startsWith(prefix))) continue;
-    escaped.push({ entry, prefix, mirrorId });
+    if (!entry.inCopy) {
+      escaped.push({ entry, prefix, mirrorId });
+      continue;
+    }
+    // A copy dropped into ANOTHER mirror (of the same source, or of a different one): the item
+    // it stands for moves there — into that mirror's source, at the matching place.
+    const into = entry.path.find((id) => topMirrors.has(id));
+    if (into && into !== mirrorId && !mirrorOf(entry.node)) crossed.push({ id: entry.node.id, prefix, mirrorId, into });
   }
   let nodes = after;
+  for (const move of crossed) {
+    const result = moveAcrossMirrors(nodes, before, move, renames, isLocked);
+    if (result === "locked") return { ok: false, reason: "locked" };
+    if (result) nodes = result;
+  }
   for (const { entry, prefix, mirrorId } of escaped) {
     const created = new Map<string, string>();
     const canonical = canonicalize(entry.node, prefix, created);
@@ -333,6 +347,77 @@ function rescueEscapedCopies(
     record(entry.node);
   }
   return { ok: true, nodes, renames };
+}
+
+/** Path-copying insertion of `node` as child `index` of `parentId`. */
+function insertNode(nodes: readonly OutlineItem[], parentId: string, index: number, node: OutlineItem): readonly OutlineItem[] {
+  return nodes.map((item) => {
+    if (item.id === parentId) {
+      const children = [...(item.children ?? [])];
+      children.splice(Math.max(0, Math.min(children.length, index)), 0, node);
+      return { ...item, children };
+    }
+    if (!item.children) return item;
+    const children = insertNode(item.children, parentId, index, node);
+    return children === item.children ? item : { ...item, children };
+  });
+}
+
+/**
+ * The copy `move.id` (from mirror `move.mirrorId`) now sits inside mirror `move.into`. Rewrite that
+ * as the source item moving into `move.into`'s source at the matching position, so it keeps its
+ * id and nothing is duplicated or lost (two mirrors of one source used to race: whichever came
+ * first in the document won, and the item could vanish). Null leaves it to the normal rule.
+ */
+function moveAcrossMirrors(
+  nodes: readonly OutlineItem[],
+  before: ReturnType<typeof index> | null,
+  move: { readonly id: string; readonly prefix: string; readonly mirrorId: string; readonly into: string },
+  renames: Map<string, string>,
+  isLocked?: (node: OutlineItem) => boolean,
+): readonly OutlineItem[] | "locked" | null {
+  const now = index(nodes);
+  const entry = now.byId.get(move.id);
+  const target = now.byId.get(move.into);
+  if (!entry || !target) return null;
+  const destination = resolveSource(mirrorOf(target.node)!, now.byId);
+  if (!destination || destination.inCopy) return null;
+  // The parent it was dropped under, as the destination source sees it.
+  const intoPrefix = prefixOf(move.into);
+  const parentId = entry.path.at(-1)!;
+  const sourceParent = parentId === move.into ? destination.node.id : parentId.startsWith(intoPrefix) ? parentId.slice(intoPrefix.length) : null;
+  if (!sourceParent || !now.byId.has(sourceParent)) return null;
+  const created = new Map<string, string>();
+  const canonical = canonicalize(entry.node, move.prefix, created);
+  if (created.size) return null; // a fresh node inside the moved copy: the normal rule handles it
+  const shadow = now.byId.get(canonical.id) ?? before?.byId.get(canonical.id);
+  const mirrorNode = now.byId.get(move.mirrorId)?.node ?? before?.byId.get(move.mirrorId)?.node;
+  const originId = mirrorNode ? mirrorOf(mirrorNode) : undefined;
+  const isOrigin = !!shadow && !!originId && (shadow.node.id === originId || shadow.path.includes(originId));
+  if (shadow && !isOrigin) return null; // the id belongs to something else: never touch it
+  if (isLocked) {
+    const lockedAt = (id: string) => {
+      const located = now.byId.get(id);
+      return !!located && (isLocked(located.node) || located.path.some((p) => { const n = now.byId.get(p)?.node; return !!n && isLocked(n); }));
+    };
+    if ((shadow && lockedAt(canonical.id)) || lockedAt(sourceParent)) return "locked";
+  }
+  // Position among the destination's children: the siblings before it in the mirror, minus any
+  // stale copy of the item itself (same source: the mirror still shows it at its old place).
+  const siblings = (parentId === move.into ? target.node.children : now.byId.get(parentId)?.node.children) ?? [];
+  const position = siblings
+    .slice(0, siblings.findIndex((node) => node.id === move.id))
+    .filter((node) => node.id !== intoPrefix + canonical.id).length;
+  let next = removeNode(nodes, move.id);
+  if (shadow && now.byId.has(canonical.id)) next = removeNode(next, canonical.id);
+  next = insertNode(next, sourceParent, position, canonical);
+  const record = (node: OutlineItem) => {
+    const id = node.id.startsWith(move.prefix) ? node.id.slice(move.prefix.length) : node.id;
+    renames.set(node.id, intoPrefix + id);
+    node.children?.forEach(record);
+  };
+  record(entry.node);
+  return next;
 }
 
 function lockedChange(

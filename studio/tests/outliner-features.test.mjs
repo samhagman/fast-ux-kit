@@ -1,4 +1,4 @@
-// Outliner parity features: mirrors, recurring dates, backlinks, agenda, sorting, bookmarks,
+// Outliner features: mirrors, recurring dates, backlinks, agenda, sorting, bookmarks,
 // honest deletes, literal paste and paren-safe links.
 //
 //   cd studio && node --test tests/

@@ -49,7 +49,8 @@ test("export: nested lists with semantic inline tags, checkbox state, headings a
   assert.match(html, /<\/h2><p>Owner: <code>rin<\/code><br>Second line <mark>hot<\/mark><\/p>/);
   assert.match(html, /<ul><li><input type="checkbox" disabled checked> <s>Old plan<\/s> replaced<\/li><li><s>Plain child<\/s><\/li><\/ul>/);
   assert.match(html, /<li>Numbered parent<ol><li>Step one<\/li><\/ol><\/li>/);
-  assert.match(html, /Links to Ship it and #tag @rin/, "id links export their target's current title");
+  // An internal link stays a link (to the item's id), labelled with its target's current title.
+  assert.match(html, /Links to <a href="#a">Ship it<\/a> and #tag @rin/, "id links export as links with their target's current title");
 });
 
 test("export escapes everything: no document string becomes markup", () => {

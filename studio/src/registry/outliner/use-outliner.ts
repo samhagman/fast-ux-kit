@@ -20,6 +20,8 @@ import {
 import {
   NO_BOOKMARKS,
   type OutlineBookmarks,
+  type OutlineExternalLinks,
+  type OutlineItemView,
   type OutlineColor,
   type OutlineExportFormat,
   type OutlineItem,
@@ -27,7 +29,7 @@ import {
   type OutlineNoteDisplay,
 } from "./types";
 import { exportOutline, exportOutlineHtml, idsInPasteOrder, importOutline, importOutlineHtml, linkMarkup, looksLikeOutlineJSON, reidentify } from "./interchange";
-import { dayNumber, firstDay, outgoingLinks, outlinerDetails, searchOutliner, searchSuggestions } from "./search-filters";
+import { agendaDay, dayNumber, outgoingLinks, outlinerDetails, searchOutliner, searchSuggestions } from "./search-filters";
 import { canonicalId, createMirror, hasMirrors, mirrorOf, mirrorsOfSource, syncMirrors } from "./mirrors";
 import {
   initOutlineState,
@@ -41,6 +43,7 @@ import {
   type OutlineEditor,
 } from "./controlled-outline";
 import { formatDateToken, inlineToPlain, nextOccurrence, parseInline, repeatFor } from "./inline";
+import { sortResults, type ResultSort } from "./result-sort";
 
 /**
  * The outliner controller. It owns exactly two kinds of state:
@@ -85,6 +88,32 @@ export interface UseOutlinerOptions {
    * `changed:today` / `edited:week` search and the "edited" sort work. False leaves data alone.
    */
   readonly trackEdits?: boolean;
+  /**
+   * Links that leave this document (`[[label|doc/item]]`) and backlinks from other documents,
+   * supplied by a multi-document host (OutlinerWorkspace). Without it, such links read as missing.
+   */
+  readonly externalLinks?: OutlineExternalLinks;
+  /**
+   * Told after every undo and redo that moved through history: `from` is the entry travelled
+   * over, `to` the entry that now stands for it on the other stack. A host that joins steps
+   * across documents (OutlinerWorkspace's moves) uses it to travel its other documents too.
+   */
+  readonly onHistoryTravel?: (travel: OutlineHistoryTravel) => void;
+}
+
+export interface OutlineHistoryTravel {
+  readonly direction: "undo" | "redo";
+  /** Opaque history entries, compared by identity. */
+  readonly from: unknown;
+  readonly to: unknown;
+}
+
+/**
+ * Mark nodes about to be passed to a `replace` (or `paste-nodes`) action: these ids arrive
+ * intact from elsewhere (a move between documents), so stamping leaves them alone.
+ */
+export function carryIds(nodes: readonly OutlineItem[], ids: ReadonlySet<string>) {
+  if (ids.size) carriedIds.set(nodes, ids);
 }
 
 export interface OutlinerRow {
@@ -123,7 +152,8 @@ export interface OutlinerRow {
 export type AgendaGroup = "overdue" | "today" | "tomorrow" | "week" | "later" | "earlier" | "none";
 const AGENDA_ORDER: readonly AgendaGroup[] = ["overdue", "today", "tomorrow", "week", "later", "earlier", "none"];
 export function agendaGroupOf(node: OutlineItem, today: number): AgendaGroup {
-  const day = firstDay(node);
+  // A range under way sits under Today; anything else under its first day.
+  const day = agendaDay(node, today);
   if (day === null) return "none";
   if (day < today) return isCompleted(node) ? "earlier" : "overdue";
   return day === today ? "today" : day === today + 1 ? "tomorrow" : day <= today + 6 ? "week" : "later";
@@ -135,8 +165,15 @@ export type OutlinerSearch = OutlineSearchResult & { readonly pending?: boolean 
 export interface OutlinerView {
   readonly query: string;
   readonly searchMode: "filter" | "flat" | "agenda";
+  /** Order of flat results (see result-sort.tsx); the agenda keeps its date groups. */
+  readonly resultSort?: ResultSort;
   readonly hideCompleted: boolean;
   readonly noteDisplay: OutlineNoteDisplay;
+  /**
+   * A read-only reader's own choice of view per item (list, board, article, mind map): local,
+   * never written to the document, whose `data.view` stays the author's default.
+   */
+  readonly views?: Readonly<Record<string, OutlineItemView>>;
 }
 
 const noteAdapter: NonNullable<OutlineEditorOptions<OutlineItemData>["noteAdapter"]> = {
@@ -264,10 +301,13 @@ export function advanceRecurring(text: string, now = new Date()): { text: string
   for (const segment of parseInline(text)) {
     if (segment.kind !== "date" || !segment.date?.repeat) continue;
     const date = nextOccurrence(segment.date, now);
-    if (segment.date.hasTime) date.setHours(segment.date.value.getHours(), segment.date.value.getMinutes(), 0, 0);
+    // The time as WRITTEN, not the clock of an instant that fell into a daylight-saving gap
+    // (02:30 on spring-forward day reads 03:30): every later occurrence is 02:30 again.
+    const time = segment.date.time ?? [segment.date.value.getHours(), segment.date.value.getMinutes()];
+    if (segment.date.hasTime) date.setHours(time[0], time[1], 0, 0);
     // A clamped month end keeps its intended day (`every month on 31`) for the step after.
     const repeat = repeatFor(date, segment.date.repeat, segment.date.repeat.day ?? segment.date.value.getDate());
-    out += text.slice(at, segment.start) + formatDateToken(date, segment.date.hasTime, repeat);
+    out += text.slice(at, segment.start) + formatDateToken(date, segment.date.hasTime, repeat, { time });
     at = segment.end;
     next ??= date;
   }
@@ -298,11 +338,19 @@ export function mirrorAfterEdit(isLocked: UseOutlinerOptions["isLocked"]): Outli
   };
 }
 
+/**
+ * Ids a `paste-nodes` brings back unchanged (a cut + paste is a MOVE, not new content), keyed by
+ * that action's node array. Stamping skips them, so a moved item keeps its `createdAt` and does
+ * not show up as "changed" (see importJSON).
+ */
+const carriedIds = new WeakMap<readonly OutlineItem[], ReadonlySet<string>>();
+
 /** The studio-layer rules for one edit: stamp what changed, then keep mirrors in sync. */
 export function outlinerAfterEdit(isLocked: UseOutlinerOptions["isLocked"], trackEdits = true): OutlineAfterEdit {
   const mirror = mirrorAfterEdit(isLocked);
   return (before, after, action) => {
-    const nodes = trackEdits ? stampEdits(before.nodes, after.nodes) : after.nodes;
+    const carried = action.type === "paste-nodes" || action.type === "replace" ? carriedIds.get(action.nodes as readonly OutlineItem[]) : undefined;
+    const nodes = trackEdits ? stampEdits(before.nodes, after.nodes, Date.now(), carried) : after.nodes;
     return mirror(before, nodes === after.nodes ? after : { ...after, nodes }, action);
   };
 }
@@ -321,7 +369,13 @@ const sameContent = (a: OutlineItem, b: OutlineItem) => {
  * the fields the core's details, sort ("edited") and the `changed:` search read. Diffed along
  * identity (untouched subtrees are skipped whole); a moved item is not an edit.
  */
-export function stampEdits(before: readonly OutlineItem[], after: readonly OutlineItem[], now = Date.now()): readonly OutlineItem[] {
+export function stampEdits(
+  before: readonly OutlineItem[],
+  after: readonly OutlineItem[],
+  now = Date.now(),
+  /** Ids that arrive unchanged from elsewhere (a cut + paste move): not edits, never stamped. */
+  carried?: ReadonlySet<string>,
+): readonly OutlineItem[] {
   let all: Map<string, OutlineItem> | null = null;
   const lookup = (id: string) => {
     if (!all) {
@@ -344,7 +398,9 @@ export function stampEdits(before: readonly OutlineItem[], after: readonly Outli
       if (prior === node) return node;
       const children = node.children ? list(node.children, prior?.children) : undefined;
       let next = children === node.children ? node : { ...node, children: children! };
-      if (!prior || !sameContent(prior, node)) {
+      if (!prior && carried?.has(node.id)) {
+        // Moved here intact (cut + paste): not an edit.
+      } else if (!prior || !sameContent(prior, node)) {
         const data = next.data ?? {};
         const fresh = typeof data.editedAt === "number" && now - data.editedAt >= 0 && now - data.editedAt < STAMP_WINDOW_MS;
         if (!fresh || (!prior && data.createdAt === undefined))
@@ -388,6 +444,10 @@ export function useOutliner(options: UseOutlinerOptions) {
   };
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
+  // External links change identity whenever another document changes: read them through a ref
+  // and re-project only when the backlink counts (their version) change.
+  const external = options.externalLinks;
+  const externalCounts = external?.counts;
 
   /* ── Dev-only contract warnings (React's own value/defaultValue rules) ── */
   const wasControlled = React.useRef(controlled);
@@ -486,6 +546,9 @@ export function useOutliner(options: UseOutlinerOptions) {
   const dispatch = React.useCallback((action: OutlineAction<OutlineItemData>, options?: { readonly afterPaint?: boolean }): OutlineEditor => {
     const isControlled = optionsRef.current.value !== undefined;
     const id = nextId.current++;
+    const travel = action.type === "undo" || action.type === "redo" ? action.type : null;
+    const history = latestEditor(store.current).history;
+    const from = travel === "undo" ? history.past.at(-1) : travel === "redo" ? history.future.at(-1) : undefined;
     const step = stepOutline(store.current, action, editorOptions.current, isControlled, id, afterEditRef.current);
     if (step.state === store.current) return step.result;
     if (step.proposal) seq.current++;
@@ -495,6 +558,11 @@ export function useOutliner(options: UseOutlinerOptions) {
     if (step.proposal) {
       const answer = optionsRef.current.onValueChange?.(step.result.nodes, { ...step.proposal.meta, reject: () => rejectProposal(id) });
       if (isControlled && answer === false) rejectProposal(id);
+    }
+    if (travel && from !== undefined && !step.result.refusal) {
+      const after = latestEditor(store.current).history;
+      const to = travel === "undo" ? after.future.at(-1) : after.past.at(-1);
+      if (to !== undefined && to !== from) optionsRef.current.onHistoryTravel?.({ direction: travel, from, to });
     }
     return step.result;
   }, [rejectProposal, renderSoon]);
@@ -574,9 +642,13 @@ export function useOutliner(options: UseOutlinerOptions) {
           stack.push(...(node.children ?? []));
         }
       }
-      return map.get(id);
+      const local = map.get(id);
+      if (local !== undefined) return local;
+      // `[[label|doc/item]]`: another document's item, through the host.
+      return optionsRef.current.externalLinks?.resolve(id) ?? undefined;
     };
-  }, [state.nodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.nodes, externalCounts]);
   const refKeyOf = (node: OutlineItem) => {
     if (!node.text.includes("|")) return undefined;
     const ids = [...node.text.matchAll(/\[\[[^\]|\n]+\|([^\]\n]+)\]\]/g)].map((match) => match[1]!);
@@ -589,6 +661,7 @@ export function useOutliner(options: UseOutlinerOptions) {
     readonly hoistedId: string | null;
     readonly view: OutlinerView;
     readonly isLocked: UseOutlinerOptions["isLocked"];
+    readonly externalCounts?: ReadonlyMap<string, number>;
     readonly rows: readonly OutlinerRow[];
     readonly index: ReadonlyMap<string, number>;
     readonly hasRefs: boolean;
@@ -612,7 +685,8 @@ export function useOutliner(options: UseOutlinerOptions) {
       last.view === view &&
       last.expandedIds === state.expandedIds &&
       last.hoistedId === state.hoistedId &&
-      last.isLocked === isLocked
+      last.isLocked === isLocked &&
+      last.externalCounts === externalCounts
     ) {
       const changed: OutlineItem[] = [];
       if (sameShape(last.nodes, state.nodes, changed)) {
@@ -680,6 +754,9 @@ export function useOutliner(options: UseOutlinerOptions) {
     const contextIds = new Set(search?.contextAncestorIds);
 
     const links = linkIndexOf(state.nodes);
+    // Local backlinks plus links from other documents (a workspace host).
+    const countBacklinks = (index: ReadonlyMap<string, readonly string[]>, id: string) =>
+      (index.get(id)?.length ?? 0) + (externalCounts?.get(id) ?? 0) || undefined;
     if (searching && view.searchMode !== "filter") {
       // Flat results, or the agenda: the same results grouped Overdue / Today / … by first date.
       let ordered = search.matches.map((match) => ({ match, location: findOutlineNode(state.nodes, match.id) }));
@@ -688,10 +765,13 @@ export function useOutliner(options: UseOutlinerOptions) {
       if (view.searchMode === "agenda") {
         for (const { match, location } of ordered) if (location) groupOf.set(match.id, agendaGroupOf(location.node as OutlineItem, today));
         const rank = (id: string) => AGENDA_ORDER.indexOf(groupOf.get(id) ?? "none");
-        const day = (location?: { node: unknown }) => (location ? (firstDay(location.node as OutlineItem) ?? Infinity) : Infinity);
+        const day = (location?: { node: unknown }) => (location ? (agendaDay(location.node as OutlineItem, today) ?? Infinity) : Infinity);
         ordered = ordered
           .map((entry, order) => ({ ...entry, order }))
           .sort((a, b) => rank(a.match.id) - rank(b.match.id) || day(a.location) - day(b.location) || a.order - b.order);
+      } else if (view.resultSort && view.resultSort !== "outline") {
+        const located = ordered.flatMap((entry, order) => (entry.location ? [{ ...entry, node: entry.location.node as OutlineItem, order }] : []));
+        ordered = [...sortResults(located, view.resultSort)];
       }
       const counts = new Map<AgendaGroup, number>();
       for (const group of groupOf.values()) counts.set(group, (counts.get(group) ?? 0) + 1);
@@ -714,7 +794,7 @@ export function useOutliner(options: UseOutlinerOptions) {
           locked: !!isLocked && [...location.ancestors, node].some((n) => isLocked(n as OutlineItem)),
           match,
           path: location.ancestors.map((ancestor) => inlineToPlain(ancestor.text)),
-          backlinks: links.get(node.id)?.length,
+          backlinks: countBacklinks(links, node.id),
           mirror: mirrorOf(node),
           agenda: opens ? { group: group!, count: counts.get(group!) ?? 0 } : undefined,
         });
@@ -780,7 +860,7 @@ export function useOutliner(options: UseOutlinerOptions) {
           match: matches.get(node.id),
           summary: hasChildren && !expanded ? summarize(node) : undefined,
           // A mirror or a copy in one shows its source's backlinks (it is the same item).
-          backlinks: links.get(source ?? (copyPrefix !== null && node.id.startsWith(copyPrefix) ? node.id.slice(copyPrefix.length) : node.id))?.length,
+          backlinks: countBacklinks(links, source ?? (copyPrefix !== null && node.id.startsWith(copyPrefix) ? node.id.slice(copyPrefix.length) : node.id)),
           mirror: source ?? (copyPrefix !== null ? "copy" : undefined),
         });
         if (expanded && node.children) walk(node.children, depth + 1, node, locked, source ? node.id + "~" : copyPrefix);
@@ -794,10 +874,10 @@ export function useOutliner(options: UseOutlinerOptions) {
     // Only an unfiltered projection can be patched by later keystrokes.
     projection.current = searching
       ? null
-      : { nodes: state.nodes, expandedIds: state.expandedIds, hoistedId: state.hoistedId, view, isLocked, rows: out, index, hasRefs: out.some((row) => row.refKey !== undefined) };
+      : { nodes: state.nodes, expandedIds: state.expandedIds, hoistedId: state.hoistedId, view, isLocked, externalCounts, rows: out, index, hasRefs: out.some((row) => row.refKey !== undefined) };
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.nodes, state.expandedIds, state.hoistedId, hoisted, search, view, isLocked, titlesFor]);
+  }, [state.nodes, state.expandedIds, state.hoistedId, hoisted, search, view, isLocked, titlesFor, externalCounts]);
 
 
   const breadcrumbs = React.useMemo(
@@ -841,6 +921,7 @@ export function useOutliner(options: UseOutlinerOptions) {
         return null;
       }
       const taken = new Set<string>();
+      const kept = new Set<string>();
       const stack = [...nodesNow()];
       while (stack.length) {
         const node = stack.pop()!;
@@ -855,15 +936,22 @@ export function useOutliner(options: UseOutlinerOptions) {
         const candidate = at < 0 ? id : id.slice(at + 1);
         if (!candidate || taken.has(candidate)) return null;
         taken.add(candidate);
+        kept.add(candidate);
         return candidate;
       });
       if (!nodes.length) return 0;
       const before = nodesNow();
+      // A kept id is the same item coming back (cut + paste): a move, not new content.
+      if (kept.size) carriedIds.set(nodes, kept);
       const next = dispatch({ type: "paste-nodes", afterId, nodes, createId: idsInPasteOrder(nodes) });
       if (next.refusal || next.nodes === before) return 0;
       // Select what was pasted, so the next paste (or ⌘Z, Tab, Delete) acts on it — not on the last row.
+      // Pasted inside a mirror, the item lives at its source; the copy the user pasted into
+      // (`mirror~id`, right where they are working) is what gets selected.
       const first = nodes[0]!.id;
-      if (findOutlineNode(next.nodes, first)) dispatch({ type: "select", id: first });
+      const prefix = afterId ? hoistedCopyPrefix(next.nodes, afterId) : null;
+      const target = prefix && findOutlineNode(next.nodes, prefix + first) ? prefix + first : first;
+      if (findOutlineNode(next.nodes, target)) dispatch({ type: "select", id: target });
       return nodes.length;
     };
     return {
@@ -909,6 +997,11 @@ export function useOutliner(options: UseOutlinerOptions) {
       },
       setColor(ids: readonly string[], color: OutlineColor | undefined) {
         updateData(ids, (node) => clean({ ...node.data, color }));
+      },
+      /** Show items as a board, an article, a mind map, or as the outline ("list": no field). */
+      setView(ids: readonly string[], view: OutlineItemView) {
+        const value = view === "board" || view === "article" || view === "mindmap" ? view : undefined;
+        updateData(ids, (node) => clean({ ...node.data, view: value }));
       },
       toggleNumbered(ids: readonly string[]) {
         const on = !ids.every((id) => nodeOf(id)?.data?.numbered);
@@ -957,10 +1050,14 @@ export function useOutliner(options: UseOutlinerOptions) {
         if (neighbour) dispatch({ type: "select", id: neighbour.id });
         return { items: roots.length, descendants, selected: neighbour?.id ?? null };
       },
-      moveTo(ids: readonly string[], parentId: string | null) {
+      /** Move items to the end of `parentId` (null: top level). Returns how many moved (0: refused or nothing). */
+      moveTo(ids: readonly string[], parentId: string | null): number {
         const parent = parentId ? nodeOf(parentId) : null;
-        dispatch({ type: "drop", ids, parentId, index: (parent ? parent.children : nodesNow())?.length ?? 0 });
+        const before = nodesNow();
+        const result = dispatch({ type: "drop", ids, parentId, index: (parent ? parent.children : nodesNow())?.length ?? 0 });
+        if (result.refusal || result.nodes === before) return 0;
         if (parentId) dispatch({ type: "expand", ids: [parentId], expanded: true });
+        return selectionRoots(before, new Set(ids)).length;
       },
       /**
        * Place a live mirror of each item at the end of `parentId` (null: top level). A mirror of
@@ -1015,11 +1112,19 @@ export function useOutliner(options: UseOutlinerOptions) {
         const nodes = ids?.length ? (ids.map(nodeOf).filter(Boolean) as OutlineItem[]) : nodesNow();
         return exportOutline(nodes, format);
       },
+      /** Markdown for another app's clipboard: no metadata comments (see interchange.ts). */
+      copyMarkdown(ids?: readonly string[]) {
+        const nodes = ids?.length ? (ids.map(nodeOf).filter(Boolean) as OutlineItem[]) : nodesNow();
+        return exportOutline(nodes, "markdown", { metadata: false });
+      },
       /** A rename-safe link to an item, in the outline's own `[[label|id]]` form. */
       linkTo(id: string) {
         const node = nodeOf(id);
-        // A copy inside a mirror dies with the mirror: link to the item it shows.
-        return linkMarkup(node?.text ?? "", canonicalId(nodesNow(), id) ?? id);
+        // A copy inside a mirror dies with the mirror: link to the item it shows. In a workspace
+        // the link names its document too, so it works pasted anywhere.
+        const target = canonicalId(nodesNow(), id) ?? id;
+        const external = optionsRef.current.externalLinks;
+        return linkMarkup(node?.text ?? "", external ? external.qualify(target) : target);
       },
       /** Lossless paste from our own clipboard flavor; ids are regenerated. Null when not ours. */
       importJSON,
@@ -1075,6 +1180,7 @@ export function useOutliner(options: UseOutlinerOptions) {
   }, []);
 
   const rowIndex = rowIndexCache.current.get(rows) ?? new Map(rows.map((row, i) => [row.id, i]));
+  const lockedPath = (id: string, nodes: readonly OutlineItem[]) => !!isLocked && getOutlinePath(nodes, id).some((node) => isLocked(node as OutlineItem));
   return {
     state,
     dispatch,
@@ -1093,6 +1199,8 @@ export function useOutliner(options: UseOutlinerOptions) {
     commands,
     readOnly,
     bookmarks,
+    /** Links to and from other documents (a workspace host); undefined in a single document. */
+    external,
     /** The last controlled veto (null until one happens). */
     rejection,
     /** Content revision this render shows (see RowField's typing draft). */
@@ -1101,14 +1209,47 @@ export function useOutliner(options: UseOutlinerOptions) {
     currentSeq: () => seq.current,
     /** The top undo entry right now: an Undo offer is only honest while this is unchanged. */
     historyTop: () => latestEditor(store.current).history.past.at(-1),
+    /** Both ends of history right now: what an undo and a redo would travel. */
+    historyStacks: () => {
+      const { past, future } = latestEditor(store.current).history;
+      return { undo: past.at(-1), redo: future.at(-1) };
+    },
     latestSelection: () => latestEditor(store.current).selection,
     /** The newest document (what the next edit builds on), for imperative reads. */
     latestNodes: () => latestEditor(store.current).nodes as readonly OutlineItem[],
     /** Whether an item (or one of its ancestors) is locked by the host's policy. */
-    isItemLocked: (id: string) => !!isLocked && getOutlinePath(state.nodes, id).some((node) => isLocked(node as OutlineItem)),
+    isItemLocked: (id: string) => lockedPath(id, state.nodes),
+    /**
+     * A row for any item: the visible one, or one made from the document for items the outline is
+     * not showing (a board's cards, a folded item), so menus and the phone sheet work on them too.
+     */
+    rowOf: (id: string): OutlinerRow | null => {
+      const visible = rows[rowIndex.get(id) ?? -1];
+      if (visible) return visible;
+      const location = findOutlineNode(state.nodes, id);
+      if (!location) return null;
+      return rowForNode(location.node as OutlineItem, { parentId: location.parentId ?? null, depth: location.ancestors.length, locked: lockedPath(id, state.nodes) });
+    },
     canUndo: state.history.past.length > 0,
     canRedo: state.history.future.length > 0,
   };
 }
 
 export type OutlinerController = ReturnType<typeof useOutliner>;
+
+/** A projection row for a node the outline is not listing (board cards and columns). */
+export function rowForNode(node: OutlineItem, at: { readonly parentId: string | null; readonly depth: number; readonly locked: boolean; readonly index?: number }): OutlinerRow {
+  return {
+    id: node.id,
+    node,
+    parentId: at.parentId,
+    depth: at.depth,
+    index: at.index ?? 0,
+    hasChildren: !!node.children?.length,
+    expanded: true,
+    details: getOutlineItemDetails(node),
+    completed: isCompleted(node),
+    locked: at.locked,
+    mirror: mirrorOf(node),
+  };
+}

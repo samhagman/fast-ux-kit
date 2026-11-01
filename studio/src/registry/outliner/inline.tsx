@@ -1,6 +1,7 @@
 import * as React from "react";
-import { CalendarDays, CornerDownRight, Repeat } from "lucide-react";
+import { CalendarDays, CalendarRange, CornerDownRight, Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MathTex } from "./math";
 
 /**
  * Inline markup for outline titles and notes. The stored text is always plain source
@@ -10,6 +11,11 @@ import { cn } from "@/lib/utils";
  *   **bold**  __italic__  ~~strike~~  `code`  ==highlight==
  *   [label](https://…)  https://bare.url  #tag  @person  !(2026-11-03 14:00)  [[Item title]]
  *   !(2026-11-03 every week)   a recurring date (completing its task moves it to the next occurrence)
+ *   !(2026-11-03 → 2026-11-07)  a date range (also with times: `!(2026-11-03 09:00 → 11:00)`,
+ *                           `!(2026-11-03 22:00 → 2026-11-04 06:00)`; `->` reads as `→`)
+ *   $e^{i\pi}+1=0$          inline math (TeX, rendered by KaTeX; see math.tsx). Currency is safe:
+ *                           the opening $ needs a non-space after it, the closing one a non-space
+ *                           before it and no digit after it, so "$5 and $10" stays text
  *   \*literal\*              a backslash makes the next markup character literal (pasted text uses it)
  */
 export type InlineKind =
@@ -25,6 +31,8 @@ export type InlineKind =
   | "mention"
   | "date"
   | "ref"
+  /** `$tex$` (or `$$tex$$`): TeX source in `display`, rendered with KaTeX. */
+  | "math"
   /** `\x`: a markup character typed (or pasted) as plain text. The backslash is hidden. */
   | "escape";
 
@@ -57,14 +65,24 @@ export interface InlineDate {
   readonly value: Date;
   readonly hasTime: boolean;
   readonly repeat?: DateRepeat;
+  /**
+   * The time of day as written (`[hours, minutes]`). It differs from `value`'s clock only when
+   * that wall time does not exist that day (a daylight-saving gap: 02:30 becomes 03:30), and it is
+   * what a recurring date keeps, so one spring-forward never moves a 02:30 task for good.
+   */
+  readonly time?: readonly [number, number];
+  /** A range's last moment (`!(start → end)`); ranges never repeat. */
+  readonly end?: Date;
+  /** The range end names a time of day (not the whole day). */
+  readonly endHasTime?: boolean;
 }
 
 /** Characters that start inline markup; `\` before one makes it literal. */
-export const MARKUP_CHARS = "\\`*_~=[]!#@()";
+export const MARKUP_CHARS = "\\`*_~=[]!#@()$";
 
 const PATTERN = new RegExp(
   [
-    "(\\\\[\\\\`*_~=\\[\\]!#@()])", // 0 escape (checked first: it wins at its position)
+    "(\\\\[\\\\`*_~=\\[\\]!#@()$])", // 0 escape (checked first: it wins at its position)
     "(`[^`\\n]+`)", // 1 code
     "(\\*\\*[^*\\n]+\\*\\*)", // 2 bold
     "(__[^_\\n]+__)", // 3 italic
@@ -73,11 +91,12 @@ const PATTERN = new RegExp(
     "(\\[\\[[^\\]\\n]+\\]\\])", // 6 internal ref
     // md link: the target may hold balanced parentheses (Wikipedia's Foo_(bar)), as in GFM
     "(\\[[^\\]\\n]+\\]\\((?:https?:\\/\\/|mailto:)(?:[^()\\s]|\\([^()\\s]*\\))+\\))", // 7 md link
-    "(!\\(\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?(?: every [a-z0-9 ]{1,24})?\\))", // 8 date
+    "(!\\(\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?(?: ?(?:→|->) ?(?:\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?|\\d{2}:\\d{2}))?(?: every [a-z0-9 ]{1,24})?\\))", // 8 date (or range)
     // bare url: may end in ")" here; an unbalanced closing paren is trimmed off in parseInline
     "(https?:\\/\\/[^\\s<]*[^\\s<.,;:!?\\]'\"])", // 9 bare url
     "((?<=^|[\\s(])#[\\p{L}\\p{N}_-]+)", // 10 tag
     "((?<=^|[\\s(])@[\\p{L}\\p{N}_.-]*[\\p{L}\\p{N}_-])", // 11 mention
+    "((?<![\\p{L}\\p{N}$\\\\])(?:\\$\\$[^$\\n]+?\\$\\$|\\$(?![\\s$])[^$\\n]*?[^\\s$\\\\]\\$)(?![\\p{N}$]))", // 12 math
   ].join("|"),
   "gu",
 );
@@ -108,14 +127,39 @@ export const formatRepeat = (repeat: DateRepeat) =>
 export const formatRepeatToken = (repeat: DateRepeat) => formatRepeat(repeat) + (repeat.day ? ` on ${repeat.day}` : "");
 
 export function parseDateToken(token: string): InlineDate | null {
-  const match = /^!\((\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?(?: every ([a-z0-9 ]+))?\)$/.exec(token);
+  const match =
+    /^!\((\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?(?: ?(?:→|->) ?(?:(\d{4})-(\d{2})-(\d{2}))?(?: ?(\d{2}):(\d{2}))?)?(?: every ([a-z0-9 ]+))?\)$/.exec(token);
   if (!match) return null;
-  const [, y, m, d, hh, mm, rule] = match;
-  const value = new Date(Number(y), Number(m) - 1, Number(d), Number(hh ?? 0), Number(mm ?? 0));
-  if (Number.isNaN(value.getTime()) || value.getMonth() !== Number(m) - 1) return null;
-  if (rule === undefined) return { value, hasTime: hh !== undefined };
+  const [, y, m, d, hh, mm, ey, em, ed, eh, emin, rule] = match;
+  const value = localDate(y!, m!, d!, hh, mm);
+  if (!value) return null;
+  const time = hh !== undefined ? ([Number(hh), Number(mm)] as const) : undefined;
+  const base = { value, hasTime: hh !== undefined, ...(time ? { time } : {}) };
+  const ranged = ey !== undefined || eh !== undefined;
+  if (ranged) {
+    // `→ 11:00` ends the same day, or the next one when it is earlier than the start (an
+    // overnight `22:00 → 02:00`); a bare `→` with nothing after it is not a range.
+    if (rule !== undefined || (ey === undefined && hh === undefined)) return null;
+    let end = ey !== undefined ? localDate(ey, em!, ed!, eh, emin) : localDate(y!, m!, d!, eh, emin);
+    if (!end) return null;
+    if (ey === undefined && end.getTime() < value.getTime()) end = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1, Number(eh), Number(emin));
+    const endHasTime = eh !== undefined;
+    // A date-only end means the end of that day; an end before the start is not a range.
+    const last = endHasTime ? end : new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+    if (last.getTime() < value.getTime()) return null;
+    return { ...base, end, endHasTime };
+  }
+  if (rule === undefined) return base;
   const repeat = parseRepeat(rule);
-  return repeat ? { value, hasTime: hh !== undefined, repeat } : null;
+  return repeat ? { ...base, repeat } : null;
+}
+
+/** A local calendar date (and wall time); null when the day does not exist (Feb 30). */
+function localDate(y: string, m: string, d: string, hh?: string, mm?: string): Date | null {
+  if (hh !== undefined && (Number(hh) > 23 || Number(mm) > 59)) return null;
+  const value = new Date(Number(y), Number(m) - 1, Number(d), Number(hh ?? 0), Number(mm ?? 0));
+  if (Number.isNaN(value.getTime()) || value.getMonth() !== Number(m) - 1 || value.getDate() !== Number(d)) return null;
+  return value;
 }
 
 /** One step of a repeat rule (months clamp to their last day: Jan 31 + 1 month = Feb 28, then back to Mar 31). */
@@ -236,6 +280,7 @@ export function parseInline(source: string): readonly InlineSegment[] {
     }
     else if (match[11]) segments.push(wrap("tag", 0));
     else if (match[12]) segments.push(wrap("mention", 0));
+    else if (match[13]) segments.push(wrap("math", token.startsWith("$$") ? 2 : 1));
   }
   text(cursor, source.length);
   return segments;
@@ -256,7 +301,7 @@ export function inlineToPlain(
     .map((segment) =>
       segment.kind === "date" && segment.date
         ? absolute
-          ? formatDateToken(segment.date.value, segment.date.hasTime, segment.date.repeat).slice(2, -1)
+          ? dateTokenOf(segment.date).slice(2, -1)
           : formatDate(segment.date) + (segment.date.repeat ? ` every ${formatRepeat(segment.date.repeat)}` : "")
         : segment.refId && resolveRef
           ? (resolveRef(segment.refId) ?? segment.display)
@@ -287,7 +332,9 @@ export function inlineToSpeech(source: string, resolveRef?: (id: string) => stri
   return parseInline(source)
     .map((segment) =>
       segment.kind === "date" && segment.date
-        ? `due ${spokenDate(segment.date)}${segment.date.repeat ? `, repeats every ${formatRepeat(segment.date.repeat)}` : ""}`
+        ? segment.date.end
+          ? `from ${spokenDate(segment.date)} to ${spokenDate({ value: segment.date.end, hasTime: !!segment.date.endHasTime })}`
+          : `due ${spokenDate(segment.date)}${segment.date.repeat ? `, repeats every ${formatRepeat(segment.date.repeat)}` : ""}`
         : segment.kind === "tag"
           ? `tag ${segment.display.slice(1)}`
           : segment.kind === "mention"
@@ -320,13 +367,19 @@ export function spokenDate(date: { value: Date; hasTime: boolean }, now = new Da
   return day + time;
 }
 
-export function formatDate(date: { value: Date; hasTime: boolean }, now = new Date()): string {
+export function formatDate(date: { value: Date; hasTime: boolean; end?: Date; endHasTime?: boolean }, now = new Date()): string {
+  if (date.end) {
+    // "Tue 9:00 AM → 11:00 AM" on one day; "Nov 3 → Nov 7" across days.
+    const sameDay = startOfDay(date.end).getTime() === startOfDay(date.value).getTime();
+    const end = sameDay
+      ? date.endHasTime ? timeOf(date.end) : ""
+      : formatDate({ value: date.end, hasTime: !!date.endHasTime }, now);
+    return end ? `${formatDate({ value: date.value, hasTime: date.hasTime }, now)} → ${end}` : formatDate({ value: date.value, hasTime: date.hasTime }, now);
+  }
   const day = startOfDay(date.value).getTime();
   const today = startOfDay(now).getTime();
   const diff = Math.round((day - today) / 86_400_000);
-  const time = date.hasTime
-    ? " " + date.value.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    : "";
+  const time = date.hasTime ? " " + timeOf(date.value) : "";
   if (diff === 0) return "Today" + time;
   if (diff === 1) return "Tomorrow" + time;
   if (diff === -1) return "Yesterday" + time;
@@ -340,17 +393,43 @@ export function formatDate(date: { value: Date; hasTime: boolean }, now = new Da
     }) + time
   );
 }
+const timeOf = (date: Date) => date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
-export function dateTone(date: Date, now = new Date()): "overdue" | "today" | "soon" | "later" {
-  const diff = Math.round((startOfDay(date).getTime() - startOfDay(now).getTime()) / 86_400_000);
+/** Chip tone. A range is "today" while it is under way and overdue only once it has ended. */
+export function dateTone(date: Date, now = new Date(), end?: Date): "overdue" | "today" | "soon" | "later" {
+  const diffOf = (value: Date) => Math.round((startOfDay(value).getTime() - startOfDay(now).getTime()) / 86_400_000);
+  const diff = diffOf(date);
+  if (end && diff <= 0) return diffOf(end) < 0 ? "overdue" : "today";
   return diff < 0 ? "overdue" : diff === 0 ? "today" : diff <= 3 ? "soon" : "later";
 }
 
-export function formatDateToken(date: Date, withTime = false, repeat?: DateRepeat): string {
+/**
+ * `!(…)` source for a date. `time` writes the wall time as intended when it differs from the
+ * instant's clock (a daylight-saving gap); `end` makes a range (`!(start → end)`), its end time
+ * shortened to `→ HH:MM` on the same day.
+ */
+export function formatDateToken(
+  date: Date,
+  withTime = false,
+  repeat?: DateRepeat,
+  extra?: { readonly end?: Date; readonly endHasTime?: boolean; readonly time?: readonly [number, number] },
+): string {
   const pad = (value: number) => String(value).padStart(2, "0");
-  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  return `!(${day}${withTime ? ` ${pad(date.getHours())}:${pad(date.getMinutes())}` : ""}${repeat ? ` every ${formatRepeatToken(repeat)}` : ""})`;
+  const dayOf = (value: Date) => `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  const clock = (value: Date, wall?: readonly [number, number]) => `${pad(wall?.[0] ?? value.getHours())}:${pad(wall?.[1] ?? value.getMinutes())}`;
+  let token = dayOf(date) + (withTime ? ` ${clock(date, extra?.time)}` : "");
+  const end = extra?.end;
+  if (end) {
+    const sameDay = dayOf(end) === dayOf(date);
+    if (sameDay && extra.endHasTime && withTime) token += ` → ${clock(end)}`;
+    else if (!sameDay || extra.endHasTime) token += ` → ${dayOf(end)}${extra.endHasTime ? ` ${clock(end)}` : ""}`;
+    return `!(${token})`;
+  }
+  return `!(${token}${repeat ? ` every ${formatRepeatToken(repeat)}` : ""})`;
 }
+/** The canonical token for a parsed date (ranges, repeats and the written time included). */
+export const dateTokenOf = (date: InlineDate) =>
+  formatDateToken(date.value, date.hasTime, date.repeat, { end: date.end, endHasTime: date.endHasTime, time: date.time });
 
 /**
  * Text as literal outline source: every character that would start markup gets a backslash, so
@@ -389,6 +468,11 @@ interface InlineTextProps extends React.HTMLAttributes<HTMLSpanElement> {
    * without chips on one line (`inlineToLabel`); the full plain title is its tooltip.
    */
   readonly resolveRef?: (id: string) => string | null;
+  /**
+   * Where `source` starts inside a longer string (a line of a rich note): `data-src` offsets and
+   * `marks` are then positions in that longer string, so a click maps to the right caret.
+   */
+  readonly offset?: number;
 }
 
 /**
@@ -402,10 +486,11 @@ export const InlineText = React.memo(function InlineText({
   onRef,
   onDate,
   resolveRef,
+  offset = 0,
   className,
   ...props
 }: InlineTextProps) {
-  const segments = React.useMemo(() => parseInline(source), [source]);
+  const segments = React.useMemo(() => shiftSegments(parseInline(source), offset), [source, offset]);
   return (
     // dir="auto": a Latin title inside an RTL outline (or the reverse) keeps its own order.
     <span dir="auto" className={cn("whitespace-pre-wrap break-words", className)} {...props}>
@@ -423,6 +508,17 @@ export const InlineText = React.memo(function InlineText({
     </span>
   );
 });
+
+const shiftSegments = (segments: readonly InlineSegment[], by: number): readonly InlineSegment[] =>
+  by === 0
+    ? segments
+    : segments.map((segment) => ({
+        ...segment,
+        start: segment.start + by,
+        end: segment.end + by,
+        contentStart: segment.contentStart + by,
+        contentEnd: segment.contentEnd + by,
+      }));
 
 function Runs({
   segment,
@@ -468,6 +564,9 @@ function Runs({
 
 const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
+/** Inline code short enough to keep on one line: one word, at most 24 characters. */
+export const isShortCode = (text: string) => text.length <= 24 && !/\s/.test(text);
+
 function Segment({
   segment,
   marks,
@@ -496,7 +595,14 @@ function Segment({
       return <s className="text-muted-foreground decoration-muted-foreground/70">{runs}</s>;
     case "code":
       return (
-        <code className="rounded-[4px] border border-hairline bg-muted px-1 py-px font-mono text-[0.86em] text-foreground/90">
+        <code
+          className={cn(
+            "rounded-[4px] border border-hairline bg-muted px-1 py-px font-mono text-[0.86em] text-foreground/90 box-decoration-clone",
+            // A short token (an identifier, a flag, `halcyon-3`) never breaks at its hyphen or
+            // slash; a long snippet still wraps so it can never push the line off a phone.
+            isShortCode(segment.display) && "whitespace-nowrap",
+          )}
+        >
           {runs}
         </code>
       );
@@ -524,6 +630,8 @@ function Segment({
           )}
         </a>
       );
+    case "math":
+      return <MathTex tex={segment.display} src={segment.start} />;
     case "tag":
     case "mention":
       return (
@@ -578,7 +686,7 @@ function Segment({
       );
     }
     case "date": {
-      const tone = segment.date ? dateTone(segment.date.value) : "later";
+      const tone = segment.date ? dateTone(segment.date.value, undefined, segment.date.end) : "later";
       // A date filter (due:, before:, after:) marks the whole token: the chip lights up like a text match.
       const marked = marks?.some((mark) => mark.start < segment.end && mark.end > segment.start);
       return (
@@ -588,6 +696,7 @@ function Segment({
           dir="auto"
           data-src={segment.contentStart}
           data-repeat={segment.date?.repeat ? formatRepeat(segment.date.repeat) : undefined}
+          data-range={segment.date?.end ? "" : undefined}
           title={segment.date?.repeat ? `Repeats every ${formatRepeat(segment.date.repeat)}` : undefined}
           onPointerDown={stop}
           onClick={(event) => {
@@ -603,7 +712,7 @@ function Segment({
             marked && "ring-2 ring-warning/45 ring-offset-0",
           )}
         >
-          {segment.date?.repeat ? <Repeat aria-hidden className="size-3" /> : <CalendarDays aria-hidden className="size-3" />}
+          {segment.date?.repeat ? <Repeat aria-hidden className="size-3" /> : segment.date?.end ? <CalendarRange aria-hidden className="size-3" /> : <CalendarDays aria-hidden className="size-3" />}
           {segment.date ? formatDate(segment.date) : segment.display}
         </button>
       );
@@ -650,6 +759,7 @@ export function sourceOffsetFromPoint(
   );
   if (!owner || !root.contains(owner)) return sourceLength;
   const base = Number(owner.dataset.src);
-  if (owner.tagName === "BUTTON") return base;
+  // Chips and rendered blocks (math, images, code) are atomic: the caret lands at their start.
+  if (owner.tagName === "BUTTON" || owner.dataset.atomic !== undefined) return base;
   return Math.min(sourceLength, base + (node.nodeType === Node.TEXT_NODE ? offset : 0));
 }

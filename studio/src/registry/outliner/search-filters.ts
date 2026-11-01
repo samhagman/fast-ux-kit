@@ -27,6 +27,14 @@ import { OUTLINE_COLORS, type OutlineItem } from "./types";
  *   links:<id>              links to that item with [[label|id]] (its backlinks)
  *   changed:today | yesterday | week | month | 2026-11-03
  *                           edited that day / in the last 7 or 30 days (`data.editedAt`); edited: is an alias
+ *   created:today | yesterday | week | month | 2026-11-03
+ *                           created then (`data.createdAt`), same words as changed:
+ *   during:2026-11-03..2026-11-07 | during:2026-11-05
+ *                           dated (a day or a range) overlapping that span
+ *
+ * Date ranges `!(2026-11-03 → 2026-11-07)` count for every day they cover: due:today matches a
+ * range under way, due:week one overlapping the next 7 days, due:overdue one that has ENDED;
+ * before: compares the range's start and after: its end.
  *
  * Every filter negates (`-due:overdue`, `NOT is:todo`) and combines with AND / OR like the core
  * predicates. Day comparisons are local calendar days, the same rule the date chips use for
@@ -49,7 +57,7 @@ interface Token {
   readonly negative: boolean;
 }
 
-type FilterKind = "todo" | "due" | "before" | "after" | "links" | "changed";
+type FilterKind = "todo" | "due" | "before" | "after" | "links" | "changed" | "created" | "during";
 interface Filter {
   readonly kind: FilterKind;
   readonly value: string;
@@ -58,6 +66,8 @@ interface Filter {
   readonly end: number;
   /** due:/before:/after: resolved to a local day number (days since epoch) when it names a date. */
   readonly day?: number;
+  /** during: the span's last day (inclusive). */
+  readonly until?: number;
 }
 
 const ALIASES: readonly [RegExp, string][] = [
@@ -97,7 +107,7 @@ function lex(query: string): Token[] {
 }
 
 const bare = (token: Token, word: string) => !token.quoted && !token.negative && token.text === word;
-const FILTER = /^(is):(todo)$|^(due|before|after|links|changed|edited):(.*)$/i;
+const FILTER = /^(is):(todo)$|^(due|before|after|links|changed|edited|created|during):(.*)$/i;
 function filterOf(token: Token): { kind: FilterKind; value: string } | null {
   if (token.quoted) return null;
   const match = FILTER.exec(token.negative ? token.text.slice(1) : token.text);
@@ -123,12 +133,26 @@ function parseDay(value: string): number | "format" | "calendar" {
 const DUE_WORDS = ["today", "tomorrow", "overdue", "week", "none"] as const;
 const CHANGED_WORDS = ["today", "yesterday", "week", "month"] as const;
 
-function validate(filter: { kind: FilterKind; value: string }, start: number, end: number): { day?: number; diagnostic?: OutlineSearchDiagnostic } {
+function validate(filter: { kind: FilterKind; value: string }, start: number, end: number): { day?: number; until?: number; diagnostic?: OutlineSearchDiagnostic } {
   if (filter.kind === "todo") return {};
+  if (filter.kind === "during") {
+    const [from = "", to = from] = filter.value.split("..");
+    const first = parseDay(from),
+      last = parseDay(to);
+    if (typeof first === "number" && typeof last === "number" && last >= first) return { day: first, until: last };
+    const bad = typeof first !== "number" ? first : typeof last !== "number" ? last : "order";
+    const message =
+      bad === "calendar"
+        ? `${filter.value} is not a calendar date.`
+        : bad === "order"
+          ? `during: ends before it starts.`
+          : `during: takes a day or a span like ${exampleDate(new Date(), 0)}..${exampleDate()}.`;
+    return { diagnostic: { code: "invalid-query", message, start, end } };
+  }
   if (filter.kind === "links")
     return filter.value ? {} : { diagnostic: { code: "invalid-query", message: "links: needs an item id.", start, end } };
   if (filter.kind === "due" && (DUE_WORDS as readonly string[]).includes(filter.value)) return {};
-  if (filter.kind === "changed" && (CHANGED_WORDS as readonly string[]).includes(filter.value)) return {};
+  if ((filter.kind === "changed" || filter.kind === "created") && (CHANGED_WORDS as readonly string[]).includes(filter.value)) return {};
   const day = parseDay(filter.value);
   if (typeof day === "number") return { day };
   const message =
@@ -136,8 +160,8 @@ function validate(filter: { kind: FilterKind; value: string }, start: number, en
       ? `${filter.value} is not a calendar date.`
       : filter.kind === "due"
         ? `due: takes today, tomorrow, overdue, week, none or a date like ${exampleDate()}.`
-        : filter.kind === "changed"
-          ? `changed: takes today, yesterday, week, month or a date like ${exampleDate(new Date(), 0)}.`
+        : filter.kind === "changed" || filter.kind === "created"
+          ? `${filter.kind}: takes today, yesterday, week, month or a date like ${exampleDate(new Date(), 0)}.`
         : `${filter.kind}: needs a date like ${exampleDate()}.`;
   return { diagnostic: { code: "invalid-query", message, start, end } };
 }
@@ -146,7 +170,10 @@ const isoDay = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)
 const exampleDate = (now = new Date(), offset = 7) => isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset));
 
 interface DatedRange extends OutlineSearchRange {
+  /** First local day (a single date: its day). */
   readonly day: number;
+  /** Last local day; equal to `day` unless the date is a range. */
+  readonly last: number;
   readonly field: "title" | "note";
 }
 function datesOf(node: OutlineItem): DatedRange[] {
@@ -154,7 +181,10 @@ function datesOf(node: OutlineItem): DatedRange[] {
   const scan = (source: string | undefined, field: "title" | "note") => {
     if (!source || !source.includes("!(")) return;
     for (const segment of parseInline(source))
-      if (segment.kind === "date" && segment.date) out.push({ start: segment.start, end: segment.end, day: dayNumber(segment.date.value), field });
+      if (segment.kind === "date" && segment.date) {
+        const day = dayNumber(segment.date.value);
+        out.push({ start: segment.start, end: segment.end, day, last: segment.date.end ? dayNumber(segment.date.end) : day, field });
+      }
   };
   scan(node.text, "title");
   scan(node.data?.note, "note");
@@ -166,6 +196,19 @@ const isDone = (node: OutlineItem) => node.checked === true || node.data?.comple
 export function firstDay(node: OutlineItem): number | null {
   let best: number | null = null;
   for (const date of datesOf(node)) if (best === null || date.day < best) best = date.day;
+  return best;
+}
+
+/**
+ * The day an item belongs to in the agenda: a range under way belongs to today (it is happening
+ * now), anything else to its first day. Null when undated.
+ */
+export function agendaDay(node: OutlineItem, today: number): number | null {
+  let best: number | null = null;
+  for (const date of datesOf(node)) {
+    const day = date.day <= today && date.last >= today ? today : date.day;
+    if (best === null || day < best) best = day;
+  }
   return best;
 }
 
@@ -190,15 +233,18 @@ export function outgoingLinks(node: OutlineItem): readonly string[] {
 /** Details for the core's own predicates: inline dates count for `has:date`. */
 export const outlinerDetails = (node: OutlineItem): OutlineItemDetails => {
   const dates = datesOf(node);
-  return { ...(node.data ?? {}), ...(dates.length ? { dates: dates.map((date) => ({ start: date.day * DAY_MS })) } : {}) };
+  return {
+    ...(node.data ?? {}),
+    ...(dates.length ? { dates: dates.map((date) => ({ start: date.day * DAY_MS, ...(date.last > date.day ? { end: date.last * DAY_MS } : {}) })) } : {}),
+  };
 };
 
 /** One filter against one node: whether it holds, and (positive date filters) which dates made it hold. */
 function test(filter: Filter, node: OutlineItem, today: number): { ok: boolean; hits: readonly DatedRange[] } {
   if (filter.kind === "todo") return { ok: (node.checked === false) !== filter.negated, hits: [] };
   if (filter.kind === "links") return { ok: outgoingLinks(node).includes(filter.value) !== filter.negated, hits: [] };
-  if (filter.kind === "changed") {
-    const at = node.data?.editedAt;
+  if (filter.kind === "changed" || filter.kind === "created") {
+    const at = filter.kind === "created" ? node.data?.createdAt : node.data?.editedAt;
     const day = typeof at === "number" && Number.isFinite(at) ? dayNumber(new Date(at)) : null;
     const span = { today: 0, yesterday: -1, week: 6, month: 29 }[filter.value as (typeof CHANGED_WORDS)[number]];
     const ok =
@@ -209,13 +255,16 @@ function test(filter: Filter, node: OutlineItem, today: number): { ok: boolean; 
   const dates = datesOf(node);
   let hits: DatedRange[];
   if (filter.kind === "due" && filter.value === "none") return { ok: !dates.length !== filter.negated, hits: [] };
+  // Every day test is an overlap: a single date is a one-day range.
+  const overlaps = (date: DatedRange, from: number, to: number) => date.day <= to && date.last >= from;
   if (filter.kind === "before") hits = dates.filter((date) => date.day < filter.day!);
-  else if (filter.kind === "after") hits = dates.filter((date) => date.day > filter.day!);
-  else if (filter.value === "today") hits = dates.filter((date) => date.day === today);
-  else if (filter.value === "tomorrow") hits = dates.filter((date) => date.day === today + 1);
-  else if (filter.value === "week") hits = dates.filter((date) => date.day >= today && date.day <= today + 6);
-  else if (filter.value === "overdue") hits = isDone(node) ? [] : dates.filter((date) => date.day < today);
-  else hits = dates.filter((date) => date.day === filter.day);
+  else if (filter.kind === "after") hits = dates.filter((date) => date.last > filter.day!);
+  else if (filter.kind === "during") hits = dates.filter((date) => overlaps(date, filter.day!, filter.until!));
+  else if (filter.value === "today") hits = dates.filter((date) => overlaps(date, today, today));
+  else if (filter.value === "tomorrow") hits = dates.filter((date) => overlaps(date, today + 1, today + 1));
+  else if (filter.value === "week") hits = dates.filter((date) => overlaps(date, today, today + 6));
+  else if (filter.value === "overdue") hits = isDone(node) ? [] : dates.filter((date) => date.last < today);
+  else hits = dates.filter((date) => overlaps(date, filter.day!, filter.day!));
   const ok = hits.length > 0;
   return { ok: ok !== filter.negated, hits: filter.negated ? [] : hits };
 }
@@ -261,9 +310,9 @@ export function searchOutliner(nodes: readonly OutlineItem[], query: string, opt
       continue;
     }
     const start = notNext ? token.start : target.start;
-    const { day, diagnostic } = validate(filter, start, target.end);
+    const { day, until, diagnostic } = validate(filter, start, target.end);
     if (diagnostic) diagnostics.push(diagnostic);
-    filters.push({ ...filter, negated: target.negative !== !!notNext, start, end: target.end, ...(day === undefined ? {} : { day }) });
+    filters.push({ ...filter, negated: target.negative !== !!notNext, start, end: target.end, ...(day === undefined ? {} : { day }), ...(until === undefined ? {} : { until }) });
   }
   branches.push({ filters, core });
   if (diagnostics.length) return failed(diagnostics);
@@ -366,6 +415,8 @@ const OPERATORS: readonly (readonly [string, string])[] = [
   ["before:", "dated before"],
   ["after:", "dated after"],
   ["changed:", "edited when"],
+  ["created:", "created when"],
+  ["during:", "dated within a span"],
   ["color:", "colour label"],
   ["heading:", "heading level"],
   ["parent:", "parent title"],
@@ -386,6 +437,10 @@ function valuesFor(operator: string, now: Date): readonly (readonly [string, str
     case "changed":
     case "edited":
       return [["today", "edited today"], ["week", "last 7 days"], ["yesterday", "edited yesterday"], ["month", "last 30 days"], [day(0), "that day"]];
+    case "created":
+      return [["today", "created today"], ["week", "last 7 days"], ["yesterday", "created yesterday"], ["month", "last 30 days"], [day(0), "that day"]];
+    case "during":
+      return [[`${day(0)}..${day(6)}`, "the next 7 days"], [day(0), "covers today"]];
     case "color":
       return OUTLINE_COLORS.map((color) => [color, `${color} label`] as const);
     case "heading":

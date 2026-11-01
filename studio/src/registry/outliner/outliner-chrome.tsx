@@ -33,6 +33,8 @@ import {
   Undo2,
   X,
   ChevronDown,
+  CalendarRange,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { findOutlineNode, getOutlinePath } from "@fux/core";
@@ -80,11 +82,13 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { formatDateToken, formatRepeat, inlineToPlain, inlineToSpeech, spokenDate, type DateRepeat } from "./inline";
+import { shortcutLabel, type Keymap, type ShortcutId } from "./keymap";
 import { useOutlinerContext, usePlatformKeys, type PlatformKeys } from "./context";
 import { COLOR_STYLES, OUTLINE_COLORS, type OutlineItem } from "./types";
 import type { OutlinerRow } from "./use-outliner";
 import { deleteItems, useItemActions, type ItemAction, type ItemEntry, type ItemSubmenu } from "./item-actions";
 import { mirrorOf } from "./mirrors";
+import { PrintCommandItem, ViewCommandItems } from "./outliner-views";
 
 /* ───────────────────────────── Item menu ───────────────────────────── */
 
@@ -165,7 +169,8 @@ export function OutlinerActionSheet() {
   const request = ui.sheet;
   const last = React.useRef<typeof request>(null);
   if (request) last.current = request;
-  const row = request ? (ol.rows.find((candidate) => candidate.id === request.rowId) ?? null) : null;
+  // Board cards are not outline rows: the controller makes a row for any item.
+  const row = request ? ol.rowOf(request.rowId) : null;
   const open = !!request && !!row;
   const content = React.useRef<HTMLDivElement>(null);
   /*
@@ -219,8 +224,13 @@ export function OutlinerActionSheet() {
             const actions = (id: string) => root?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"] [data-row-actions]`);
             const target =
               (closed && actions(closed.rowId)) ?? [...ol.latestSelection()].map(actions).find(Boolean) ?? null;
-            if (target) target.focus({ preventScroll: true });
-            else ui.focusList();
+            if (target) {
+              target.focus({ preventScroll: true });
+              // The row was lifted under the toolbar while the sheet hid the ancestor strip: keep it clear of the strip.
+              if (closed) ui.scrollToRow(closed.rowId);
+            }
+            // Never the tree on touch (it would select the first row and jump to the top): the toolbar.
+            else root?.querySelector<HTMLElement>("[data-view-menu-trigger]")?.focus({ preventScroll: true });
           });
         }}
       >
@@ -282,7 +292,9 @@ function ActionSheetBody({ ids, row, onRun }: { readonly ids: readonly string[];
     <>
       <DrawerHeader className="gap-0 px-4 pt-2 pb-2 text-start! md:text-start">
         <DrawerTitle className="line-clamp-2 text-[15px] leading-6 font-semibold">{title}</DrawerTitle>
-        <DrawerDescription className="font-mono text-[11px] text-muted-foreground">
+        {/* The path above the item (a top-level item has none: the title already says it all,
+            so the description is for screen readers only rather than repeating the title). */}
+        <DrawerDescription className={cn("font-mono text-[11px] text-muted-foreground", !page && ids.length === 1 && !path && "sr-only")}>
           {page ? page.label : ids.length > 1 ? `${ui.labels.actionsForSelection(ids.length)}` : path || inlineToSpeech(row.node.text, resolve)}
         </DrawerDescription>
       </DrawerHeader>
@@ -440,7 +452,7 @@ function BarButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label} className={cn("text-foreground/80", className)} {...props}>
+        <Button variant="ghost" size="icon-sm" aria-label={label} className={cn("text-foreground/80 coarse:size-11", className)} {...props}>
           {children}
         </Button>
       </TooltipTrigger>
@@ -578,11 +590,15 @@ function useKeyboardOffset() {
 /* ───────────────────────────── Command palette / finder ───────────────────────────── */
 
 export function OutlinerCommandPalette() {
-  const { modKey, shift, alt } = usePlatformKeys();
+  const { modKey, shift, isMac } = usePlatformKeys();
   const { ol, ui } = useOutlinerContext();
   const L = ui.labels;
   const mode = ui.paletteMode;
   const picking = mode === "move" || mode === "mirror";
+  // Switching to "Move to…" / "Mirror to…" starts a fresh search for the destination (the words
+  // typed to find the command are not a destination).
+  const [search, setSearch] = React.useState("");
+  React.useEffect(() => setSearch(""), [mode, ui.paletteOpen]);
   // Jump targets parse every title, so build them only while the palette is open — not on
   // every keystroke of a closed palette.
   const items = React.useMemo(() => {
@@ -602,7 +618,18 @@ export function OutlinerCommandPalette() {
 
   // The tag inventory walks the whole document: only an open palette asks for it.
   const tags = ui.paletteOpen ? ol.tags : [];
-  const selection = [...ol.state.selection];
+  const coarse = useMediaQuery("(pointer: coarse)");
+  /*
+   * What item commands act on: the selection, else the cursor row (the anchor a tap or the
+   * keyboard left, or the item being edited). A phone rarely has a selection, and "Move to…"
+   * must still be there for the row you were on.
+   */
+  const cursorRow = ol.state.selectionAnchor ?? ol.state.caret?.id ?? null;
+  const selection = ol.state.selection.size
+    ? [...ol.state.selection]
+    : cursorRow && findOutlineNode(ol.state.nodes, cursorRow)
+      ? [cursorRow]
+      : [];
   const moving = picking ? (selection.length ? selection : ol.state.caret ? [ol.state.caret.id] : []) : [];
   // Never a destination inside what moves, nor inside a mirror's copy (or its source: a loop).
   const blocked = new Set(moving.flatMap((id) => collectAllIds(findOutlineNode(ol.state.nodes, id)?.node)));
@@ -614,8 +641,22 @@ export function OutlinerCommandPalette() {
       })
     : [];
   const query = ol.view.query.trim();
+  const selectedNode = selection.length === 1 ? (findOutlineNode(ol.state.nodes, selection[0]!)?.node as OutlineItem | undefined) : undefined;
+  const hoistedNode = ol.hoisted;
 
   const close = () => ui.setPaletteOpen(false);
+  /**
+   * Move with a receipt: "Moved 2 items to Ideas parking lot · Undo". It is a toast (the toast
+   * region speaks it: one live channel), raised once the palette has closed, so the page it speaks
+   * from is no longer hidden behind the modal.
+   */
+  const moveWithReceipt = (parentId: string | null) => {
+    const count = ol.commands.moveTo(moving, parentId);
+    if (!count) return;
+    const node = parentId ? (findOutlineNode(ol.latestNodes(), parentId)?.node as OutlineItem | undefined) : undefined;
+    const destination = parentId ? inlineToPlain(node?.text ?? "") || L.untitled : L.topLevel;
+    window.setTimeout(() => ui.offerUndo(L.movedTo(count, destination)), 220);
+  };
   const run = (fn: () => void) => () => {
     fn();
     close();
@@ -636,9 +677,11 @@ export function OutlinerCommandPalette() {
       requestAnimationFrame(go);
     } else go();
   };
-  const sortHere = (by: "title" | "date" | "completion", direction?: "descending") =>
-    run(() => ol.commands.sortChildren(selection.length === 1 ? selection[0]! : ol.state.hoistedId, by, direction));
-  const sortScope = selection.length === 1 ? "children" : ol.state.hoistedId ? "this level" : "top level";
+  // Sorting follows the real selection only (a remembered cursor must not change what "sort" means).
+  const sorted = [...ol.state.selection];
+  const sortHere = (by: "title" | "date" | "completion" | "created" | "edited", direction?: "descending") =>
+    run(() => ol.commands.sortChildren(sorted.length === 1 ? sorted[0]! : ol.state.hoistedId, by, direction));
+  const sortScope = sorted.length === 1 ? "children" : ol.state.hoistedId ? "this level" : "top level";
 
   return (
     <CommandDialog
@@ -655,6 +698,8 @@ export function OutlinerCommandPalette() {
     >
       <Command loop filter={wordFilter} className="rounded-none bg-transparent">
       <CommandInput
+        value={search}
+        onValueChange={setSearch}
         placeholder={
           mode === "move"
             ? `Move ${moving.length} item${moving.length === 1 ? "" : "s"} to…`
@@ -670,7 +715,7 @@ export function OutlinerCommandPalette() {
             <CommandItem
               value="__top-level__ top level document root"
               onSelect={run(() => {
-                if (mode === "move") ol.commands.moveTo(moving, null);
+                if (mode === "move") moveWithReceipt(null);
                 else if (ol.commands.mirrorTo(moving, null).length) ui.announce(L.mirrored(moving.length));
               })}
             >
@@ -681,7 +726,7 @@ export function OutlinerCommandPalette() {
                 key={item.id}
                 value={`${item.text}\u0001${item.path}\u0000${item.id}`}
                 onSelect={run(() => {
-                  if (mode === "move") ol.commands.moveTo(moving, item.id);
+                  if (mode === "move") moveWithReceipt(item.id);
                   else if (ol.commands.mirrorTo(moving, item.id).length) ui.announce(L.mirrored(moving.length));
                 })}
               >
@@ -695,7 +740,13 @@ export function OutlinerCommandPalette() {
           <>
             {selection.length > 0 && !ol.readOnly && (
               <>
-                <CommandGroup heading={`Selection · ${selection.length}`}>
+                <CommandGroup
+                  heading={
+                    ol.state.selection.size
+                      ? `Selection · ${selection.length}`
+                      : `Item · ${inlineToPlain((findOutlineNode(ol.state.nodes, selection[0]!)?.node as OutlineItem | undefined)?.text ?? "") || L.untitled}`
+                  }
+                >
                   <CommandItem onSelect={run(() => ui.announceToggle(ol.commands.toggleComplete(selection)))}>
                     <CircleCheck /> Toggle complete
                     <CommandShortcut dir="ltr">Space</CommandShortcut>
@@ -726,6 +777,7 @@ export function OutlinerCommandPalette() {
                   <CommandItem onSelect={run(() => ol.commands.duplicate(selection))}>
                     <Copy /> Duplicate
                   </CommandItem>
+                  {selectedNode && <ViewCommandItems item={selectedNode} run={run} />}
                   {selection.length === 1 && (
                     <CommandItem
                       onSelect={run(() => {
@@ -834,7 +886,23 @@ export function OutlinerCommandPalette() {
                 <CommandSeparator />
               </>
             )}
+            {(ui.host.paletteGroups ?? []).map((group) => (
+              <React.Fragment key={group.heading}>
+                <CommandGroup heading={group.heading}>
+                  {group.commands.map((command) => (
+                    <CommandItem key={command.id} value={`${command.label} ${command.keywords ?? ""}\u0000${command.id}`} onSelect={run(command.run)}>
+                      {command.icon}
+                      <span className="min-w-0 flex-1 truncate">{command.label}</span>
+                      {command.hint && <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">{command.hint}</span>}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                <CommandSeparator />
+              </React.Fragment>
+            ))}
             <CommandGroup heading="Actions">
+              {hoistedNode && !ol.readOnly && <ViewCommandItems item={hoistedNode} run={run} showTarget />}
+              <PrintCommandItem run={run} />
               <CommandItem onSelect={run(() => ol.dispatch({ type: "expand-all", expanded: true }))}>
                 <ChevronsUpDown /> Expand all
               </CommandItem>
@@ -843,14 +911,11 @@ export function OutlinerCommandPalette() {
               </CommandItem>
               <CommandItem onSelect={run(() => ol.setView((view) => ({ ...view, hideCompleted: !view.hideCompleted })))}>
                 <EyeOff /> {ol.view.hideCompleted ? "Show completed" : "Hide completed"}
-                <CommandShortcut dir="ltr">
-                  {alt}
-                  {modKey}H
-                </CommandShortcut>
+                <CommandShortcut dir="ltr">{shortcutLabel(ui.keymap, "hideCompleted", isMac)}</CommandShortcut>
               </CommandItem>
               <CommandItem onSelect={run(() => ui.setSearchOpen(true))}>
                 <Focus /> Search in outline
-                <CommandShortcut dir="ltr">{modKey}F</CommandShortcut>
+                <CommandShortcut dir="ltr">{shortcutLabel(ui.keymap, "search", isMac)}</CommandShortcut>
               </CommandItem>
               {!ol.readOnly && (
                 <>
@@ -863,11 +928,17 @@ export function OutlinerCommandPalette() {
                   <CommandItem value={`sort ${sortScope} by completion incomplete first done`} onSelect={sortHere("completion")}>
                     <ArrowDownAZ /> Sort {sortScope} by completion
                   </CommandItem>
+                  <CommandItem value={`sort ${sortScope} by created time newest`} onSelect={sortHere("created", "descending")}>
+                    <ArrowDownAZ /> Sort {sortScope} by created, newest first
+                  </CommandItem>
+                  <CommandItem value={`sort ${sortScope} by edited time modified recent`} onSelect={sortHere("edited", "descending")}>
+                    <ArrowDownAZ /> Sort {sortScope} by edited, most recent first
+                  </CommandItem>
                 </>
               )}
               <CommandItem
                 onSelect={run(async () => {
-                  await navigator.clipboard.writeText(ol.commands.exportAs("markdown"));
+                  await navigator.clipboard.writeText(ol.commands.copyMarkdown());
                   toast.success(L.copiedMarkdown);
                 })}
               >
@@ -923,7 +994,7 @@ export function OutlinerCommandPalette() {
           </>
         )}
       </CommandList>
-      <div className="flex items-center gap-3 border-t px-3 py-2 text-2xs text-muted-foreground">
+      {!coarse && <div className="flex items-center gap-3 border-t px-3 py-2 text-2xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Kbd>↑</Kbd>
           <Kbd>↓</Kbd> navigate
@@ -934,7 +1005,7 @@ export function OutlinerCommandPalette() {
         <span className="ms-auto flex items-center gap-1">
           <Kbd>Esc</Kbd> close
         </span>
-      </div>
+      </div>}
       </Command>
     </CommandDialog>
   );
@@ -960,7 +1031,9 @@ export function OutlinerBookmarksMenu() {
   const query = ol.view.query.trim();
   const zoomed = ol.state.hoistedId;
   const zoomedId = zoomed ? ol.commands.identityOf(zoomed) : null;
-  const count = items.length + ol.bookmarks.searches.length;
+  // A workspace's starred documents come first: bookmarks of whole documents.
+  const docs = ui.host.starredDocuments;
+  const count = items.length + ol.bookmarks.searches.length + (docs?.items.length ?? 0);
   const run = (search: string) => {
     ol.setView((view) => ({ ...view, query: search }));
     ui.setSearchOpen(true);
@@ -980,6 +1053,33 @@ export function OutlinerBookmarksMenu() {
         <TooltipContent>{L.bookmarks}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-64 max-w-[calc(100vw-1.5rem)]" onCloseAutoFocus={(event) => ui.returnFocus(event)}>
+        {docs && (
+          <>
+            <DropdownMenuLabel className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">{L.documents}</DropdownMenuLabel>
+            {docs.items.map((doc) => (
+              <div key={doc.id} role="none" className={pair}>
+                <DropdownMenuItem className="min-w-0 flex-1" data-starred-document={doc.id} onSelect={() => docs.open(doc.id)}>
+                  <FileText className="text-warning" />
+                  <span dir="auto" className="min-w-0 flex-1 truncate">{doc.title}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  aria-label={L.removeStarred(doc.title)}
+                  className={remove}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    docs.unstar(doc.id);
+                  }}
+                >
+                  <X className="size-3.5" />
+                </DropdownMenuItem>
+              </div>
+            ))}
+            <DropdownMenuItem onSelect={docs.toggleCurrent}>
+              <Star className={cn(docs.current && "fill-current")} /> {docs.current ? L.unstarDocument : L.starDocument}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuLabel className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">Starred</DropdownMenuLabel>
         {items.length === 0 && <div className="px-2 py-1.5 text-[12px] text-muted-foreground">Star an item from its menu.</div>}
         {items.map((item) => (
@@ -1081,58 +1181,76 @@ function collectAllIds(node?: OutlineItem): string[] {
 
 /* ───────────────────────────── Shortcuts sheet ───────────────────────────── */
 
-function shortcutsFor({ modKey, alt, shift }: PlatformKeys): readonly { readonly group: string; readonly items: readonly (readonly [string, string])[] }[] {
+function shortcutsFor({ modKey, shift, isMac }: PlatformKeys, keymap: Keymap): readonly { readonly group: string; readonly items: readonly (readonly [string, string])[] }[] {
+  // Remappable keys come from the active keymap (profile + remaps), so this sheet never lies.
+  const k = (...ids: ShortcutId[]) => ids.map((id) => shortcutLabel(keymap, id, isMac) || "—").join(" · ");
+  const power = keymap.profile === "power";
   return [
   {
     group: "Writing",
     items: [
       ["New item", "↵"],
       ["Add / edit note", `${shift}↵`],
+      [power ? "Line break in a note (↵ starts the next item)" : "Line break in a note", power ? `${shift}${modKey}↵` : "↵"],
       ["Indent · Outdent", `Tab · ${shift}Tab`],
       ["Merge with previous", "⌫ at start"],
-      ["Complete", `${modKey}↵`],
-      ["Checkbox", `${shift}${modKey}C`],
-      ["Heading 1–3 · Normal", `${alt}${modKey}1–3 · 0`],
+      ["Complete", k("complete")],
+      ["Checkbox", k("checkbox")],
+      ["Heading 1 · 2 · 3", k("heading1", "heading2", "heading3")],
+      ["Normal text", k("heading0")],
     ],
   },
   {
     group: "Formatting",
     items: [
-      ["Bold", `${modKey}B`],
-      ["Italic", `${modKey}I`],
-      ["Inline code", `${modKey}E`],
-      ["Strikethrough", `${shift}${modKey}X`],
-      ["Highlight", `${shift}${modKey}H`],
+      ["Bold", k("bold")],
+      ["Italic", k("italic")],
+      ["Inline code", k("code")],
+      ["Strikethrough", k("strike")],
+      ["Highlight", k("highlight")],
       ["Tag · Mention · Date", "#tag · @name · !(2026-11-03)"],
     ],
   },
   {
     group: "Structure",
     items: [
-      ["Move up · down", `${alt}${shift}↑ · ↓`],
-      ["Move to…", `${shift}${modKey}M`],
-      ["Fold · unfold", `${modKey}.`],
-      ["Zoom in · out", `${modKey}] · ${modKey}[`],
+      ["Move up", k("moveUp")],
+      ["Move down", k("moveDown")],
+      ["Move to…", k("moveTo")],
+      ["Zoom in · out", k("zoomIn", "zoomOut")],
+      ["Copy item link", k("copyLink")],
       ["Undo · Redo", `${modKey}Z · ${shift}${modKey}Z`],
+    ],
+  },
+  {
+    group: "Folding",
+    items: [
+      ["Fold · unfold", k("fold")],
+      ["Show 1 · 2 · 3 levels", k("levels1", "levels2", "levels3")],
+      ["Show all levels", k("levelsAll")],
+      ["Hide completed", k("hideCompleted")],
     ],
   },
   {
     group: "Selection",
     items: [
       ["Select item", "Esc while editing"],
-      ["Extend selection", `${shift}↑ · ${shift}↓`],
+      ["Extend selection (also from a title)", `${shift}↑ · ${shift}↓`],
+      ["Add or remove a row", `${modKey}-click`],
       ["Select all", `${modKey}A twice`],
       ["Delete selected", "⌫"],
       ["Copy · Cut · Paste", `${modKey}C · X · V`],
+      ["Copy while dragging", `${isMac ? "⌥" : "Alt"}-drag`],
     ],
   },
   {
     group: "Navigate",
     items: [
-      ["Command palette", `${modKey}K`],
-      ["Search", `${modKey}F`],
+      ["Command palette", k("palette")],
+      ["Search", k("search")],
+      ["Find and replace", k("findReplace")],
       ["Flat results", `${shift}↵ in search`],
-      ["Hide completed", `${alt}${modKey}H`],
+      ["Settings", k("settings")],
     ],
   },
   ];
@@ -1146,13 +1264,30 @@ export function OutlinerShortcuts() {
       <DialogContent
         className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"
         onCloseAutoFocus={(event) => ui.returnFocus(event)}
+        // The sheet is for reading: focus the sheet itself, not its one link.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus?.();
+        }}
       >
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
-          <DialogDescription>Everything works without a mouse. On touch devices, the editing bar provides the same structure tools.</DialogDescription>
+          <DialogDescription>
+            {ui.keymap.profile === "power" ? "Power profile. " : ""}Everything works without a mouse. On touch devices, the editing bar provides the same structure tools.{" "}
+            <button
+              type="button"
+              className="text-signal underline-offset-2 hover:underline"
+              onClick={() => {
+                ui.setShortcutsOpen(false);
+                window.setTimeout(() => ui.setSettingsOpen(true), 0);
+              }}
+            >
+              Change shortcuts…
+            </button>
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
-          {shortcutsFor(keys).map((section) => (
+        <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2" data-shortcut-sheet={ui.keymap.profile}>
+          {shortcutsFor(keys, ui.keymap).map((section) => (
             <section key={section.group}>
               <h3 className="mb-1.5 text-2xs font-medium tracking-wide text-muted-foreground uppercase">{section.group}</h3>
               <dl className="divide-y divide-hairline">
@@ -1180,23 +1315,58 @@ export function OutlinerDatePicker() {
   // The close-focus callback runs after the request is cleared: remember whose picker it was.
   const lastRow = React.useRef<string | null>(null);
   if (request) lastRow.current = request.rowId;
+  /**
+   * Range mode (`!(start → end)`): the first click picks the start, the second the end. It opens
+   * on when the token already is a range. Ranges and repeats exclude each other.
+   */
+  const [rangeMode, setRangeMode] = React.useState(false);
+  const [rangeStart, setRangeStart] = React.useState<Date | null>(null);
+  const requestKey = request ? `${request.rowId}:${request.start}` : null;
+  React.useEffect(() => {
+    setRangeMode(!!request?.rangeEnd);
+    setRangeStart(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey]);
   /** Replace the token; `date` null removes it. Focus returns to the row, the change is spoken. */
-  const replace = (date: Date | null, hasTime = request?.hasTime ?? false, repeat = request?.repeat) => {
+  const replace = (date: Date | null, hasTime = request?.hasTime ?? false, repeat = request?.repeat, end?: { readonly at: Date; readonly hasTime: boolean }) => {
     if (!request) return;
     const node = findOutlineNode(ol.latestNodes(), request.rowId)?.node as OutlineItem | undefined;
     if (!node) return;
-    const token = date ? formatDateToken(date, hasTime, repeat) : "";
+    const sameTime = date && request.time && date.getHours() === request.value.getHours() && date.getMinutes() === request.value.getMinutes();
+    const token = date ? formatDateToken(date, hasTime, end ? undefined : repeat, { end: end?.at, endHasTime: end?.hasTime, time: sameTime ? request.time : undefined }) : "";
     const source = request.field === "note" ? (node.data?.note ?? "") : node.text;
     const next = (source.slice(0, request.start) + token + source.slice(request.end)).replace(/ {2,}/g, " ");
     ol.dispatch({ type: request.field === "note" ? "note" : "text", id: request.rowId, text: next });
-    ui.announce(date ? L.dueOn(spokenDate({ value: date, hasTime }) + (repeat ? `, repeats every ${formatRepeat(repeat)}` : "")) : L.dateRemoved);
+    ui.announce(
+      !date
+        ? L.dateRemoved
+        : end
+          ? L.dateRange(spokenDate({ value: date, hasTime }), spokenDate({ value: end.at, hasTime: end.hasTime }))
+          : L.dueOn(spokenDate({ value: date, hasTime }) + (repeat ? `, repeats every ${formatRepeat(repeat)}` : "")),
+    );
     ui.setDatePicker(null);
   };
   /** A day from a preset or the calendar keeps the token's time of day. */
-  const onDay = (day: Date) => {
+  const atDay = (day: Date, from: Date, hasTime: boolean) => {
     const date = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-    if (request?.hasTime) date.setHours(request.value.getHours(), request.value.getMinutes());
-    replace(date);
+    if (hasTime) date.setHours(from.getHours(), from.getMinutes());
+    return date;
+  };
+  const onDay = (day: Date) => {
+    if (!request) return;
+    if (!rangeMode) return replace(atDay(day, request.value, request.hasTime), request.hasTime, request.repeat);
+    if (!rangeStart) {
+      setRangeStart(day);
+      ui.announce(L.pickRangeEnd);
+      return;
+    }
+    const [first, last] = day < rangeStart ? [day, rangeStart] : [rangeStart, day];
+    const start = atDay(first, request.value, request.hasTime);
+    const sameDay = first.toDateString() === last.toDateString();
+    // One day picked twice is a plain date again (a timed range keeps its end time).
+    if (sameDay && !(request.hasTime && request.rangeEndHasTime && request.rangeEnd)) return replace(start, request.hasTime, undefined);
+    const endAt = request.rangeEnd && request.rangeEndHasTime ? atDay(last, request.rangeEnd, true) : atDay(last, last, false);
+    replace(start, request.hasTime, undefined, { at: endAt, hasTime: !!(request.rangeEnd && request.rangeEndHasTime) });
   };
   const quick = (label: string, days: number) => {
     const date = new Date();
@@ -1247,27 +1417,70 @@ export function OutlinerDatePicker() {
                 Remove
               </Button>
             </div>
-            <Calendar
-              mode="single"
-              selected={request.value}
-              defaultMonth={request.value}
-              onSelect={(date) => date && onDay(date)}
-              disabled={ol.readOnly}
-            />
-            <div className="flex flex-wrap items-center gap-1 border-t p-1.5" role="group" aria-label="Repeat">
-              {repeats.map(([label, repeat]) => (
-                <Button
-                  key={label}
-                  variant="ghost"
-                  size="xs"
-                  aria-pressed={sameRepeat(repeat, request.repeat)}
-                  disabled={ol.readOnly}
-                  className={cn(sameRepeat(repeat, request.repeat) && "bg-signal-muted text-signal hover:bg-signal-muted hover:text-signal")}
-                  onClick={() => replace(request.value, request.hasTime, repeat)}
+            {rangeMode ? (
+              <Calendar
+                mode="range"
+                selected={rangeStart ? { from: rangeStart, to: undefined } : { from: request.value, to: request.rangeEnd ?? request.value }}
+                defaultMonth={request.value}
+                onSelect={(_range, day) => onDay(day)}
+                disabled={ol.readOnly}
+              />
+            ) : (
+              <Calendar
+                mode="single"
+                selected={request.value}
+                defaultMonth={request.value}
+                onSelect={(date) => date && onDay(date)}
+                disabled={ol.readOnly}
+              />
+            )}
+            <AnimatePresence initial={false}>
+              {rangeMode && (
+                <motion.p
+                  key={rangeStart ? "end" : "start"}
+                  initial={{ opacity: 0, y: -2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={motionTokens.quick}
+                  aria-live="polite"
+                  className="px-3 pb-1.5 font-mono text-[10.5px] tracking-wide text-muted-foreground uppercase"
                 >
-                  {label}
-                </Button>
-              ))}
+                  {rangeStart ? L.pickRangeEnd : L.pickRangeStart}
+                </motion.p>
+              )}
+            </AnimatePresence>
+            <div className="flex flex-wrap items-center gap-1 border-t p-1.5" role="group" aria-label="Repeat">
+              {repeats.map(([label, repeat]) => {
+                const on = !rangeMode && sameRepeat(repeat, request.repeat);
+                return (
+                  <Button
+                    key={label}
+                    variant="ghost"
+                    size="xs"
+                    aria-pressed={on}
+                    disabled={ol.readOnly}
+                    className={cn(on && "bg-signal-muted text-signal hover:bg-signal-muted hover:text-signal")}
+                    onClick={() => replace(request.value, request.hasTime, repeat)}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+              <Button
+                variant="ghost"
+                size="xs"
+                aria-pressed={rangeMode}
+                disabled={ol.readOnly}
+                className={cn("gap-1", rangeMode && "bg-signal-muted text-signal hover:bg-signal-muted hover:text-signal")}
+                onClick={() => {
+                  setRangeStart(null);
+                  // Leaving range mode on a range keeps just its start.
+                  if (rangeMode && request.rangeEnd) replace(request.value, request.hasTime, undefined);
+                  else setRangeMode((on) => !on);
+                }}
+              >
+                <CalendarRange className="size-3" /> {L.dateRangeMode}
+              </Button>
               {request.hasTime && (
                 <Button variant="ghost" size="xs" className="ms-auto text-muted-foreground" disabled={ol.readOnly} onClick={() => replace(request.value, false)}>
                   Remove time
