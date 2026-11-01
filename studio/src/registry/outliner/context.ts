@@ -92,6 +92,8 @@ export interface OutlinerSearchScope {
   readonly renderResults: (query: string) => React.ReactNode;
   /** Matches across every document, for the count in the search field. */
   readonly count?: (query: string) => number;
+  /** What the results across documents show, for the status footer (matches, and in how many documents). */
+  readonly stats?: (query: string) => { readonly matches: number; readonly documents: number };
   /** Told whenever this outline's query changes (a workspace keeps its tag pane in step). */
   readonly onQueryChange?: (query: string) => void;
 }

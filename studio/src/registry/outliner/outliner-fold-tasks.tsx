@@ -73,7 +73,11 @@ export function FoldTasks({
    * be unticked) until the list closes, instead of jumping out from under the pointer.
    */
   const [listed, setListed] = React.useState<readonly string[]>([]);
-  const tasks = React.useMemo(() => (open ? branchTasks(node) : []), [open, node]);
+  const live = React.useMemo(() => (open ? branchTasks(node) : null), [open, node]);
+  // While the sheet or popover animates out it keeps its last list (never a "nothing open" frame).
+  const kept = React.useRef<readonly FoldTask[]>([]);
+  if (live) kept.current = live;
+  const tasks = live ?? kept.current;
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const shown = listed.flatMap((id) => (byId.get(id) ? [byId.get(id)!] : []));
   const openCount = tasks.filter((task) => !isCompleted(task.node)).length;

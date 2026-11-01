@@ -317,7 +317,7 @@ export function AutocompletePopover({
               onMouseEnter={() => setActive(index)}
               onClick={() => anchor && accept(anchor, item)}
               className={cn(
-                "flex h-7 w-full items-center gap-2 rounded-md px-2 text-start text-ui transition-colors [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground",
+                "flex h-7 w-full items-center gap-2 rounded-md px-2 text-start text-ui transition-colors coarse:h-11 coarse:text-[15px] [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-muted-foreground coarse:[&_svg]:size-4",
                 index === active && "bg-muted",
               )}
             >
@@ -326,7 +326,7 @@ export function AutocompletePopover({
               {item.hint && <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground tabular-nums">{item.hint}</span>}
             </button>
           ))}
-          <div className="mt-1 flex items-center gap-2 border-t border-hairline px-2 pt-1.5 pb-0.5 text-[10.5px] text-muted-foreground">
+          <div className="mt-1 flex items-center gap-2 border-t border-hairline px-2 pt-1.5 pb-0.5 text-[10.5px] text-muted-foreground coarse:hidden">
             <span>↑↓ choose</span>
             <span>↵ insert</span>
             <span className="ms-auto">esc dismiss</span>

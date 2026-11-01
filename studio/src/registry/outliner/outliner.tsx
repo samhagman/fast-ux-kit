@@ -80,6 +80,7 @@ import { MindMapSlot, ViewSwitcher, printCurrent, shownView } from "./outliner-v
 import { searchSuggestions } from "./search-filters";
 import { ResultSortControl } from "./result-sort";
 import { reportImport } from "./outliner-import-report";
+import { insideClose, keepClearOfToasts } from "./toasts";
 import {
   ItemMenuContent,
   OutlinerActionSheet,
@@ -347,6 +348,7 @@ export function Outliner({
     const id = toast(text, {
       duration: opts?.sticky ? Infinity : 5000,
       closeButton: opts?.sticky,
+      ...(opts?.sticky ? { classNames: insideClose("center") } : {}),
       action: {
         label: live.current.labels.undoAction,
         onClick: () => {
@@ -358,6 +360,13 @@ export function Outliner({
       },
     });
     undoOffer.current = { id, entry };
+    // The rows the toast is about stay visible above it: measured once the toast has laid out
+    // and a row that just appeared has grown to its height (the base motion token).
+    window.setTimeout(() => {
+      const { state } = live.current.ol;
+      const head = state.selectionAnchor ?? [...state.selection].at(-1) ?? state.caret?.id;
+      if (head) keepClearOfToasts(rootRef.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(head)}"]`));
+    }, motionTokens.base.duration * 1000 + 60);
   }, []);
   const historyTop = ol.state.history.past.at(-1);
   React.useEffect(() => {
@@ -818,6 +827,9 @@ function OutlinerHeader({ title }: { readonly title: string }) {
         </ol>
       </nav>
       <OutlinerSearchField wide={phoneSearch} />
+      {/* A phone's search takes the toolbar; the bookmarks stay beside it, so the query in the
+          field can be saved (and a saved one chosen) without leaving search. */}
+      {phoneSearch && <OutlinerBookmarksMenu />}
       <div className={cn("flex items-center gap-0.5", phoneSearch && "hidden")}>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -853,7 +865,7 @@ function OutlinerHeader({ title }: { readonly title: string }) {
             {L.redo} <Kbd dir="ltr">{isMac ? "⇧⌘Z" : "Ctrl Y"}</Kbd>
           </TooltipContent>
         </Tooltip>
-        <OutlinerBookmarksMenu />
+        {!phoneSearch && <OutlinerBookmarksMenu />}
         <ViewMenu />
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1254,19 +1266,24 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
             .map((node) => node.id)
             .reverse()
             .find((id) => visible.has(id)) ?? null);
-    scrollEl?.scrollTo({ top });
+    // Rows of the level we land on can still be growing in (or a virtual list sizing up), which
+    // would clamp the position: restore until it sticks, then make sure the cursor shows.
+    const landed = (done: () => void) => (scrollEl ? restoreScroll(scrollEl, top, done) : done());
     if (cameFrom) {
       ui.focusList();
       ol.dispatch({ type: "select", id: cameFrom });
       ui.setHead(cameFrom);
-      requestAnimationFrame(() => {
-        const el = ui.listRef.current?.querySelector(`[data-row="${CSS.escape(cameFrom)}"]`);
-        const box = el?.getBoundingClientRect();
-        const view = scrollEl?.getBoundingClientRect();
-        if (!el || (box && view && (box.top < view.top || box.bottom > view.bottom))) ui.scrollToRow(cameFrom, "center");
-      });
+      landed(() =>
+        requestAnimationFrame(() => {
+          const el = ui.listRef.current?.querySelector(`[data-row="${CSS.escape(cameFrom)}"]`);
+          const box = el?.getBoundingClientRect();
+          const view = scrollEl?.getBoundingClientRect();
+          if (!el || (box && view && (box.top < view.top || box.bottom > view.bottom))) ui.scrollToRow(cameFrom, "center");
+        }),
+      );
       ui.announce(`Zoomed out to ${ol.hoisted ? inlineToSpeech(ol.hoisted.text, live.current.resolveRef) : "the document"}`);
     } else {
+      landed(() => {});
       ui.announce(ol.hoisted ? `Zoomed into ${inlineToSpeech(ol.hoisted.text, live.current.resolveRef)}` : "Document root");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1280,21 +1297,8 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
     } else if (!queryActive && searchScroll.current !== null) {
       const top = searchScroll.current;
       searchScroll.current = null;
-      // The full list (and a virtual list's total height) can arrive well after the query
-      // clears, so keep restoring until the position sticks — but yield as soon as the user
-      // scrolls on their own.
-      const deadline = performance.now() + 2000;
-      let cancelled = false;
-      const cancel = () => (cancelled = true);
-      const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
-      for (const type of events) scrollEl.addEventListener(type, cancel, { once: true, passive: true });
-      const restore = () => {
-        if (cancelled) return;
-        scrollEl.scrollTop = top;
-        if (Math.abs(scrollEl.scrollTop - top) > 1 && performance.now() < deadline) requestAnimationFrame(restore);
-        else for (const type of events) scrollEl.removeEventListener(type, cancel);
-      };
-      requestAnimationFrame(restore);
+      // The full list (and a virtual list's total height) arrives after the query clears.
+      requestAnimationFrame(() => restoreScroll(scrollEl, top));
     }
   }, [queryActive, scrollEl]);
   // While the phone sheet is open the list has room below its content, so the sheet can lift its
@@ -1501,6 +1505,28 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
       {mindmap && <MindMapSlot key={mindmap.id} root={mindmap} />}
     </div>
   );
+}
+
+/**
+ * Put a scroller back at `top`, and keep doing so each frame until it sticks: the content it
+ * needs (rows growing in, a virtual list's total height) can arrive frames later. It yields at
+ * once when the user scrolls on their own, and gives up after two seconds; `done` runs either way.
+ */
+function restoreScroll(scrollEl: HTMLElement, top: number, done?: () => void) {
+  const deadline = performance.now() + 2000;
+  let cancelled = false;
+  const cancel = () => (cancelled = true);
+  const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+  for (const type of events) scrollEl.addEventListener(type, cancel, { once: true, passive: true });
+  const attempt = () => {
+    if (!cancelled) scrollEl.scrollTop = top;
+    if (!cancelled && Math.abs(scrollEl.scrollTop - top) > 1 && performance.now() < deadline) requestAnimationFrame(attempt);
+    else {
+      for (const type of events) scrollEl.removeEventListener(type, cancel);
+      done?.();
+    }
+  };
+  attempt();
 }
 
 /**
@@ -2077,7 +2103,9 @@ function OutlinerStatusBar() {
   const L = ui.labels;
   const selected = ol.state.selection.size;
   const searching = !!ol.view.query.trim();
-  const matches = ol.search?.matchedIds.length ?? 0;
+  // Across documents the footer reports what the results show, not this document's matches.
+  const across = searching && ui.host.searchScope?.value === "all" ? (ui.host.searchScope.stats?.(ol.view.query) ?? null) : null;
+  const matches = across ? across.matches : (ol.search?.matchedIds.length ?? 0);
   // The footer follows the field: a half-typed token is "typing…", never "invalid".
   const typing = searching && (ol.search?.pending || searchSuggestions(ol.view.query).length > 0);
   const mode = ol.readOnly
@@ -2106,7 +2134,7 @@ function OutlinerStatusBar() {
         />
         {mode}
       </span>
-      <span>{ol.rows.length.toLocaleString()} {ol.rows.length === 1 ? "row" : "rows"}</span>
+      {across ? <span>{L.acrossDocuments(across.documents)}</span> : <span>{ol.rows.length.toLocaleString()} {ol.rows.length === 1 ? "row" : "rows"}</span>}
       {ol.state.history.past.length > 0 && (
         <span>
           {ol.state.history.past.length} {ol.state.history.past.length === 1 ? "change" : "changes"}

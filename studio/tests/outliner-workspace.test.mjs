@@ -180,6 +180,22 @@ test("workspace UI: search scope 'all documents' shows grouped results that open
   await ui.unmount();
 });
 
+test("workspace UI: in 'all documents' the status footer reports the shown results, across how many documents", async () => {
+  const ui = await mountWorkspace({ defaultDocuments: docs() });
+  const handle = ui.handle.current.active();
+  await ui.act(() => handle.search("#launch"));
+  const footer = () => [...ui.pane("a").querySelectorAll("div")].find((el) => /^Searching/.test(el.firstElementChild?.textContent ?? ""))?.textContent ?? "";
+  assert.match(footer(), /Searching · 1 match/, "this document: its own match");
+  assert.match(footer(), /rows/);
+  await ui.act(() => ui.pane("a").querySelector('button[aria-label^="Search scope"]').click());
+  const shown = ui.pane("a").querySelectorAll("[data-scope-result]").length;
+  assert.equal(shown, 2);
+  assert.match(footer(), /Searching · 2 matches/, "the results the list shows");
+  assert.match(footer(), /across 2 documents/);
+  assert.doesNotMatch(footer(), /rows/, "not this document's row count");
+  await ui.unmount();
+});
+
 test("workspace UI: controlled documents render what the host passes", async () => {
   let host = docs();
   const ui = await mountWorkspace({ documents: host, onDocumentsChange: (next) => (host = next) });

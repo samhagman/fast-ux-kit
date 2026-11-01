@@ -173,6 +173,58 @@ export const MIND_METRICS = {
   lines: 3,
 } as const;
 
+/**
+ * The smallest zoom a fit may choose: node labels (13 px at 1:1) never render below 12 px. A map
+ * bigger than that leaves the rest to panning instead of shrinking into unreadable type.
+ */
+export const MIN_LABEL_PX = 12;
+export const MIN_FIT_ZOOM = MIN_LABEL_PX / 13;
+
+/**
+ * The viewport that shows a laid-out map. Desktop centres it (a small map at 1:1, a large one
+ * fitted with a margin); a phone pins the one-sided map to the top. Neither goes below
+ * `MIN_FIT_ZOOM`: then the root stays in view (at the start edge on a phone) and the user pans.
+ */
+export function fitMindMap(
+  boxes: ReadonlyMap<string, MindBox>,
+  rootId: string,
+  host: { readonly width: number; readonly height: number },
+  options: { readonly narrow?: boolean; readonly rtl?: boolean } = {},
+): { x: number; y: number; zoom: number } {
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  for (const box of boxes.values()) {
+    x1 = Math.min(x1, box.x);
+    y1 = Math.min(y1, box.y);
+    x2 = Math.max(x2, box.x + box.width);
+    y2 = Math.max(y2, box.y + box.height);
+  }
+  const width = x2 - x1, height = y2 - y1;
+  const root = boxes.get(rootId) ?? { x: x1, y: y1, width, height };
+  const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value));
+  if (options.narrow) {
+    const pad = 20;
+    const zoom = clamp(Math.min((host.width - pad * 2) / width, (host.height - pad * 2) / height), MIN_FIT_ZOOM, 1);
+    const fitsAcross = width * zoom <= host.width - pad * 2;
+    const x = fitsAcross
+      ? (host.width - width * zoom) / 2 - x1 * zoom
+      : options.rtl
+        ? host.width - pad - x2 * zoom
+        : pad - x1 * zoom;
+    const top = pad - y1 * zoom;
+    const y = height * zoom <= host.height - pad * 2 ? top : clamp(host.height / 2 - (root.y + root.height / 2) * zoom, host.height - pad - y2 * zoom, top);
+    return { x, y, zoom };
+  }
+  // A small map at 1:1; a large one fitted with an 18% margin each side. When that would go below
+  // readable, a tighter 24 px margin may still show it whole; failing that, the root is centred
+  // at the readable floor and the rest is a pan away.
+  const roomy = Math.min(1, host.width / (width * 1.36), host.height / (height * 1.36));
+  const tight = Math.min(1, (host.width - 48) / width, (host.height - 48) / height);
+  const zoom = roomy >= MIN_FIT_ZOOM ? roomy : Math.max(MIN_FIT_ZOOM, tight);
+  const whole = roomy >= MIN_FIT_ZOOM || tight >= MIN_FIT_ZOOM;
+  const [cx, cy] = whole ? [x1 + width / 2, y1 + height / 2] : [root.x + root.width / 2, root.y + root.height / 2];
+  return { x: host.width / 2 - cx * zoom, y: host.height / 2 - cy * zoom, zoom };
+}
+
 export const metricsFor = (depth: number) => (depth === 0 ? MIND_METRICS.root : depth === 1 ? MIND_METRICS.branch : MIND_METRICS.leaf);
 
 let canvas: CanvasRenderingContext2D | null | undefined;

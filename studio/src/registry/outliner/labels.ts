@@ -87,6 +87,13 @@ export const DEFAULT_LABELS = {
   dateRangeMode: "Range",
   pickRangeStart: "Pick the first day",
   pickRangeEnd: "Now pick the last day",
+  dueDate: "Due date",
+  removeDate: "Remove",
+  addTime: "Add time",
+  setTime: "Set",
+  timeOfDay: "Time",
+  removeTime: "Remove time",
+  repeat: "Repeat",
   mirrored: (count: number) => `Mirrored ${plural(count, "item")}`,
   moved: (count: number) => `Moved ${plural(count, "item")}`,
   movedTo: (count: number, destination: string) => `Moved ${plural(count, "item")} to ${destination}`,
@@ -218,6 +225,7 @@ export const DEFAULT_LABELS = {
   selected: (count: number) => `${count.toLocaleString()} selected`,
   searching: (count: number) => `Searching · ${plural(count, "match", "matches")}`,
   typingQuery: "typing…",
+  acrossDocuments: (count: number) => `across ${plural(count, "document")}`,
   invalidQuery: "invalid query · showing everything",
   // Agenda
   agendaGroups: {

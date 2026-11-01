@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useOutlinerContext } from "./context";
 import { InlineText, inlineToSpeech } from "./inline";
 import {
+  fitMindMap,
   layoutMindMap,
   measureMindMapNode,
   metricsFor,
@@ -151,35 +152,16 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
   }, [shown, graph, rtl]);
 
   /**
-   * Fit the whole map. Desktop centres it (a small map at 1:1, a large one fitted). A phone
-   * pins it to the top edge: the one-sided map is wider than it is tall, so centring it would
-   * leave a large empty band above it.
+   * Fit the whole map (`fitMindMap`): desktop centres it, a phone pins it to the top edge, and
+   * neither shrinks labels below 12 px (a bigger map keeps its root in view and pans instead).
    */
   const fit = React.useCallback(
     (duration: number) => {
       const host = hostRef.current;
       if (!boxes?.size || !host) return;
-      let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-      for (const box of boxes.values()) {
-        x1 = Math.min(x1, box.x);
-        y1 = Math.min(y1, box.y);
-        x2 = Math.max(x2, box.x + box.width);
-        y2 = Math.max(y2, box.y + box.height);
-      }
-      const bounds = { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
-      if (narrow) {
-        const pad = 20;
-        const zoom = Math.min(1, (host.clientWidth - pad * 2) / bounds.width, (host.clientHeight - pad * 2) / bounds.height);
-        const x = (host.clientWidth - bounds.width * zoom) / 2 - bounds.x * zoom;
-        void flow.setViewport({ x, y: pad - bounds.y * zoom, zoom }, { duration });
-        return;
-      }
-      // Never zoom past 1:1 for a small map: centre it instead.
-      const fits = bounds.width * 1.36 < host.clientWidth && bounds.height * 1.36 < host.clientHeight;
-      if (fits) void flow.setCenter(x1 + bounds.width / 2, y1 + bounds.height / 2, { zoom: 1, duration });
-      else void flow.fitBounds(bounds, { padding: 0.18, duration });
+      void flow.setViewport(fitMindMap(boxes, root.id, { width: host.clientWidth, height: host.clientHeight }, { narrow, rtl }), { duration });
     },
-    [boxes, flow, narrow],
+    [boxes, flow, narrow, rtl, root.id],
   );
 
   // Fit once the first layout lands (and whenever the map's root changes). It fits the
@@ -260,7 +242,7 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
       animate={{ opacity: boxes ? 1 : 0.001 }}
       transition={motionTokens.base}
       data-mindmap=""
-      className="ol-mindmap relative h-full min-h-[360px] w-full touch-none overflow-hidden border-y border-hairline bg-[color-mix(in_srgb,var(--muted)_35%,var(--surface))] outline-none focus-visible:ring-3 focus-visible:ring-signal/30 focus-visible:ring-inset sm:rounded-lg sm:border"
+      className="ol-mindmap relative h-full min-h-[360px] w-full touch-none overflow-hidden border-y border-hairline bg-[color-mix(in_srgb,var(--muted)_35%,var(--surface))] group/map outline-none sm:rounded-lg sm:border"
       role="tree"
       aria-label={L.mindMap(title)}
       aria-activedescendant={domId(focusId)}
@@ -402,8 +384,10 @@ function MindMapNodeView({ data }: NodeProps<MindFlowNode>) {
           : mind.depth === 1
             ? "border-border shadow-[0_1px_1px_rgb(0_0_0/0.04)] hover:border-foreground/30"
             : "border-hairline hover:border-foreground/25",
-        focused && "ring-3 ring-signal/35 ring-offset-0",
-        focused && mind.depth > 0 && "border-signal/70",
+        // One focus indicator: the focused node's ring, only while the map has keyboard focus
+        // (the canvas itself draws none).
+        focused && "group-focus-visible/map:ring-3 group-focus-visible/map:ring-signal/35",
+        focused && mind.depth > 0 && "group-focus-visible/map:border-signal/70",
       )}
       style={{ paddingInline: metrics.padX, paddingBlock: metrics.padY }}
     >

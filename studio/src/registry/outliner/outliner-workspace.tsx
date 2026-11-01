@@ -815,6 +815,16 @@ export function OutlinerWorkspace({
   /** Each document's current query (the tag pane follows the open one's). */
   const [queries, setQueries] = React.useState<Readonly<Record<string, string>>>({});
   const scopes = React.useMemo(() => new Map<string, OutlinerSearchScope>(), [scope, open, L, resultSort]);
+  /** One search across every document per (query, documents) pair: the field's count and the footer share it. */
+  const statsCache = React.useRef<{ query: string; documents: readonly OutlineDocument[]; stats: { matches: number; documents: number } } | null>(null);
+  const statsFor = (query: string) => {
+    const cached = statsCache.current;
+    if (cached && cached.query === query && cached.documents === docsRef.current) return cached.stats;
+    const hits = searchDocuments(docsRef.current, query);
+    const stats = { matches: hits.reduce((sum, hit) => sum + hit.result.matches.length, 0), documents: hits.filter((hit) => hit.result.matches.length > 0).length };
+    statsCache.current = { query, documents: docsRef.current, stats };
+    return stats;
+  };
   const searchScopeFor = (documentId: string): OutlinerSearchScope => {
     let made = scopes.get(documentId);
     if (!made)
@@ -824,7 +834,8 @@ export function OutlinerWorkspace({
           value: scope,
           onChange: setScope,
           renderResults: (query) => <WorkspaceResults query={query} documents={docsRef.current} labels={L} onOpen={open} sort={resultSort} onSort={setResultSort} />,
-          count: (query) => searchDocuments(docsRef.current, query).reduce((sum, hit) => sum + hit.result.matches.length, 0),
+          count: (query) => statsFor(query).matches,
+          stats: statsFor,
           onQueryChange: (query) => setQueries((all) => ((all[documentId] ?? "") === query ? all : { ...all, [documentId]: query })),
         }),
       );

@@ -109,7 +109,9 @@ export function ResponsiveMenu({
     onCloseAutoFocus?.(event);
   };
   if (touch) return <MenuSheet trigger={trigger} title={title} backLabel={backLabel} entries={visible(entries, "touch")} run={run} onCloseAutoFocus={closeFocus} />;
-  const render = (list: readonly MenuEntry[]): React.ReactNode =>
+  // Inside a submenu an entry without a glyph is inset by the icon column, so its text lines up
+  // with the parent's iconed rows.
+  const render = (list: readonly MenuEntry[], inSub = false): React.ReactNode =>
     visible(list, "pointer").map((entry) => {
       switch (entry.kind) {
         case "separator":
@@ -131,14 +133,14 @@ export function ResponsiveMenu({
                   <DropdownMenuRadioGroup value={entry.radio.value} onValueChange={entry.radio.onChange}>
                     {visible(entry.entries, "pointer").map((child) =>
                       child.kind === "item" ? (
-                        <DropdownMenuRadioItem key={child.id} value={child.id}>
+                        <DropdownMenuRadioItem key={child.id} value={child.id} inset={child.icon ? undefined : true}>
                           {child.label}
                         </DropdownMenuRadioItem>
                       ) : null,
                     )}
                   </DropdownMenuRadioGroup>
                 ) : (
-                  render(entry.entries)
+                  render(entry.entries, true)
                 )}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -152,11 +154,11 @@ export function ResponsiveMenu({
             </>
           );
           return entry.checked !== undefined ? (
-            <DropdownMenuCheckboxItem key={entry.id} checked={entry.checked} disabled={entry.disabled} onCheckedChange={() => entry.run()}>
+            <DropdownMenuCheckboxItem key={entry.id} checked={entry.checked} disabled={entry.disabled} inset={inSub && !entry.icon ? true : undefined} onCheckedChange={() => entry.run()}>
               {body}
             </DropdownMenuCheckboxItem>
           ) : (
-            <DropdownMenuItem key={entry.id} disabled={entry.disabled} onSelect={() => run(entry)}>
+            <DropdownMenuItem key={entry.id} disabled={entry.disabled} inset={inSub && !entry.icon ? true : undefined} onSelect={() => run(entry)}>
               {body}
             </DropdownMenuItem>
           );

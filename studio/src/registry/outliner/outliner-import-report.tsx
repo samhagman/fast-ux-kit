@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { FileWarning } from "lucide-react";
 import { analyzeImport, summarizeReport, type ImportFormat, type ImportReport } from "./import-report";
 import { importOutline } from "./interchange";
+import { insideClose } from "./toasts";
 
 /** How many kinds of loss a toast lists before "and N more". */
 const SHOWN = 4;
@@ -33,6 +34,7 @@ export function reportImport(
     icon: <FileWarning className="size-4 text-warning" />,
     duration: 12_000,
     closeButton: true,
+    classNames: insideClose("top"),
     description: (
       <ul data-import-report="" className="mt-1 space-y-0.5 text-[12px]">
         {report.losses.slice(0, SHOWN).map((loss) => (

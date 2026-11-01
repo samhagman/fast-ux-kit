@@ -33,7 +33,6 @@ import {
   Undo2,
   X,
   ChevronDown,
-  CalendarRange,
   FileText,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -79,9 +78,7 @@ import {
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { formatDateToken, formatRepeat, inlineToPlain, inlineToSpeech, spokenDate, type DateRepeat } from "./inline";
+import { inlineToPlain, inlineToSpeech } from "./inline";
 import { shortcutLabel, type Keymap, type ShortcutId } from "./keymap";
 import { useOutlinerContext, usePlatformKeys, type PlatformKeys } from "./context";
 import { COLOR_STYLES, OUTLINE_COLORS, type OutlineItem } from "./types";
@@ -126,7 +123,9 @@ export function ItemMenuContent({
   const { ui } = useOutlinerContext();
   const M = variant === "context" ? CONTEXT : DROPDOWN;
   const entries = useItemActions(ids, row);
-  const render = (entry: ItemEntry): React.ReactNode => {
+  // Inside a submenu an entry without a glyph is inset by the icon column, so its text lines up
+  // with the iconed rows (and the parent menu's text column).
+  const render = (entry: ItemEntry, inSub = false): React.ReactNode => {
     if (entry.kind === "separator") return <M.Separator key={entry.id} />;
     if (entry.kind === "submenu")
       return (
@@ -134,11 +133,11 @@ export function ItemMenuContent({
           <M.SubTrigger disabled={entry.disabled}>
             {entry.icon} <bdi>{entry.label}</bdi>
           </M.SubTrigger>
-          <M.SubContent className="w-52">{entry.items.map(render)}</M.SubContent>
+          <M.SubContent className="w-52">{entry.items.map((item) => render(item, true))}</M.SubContent>
         </M.Sub>
       );
     return (
-      <M.Item key={entry.id} variant={entry.destructive ? "destructive" : undefined} disabled={entry.disabled} onSelect={entry.run}>
+      <M.Item key={entry.id} inset={inSub && !entry.icon ? true : undefined} variant={entry.destructive ? "destructive" : undefined} disabled={entry.disabled} onSelect={entry.run}>
         {entry.icon} <bdi>{entry.label}</bdi>
         {entry.current && <span className="ms-auto text-signal">●</span>}
         {entry.shortcut && <M.Shortcut dir="ltr">{entry.shortcut}</M.Shortcut>}
@@ -152,7 +151,7 @@ export function ItemMenuContent({
           <bdi>{ui.labels.selectionHeader(ids.length)}</bdi>
         </M.Label>
       )}
-      {entries.map(render)}
+      {entries.map((entry) => render(entry))}
     </>
   );
 }
@@ -1308,188 +1307,4 @@ export function OutlinerShortcuts() {
 
 /* ───────────────────────────── Date chip editor ───────────────────────────── */
 
-export function OutlinerDatePicker() {
-  const { ol, ui } = useOutlinerContext();
-  const request = ui.datePicker;
-  const L = ui.labels;
-  // The close-focus callback runs after the request is cleared: remember whose picker it was.
-  const lastRow = React.useRef<string | null>(null);
-  if (request) lastRow.current = request.rowId;
-  /**
-   * Range mode (`!(start → end)`): the first click picks the start, the second the end. It opens
-   * on when the token already is a range. Ranges and repeats exclude each other.
-   */
-  const [rangeMode, setRangeMode] = React.useState(false);
-  const [rangeStart, setRangeStart] = React.useState<Date | null>(null);
-  const requestKey = request ? `${request.rowId}:${request.start}` : null;
-  React.useEffect(() => {
-    setRangeMode(!!request?.rangeEnd);
-    setRangeStart(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestKey]);
-  /** Replace the token; `date` null removes it. Focus returns to the row, the change is spoken. */
-  const replace = (date: Date | null, hasTime = request?.hasTime ?? false, repeat = request?.repeat, end?: { readonly at: Date; readonly hasTime: boolean }) => {
-    if (!request) return;
-    const node = findOutlineNode(ol.latestNodes(), request.rowId)?.node as OutlineItem | undefined;
-    if (!node) return;
-    const sameTime = date && request.time && date.getHours() === request.value.getHours() && date.getMinutes() === request.value.getMinutes();
-    const token = date ? formatDateToken(date, hasTime, end ? undefined : repeat, { end: end?.at, endHasTime: end?.hasTime, time: sameTime ? request.time : undefined }) : "";
-    const source = request.field === "note" ? (node.data?.note ?? "") : node.text;
-    const next = (source.slice(0, request.start) + token + source.slice(request.end)).replace(/ {2,}/g, " ");
-    ol.dispatch({ type: request.field === "note" ? "note" : "text", id: request.rowId, text: next });
-    ui.announce(
-      !date
-        ? L.dateRemoved
-        : end
-          ? L.dateRange(spokenDate({ value: date, hasTime }), spokenDate({ value: end.at, hasTime: end.hasTime }))
-          : L.dueOn(spokenDate({ value: date, hasTime }) + (repeat ? `, repeats every ${formatRepeat(repeat)}` : "")),
-    );
-    ui.setDatePicker(null);
-  };
-  /** A day from a preset or the calendar keeps the token's time of day. */
-  const atDay = (day: Date, from: Date, hasTime: boolean) => {
-    const date = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-    if (hasTime) date.setHours(from.getHours(), from.getMinutes());
-    return date;
-  };
-  const onDay = (day: Date) => {
-    if (!request) return;
-    if (!rangeMode) return replace(atDay(day, request.value, request.hasTime), request.hasTime, request.repeat);
-    if (!rangeStart) {
-      setRangeStart(day);
-      ui.announce(L.pickRangeEnd);
-      return;
-    }
-    const [first, last] = day < rangeStart ? [day, rangeStart] : [rangeStart, day];
-    const start = atDay(first, request.value, request.hasTime);
-    const sameDay = first.toDateString() === last.toDateString();
-    // One day picked twice is a plain date again (a timed range keeps its end time).
-    if (sameDay && !(request.hasTime && request.rangeEndHasTime && request.rangeEnd)) return replace(start, request.hasTime, undefined);
-    const endAt = request.rangeEnd && request.rangeEndHasTime ? atDay(last, request.rangeEnd, true) : atDay(last, last, false);
-    replace(start, request.hasTime, undefined, { at: endAt, hasTime: !!(request.rangeEnd && request.rangeEndHasTime) });
-  };
-  const quick = (label: string, days: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    return { label, date };
-  };
-  const repeats: readonly (readonly [string, DateRepeat | undefined])[] = [
-    ["Once", undefined],
-    ["Daily", { unit: "day", interval: 1 }],
-    ["Weekdays", { unit: "weekday", interval: 1 }],
-    ["Weekly", { unit: "week", interval: 1 }],
-    ["Monthly", { unit: "month", interval: 1 }],
-  ];
-  const sameRepeat = (a?: DateRepeat, b?: DateRepeat) => a?.unit === b?.unit && a?.interval === b?.interval;
-  return (
-    <Popover open={!!request} onOpenChange={(open) => !open && ui.setDatePicker(null)}>
-      {request && (
-        <PopoverAnchor asChild>
-          <span
-            aria-hidden
-            style={{ position: "fixed", left: request.rect.left, top: request.rect.top, width: request.rect.width, height: request.rect.height }}
-          />
-        </PopoverAnchor>
-      )}
-      <PopoverContent
-        align="start"
-        sideOffset={6}
-        aria-label="Due date"
-        className="w-auto p-0"
-        // Back to the row it edits, selected, never <body> (⌘Z keeps working).
-        onCloseAutoFocus={(event) => ui.returnFocus(event, lastRow.current)}
-      >
-        {request && (
-          <div className="flex flex-col">
-            <div className="flex gap-1 border-b p-1.5">
-              {[quick("Today", 0), quick("Tomorrow", 1), quick("+1 week", 7)].map((option) => (
-                <Button key={option.label} variant="ghost" size="xs" disabled={ol.readOnly} onClick={() => onDay(option.date)}>
-                  {option.label}
-                </Button>
-              ))}
-              <Button
-                variant="ghost"
-                size="xs"
-                className="ms-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
-                disabled={ol.readOnly}
-                onClick={() => replace(null)}
-              >
-                Remove
-              </Button>
-            </div>
-            {rangeMode ? (
-              <Calendar
-                mode="range"
-                selected={rangeStart ? { from: rangeStart, to: undefined } : { from: request.value, to: request.rangeEnd ?? request.value }}
-                defaultMonth={request.value}
-                onSelect={(_range, day) => onDay(day)}
-                disabled={ol.readOnly}
-              />
-            ) : (
-              <Calendar
-                mode="single"
-                selected={request.value}
-                defaultMonth={request.value}
-                onSelect={(date) => date && onDay(date)}
-                disabled={ol.readOnly}
-              />
-            )}
-            <AnimatePresence initial={false}>
-              {rangeMode && (
-                <motion.p
-                  key={rangeStart ? "end" : "start"}
-                  initial={{ opacity: 0, y: -2 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={motionTokens.quick}
-                  aria-live="polite"
-                  className="px-3 pb-1.5 font-mono text-[10.5px] tracking-wide text-muted-foreground uppercase"
-                >
-                  {rangeStart ? L.pickRangeEnd : L.pickRangeStart}
-                </motion.p>
-              )}
-            </AnimatePresence>
-            <div className="flex flex-wrap items-center gap-1 border-t p-1.5" role="group" aria-label="Repeat">
-              {repeats.map(([label, repeat]) => {
-                const on = !rangeMode && sameRepeat(repeat, request.repeat);
-                return (
-                  <Button
-                    key={label}
-                    variant="ghost"
-                    size="xs"
-                    aria-pressed={on}
-                    disabled={ol.readOnly}
-                    className={cn(on && "bg-signal-muted text-signal hover:bg-signal-muted hover:text-signal")}
-                    onClick={() => replace(request.value, request.hasTime, repeat)}
-                  >
-                    {label}
-                  </Button>
-                );
-              })}
-              <Button
-                variant="ghost"
-                size="xs"
-                aria-pressed={rangeMode}
-                disabled={ol.readOnly}
-                className={cn("gap-1", rangeMode && "bg-signal-muted text-signal hover:bg-signal-muted hover:text-signal")}
-                onClick={() => {
-                  setRangeStart(null);
-                  // Leaving range mode on a range keeps just its start.
-                  if (rangeMode && request.rangeEnd) replace(request.value, request.hasTime, undefined);
-                  else setRangeMode((on) => !on);
-                }}
-              >
-                <CalendarRange className="size-3" /> {L.dateRangeMode}
-              </Button>
-              {request.hasTime && (
-                <Button variant="ghost" size="xs" className="ms-auto text-muted-foreground" disabled={ol.readOnly} onClick={() => replace(request.value, false)}>
-                  Remove time
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
+export { OutlinerDatePicker } from "./outliner-date-picker";
