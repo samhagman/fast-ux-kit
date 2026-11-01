@@ -246,8 +246,8 @@ function DatePickerBody({ request, touch }: { readonly request: DatePickerReques
           </motion.p>
         )}
       </AnimatePresence>
-      {/* Repeat: wraps with a pointer; one sideways-scrolling row of 44 px chips on touch. */}
-      <div className={cn(row, touch ? "overflow-x-auto overscroll-x-contain [scrollbar-width:none]" : "flex-wrap")} role="group" aria-label={L.repeat}>
+      {/* Repeat: wraps with a pointer; on touch a 3×2 grid of 44 px chips, every choice in view. */}
+      <div className={cn(row, touch ? "grid grid-cols-3" : "flex-wrap")} role="group" aria-label={L.repeat} data-repeat-row="">
         {repeats.map(([label, repeat]) => {
           const active = !rangeMode && sameRepeat(repeat, request.repeat);
           return (

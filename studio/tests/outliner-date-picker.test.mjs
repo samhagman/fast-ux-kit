@@ -115,6 +115,10 @@ test("date picker on touch: a bottom sheet, 44 px targets, Remove and Remove tim
       assert.match(el.className, /\bh-11\b/, `${label} is a 44 px target`);
     }
     assert.match(picker().querySelector("[data-date-time] label").className, /\bh-11\b/, "the time field too");
+    const repeatRow = picker().querySelector("[data-repeat-row]");
+    assert.match(repeatRow.className, /\bgrid-cols-3\b/, "every repeat choice in view: a grid, not a sideways scroller");
+    assert.doesNotMatch(repeatRow.className, /overflow-x-auto/);
+    assert.equal(repeatRow.querySelectorAll("button").length, 6, "Once, Daily, Weekdays, Weekly, Monthly, Range");
     assert.match(picker().innerHTML, /\[--cell-size:--spacing\(11\)\]/, "44 px days");
     await ui.click(button("Remove time"));
     assert.equal(ui.value()[0].text, "Review !(2026-11-05)");
