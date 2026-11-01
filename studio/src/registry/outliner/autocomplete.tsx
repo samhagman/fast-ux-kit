@@ -4,15 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   AtSign,
   CalendarDays,
-  CheckSquare,
   CornerDownRight,
   Hash,
-  Heading1,
-  Heading2,
-  Heading3,
-  ListOrdered,
-  StickyNote,
-  Text,
   Files,
 } from "lucide-react";
 import { textareaCaretRect } from "@fux/text-geometry";
@@ -24,10 +17,11 @@ import type { OutlineItem } from "./types";
 
 /**
  * Caret-anchored suggestions inside a row field. Triggers:
- *   #tag   @person   [[item link   !date   /command (at the start of a word)
+ *   #tag   @person   [[item link   !date
  * The menu never owns focus: the textarea keeps the caret and forwards navigation keys.
+ * "/" is not one of them: it opens the item menu (item-menu.tsx), the one list of commands.
  */
-export type TriggerKind = "tag" | "mention" | "link" | "date" | "slash";
+export type TriggerKind = "tag" | "mention" | "link" | "date";
 
 export interface Suggestion {
   readonly id: string;
@@ -50,16 +44,14 @@ export function findTriggerToken(value: string, caret: number): Token | null {
   const before = value.slice(0, caret);
   const link = /\[\[([^\]\n]*)$/.exec(before);
   if (link) return { kind: "link", start: link.index, end: caret, query: link[1]! };
-  const match = /(^|[\s(])([#@!/])([\p{L}\p{N}_.\- ]{0,24})$/u.exec(before);
+  const match = /(^|[\s(])([#@!])([\p{L}\p{N}_.\- ]{0,24})$/u.exec(before);
   if (!match) return null;
   const trigger = match[2]!;
   const query = match[3]!;
   const start = match.index + match[1]!.length;
-  // Tags and mentions stop at whitespace; dates and commands may contain spaces ("next week").
+  // Tags and mentions stop at whitespace; dates may contain spaces ("next week").
   if ((trigger === "#" || trigger === "@") && /\s/.test(query)) return null;
-  if (trigger === "/" && start !== 0 && !/\s/.test(before[start - 1] ?? "")) return null;
-  const kind: TriggerKind =
-    trigger === "#" ? "tag" : trigger === "@" ? "mention" : trigger === "!" ? "date" : "slash";
+  const kind: TriggerKind = trigger === "#" ? "tag" : trigger === "@" ? "mention" : "date";
   return { kind, start, end: caret, query };
 }
 
@@ -188,25 +180,6 @@ export function useAutocomplete(
           }
         return out;
       }
-      case "slash": {
-        const ids = [row.id];
-        const commands: Suggestion[] = [
-          { id: "h1", label: "Heading 1", icon: <Heading1 />, apply: () => ol.commands.setHeading(ids, 1) },
-          { id: "h2", label: "Heading 2", icon: <Heading2 />, apply: () => ol.commands.setHeading(ids, 2) },
-          { id: "h3", label: "Heading 3", icon: <Heading3 />, apply: () => ol.commands.setHeading(ids, 3) },
-          { id: "text", label: "Normal text", icon: <Text />, apply: () => ol.commands.setHeading(ids, undefined) },
-          { id: "todo", label: "Checkbox", hint: "task", icon: <CheckSquare />, apply: () => ol.commands.toggleCheckbox(ids) },
-          { id: "numbered", label: "Number children", icon: <ListOrdered />, apply: () => ol.commands.toggleNumbered(ids) },
-          { id: "date", label: "Date", hint: "!", icon: <CalendarDays />, insert: "!" },
-          {
-            id: "note",
-            label: "Add note",
-            icon: <StickyNote />,
-            apply: () => ol.dispatch({ type: "focus", id: row.id, field: "note", start: 0 }),
-          },
-        ];
-        return field === "note" ? [] : commands.filter((command) => command.label.toLowerCase().includes(q));
-      }
     }
   }, [token, ol, row.id, field]);
 
@@ -262,7 +235,6 @@ const TITLES: Record<TriggerKind, string> = {
   mention: "People",
   link: "Link to item",
   date: "Date",
-  slash: "Turn into",
 };
 
 export function AutocompletePopover({

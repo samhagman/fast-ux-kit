@@ -62,10 +62,12 @@ export function mindMapGraph(
     readonly limit?: number;
     /** Narrow screens grow the map to one side (a tall map fits a phone; a wide one shrinks to nothing). */
     readonly oneSided?: boolean;
+    /** Nodes Hide completed keeps because they are still the target, and the path to them (target.ts linger). */
+    readonly linger?: ReadonlySet<string>;
   } = {},
 ): MindGraph {
   const limit = options.limit ?? MIND_MAP_LIMIT;
-  const keep = (node: OutlineItem) => !(options.hideCompleted && isDone(node));
+  const keep = (node: OutlineItem) => !(options.hideCompleted && isDone(node)) || !!options.linger?.has(node.id);
   const nodes = new Map<string, MindMapNode>();
   const order: string[] = [];
   let truncated = false;
@@ -151,6 +153,20 @@ export function stepMindMap(graph: MindGraph, fromId: string | null, key: MindKe
     return from.childIds[0] ? { id: from.childIds[0] } : null;
   }
   return from.parentId ? { id: from.parentId } : null;
+}
+
+/**
+ * The fold an arrow opens or closes before it travels (folding is ←/→, as in the list):
+ * outward on a folded node unfolds it; inward on an open node with children folds it. The
+ * centre never folds. null: the arrow travels (stepMindMap).
+ */
+export function foldMindMap(graph: MindGraph, fromId: string | null, key: "left" | "right", rtl = false): string | null {
+  const from = fromId ? graph.nodes.get(fromId) : undefined;
+  if (!from || from.side === "root") return null;
+  const visual = rtl ? (key === "left" ? "right" : "left") : key;
+  const outward = from.side === "end" ? "right" : "left";
+  if (visual === outward) return from.folded ? from.id : null;
+  return from.hasChildren && !from.folded ? from.id : null;
 }
 
 /* ───────────────────────────── Layout ───────────────────────────── */

@@ -42,8 +42,9 @@ import {
   type OutlineAfterEdit,
   type OutlineEditor,
 } from "./controlled-outline";
-import { formatDateToken, inlineToPlain, nextOccurrence, parseInline, repeatFor } from "./inline";
+import { formatDateToken, inlineToPlain, nextOccurrence, parseInline, repeatFor, type DateRepeat, type InlineDate } from "./inline";
 import { sortResults, type ResultSort } from "./result-sort";
+import { createdRoots, lingerPaths, lingerSession, navRows, neighbourOf, nextLinger, NO_LINGER, targetIdsOf, type LingerState, type SelectPolicy, type TargetRows, type ViewNav } from "./target";
 
 /**
  * The outliner controller. It owns exactly two kinds of state:
@@ -314,6 +315,38 @@ export function advanceRecurring(text: string, now = new Date()): { text: string
   return next ? { text: out + text.slice(at), next } : null;
 }
 
+/** A title's first `!(…)` date: where it is and what it says (null: no date). */
+export function titleDate(text: string): { readonly start: number; readonly end: number; readonly date: InlineDate } | null {
+  const segment = parseInline(text).find((candidate) => candidate.kind === "date" && candidate.date);
+  return segment?.date ? { start: segment.start, end: segment.end, date: segment.date } : null;
+}
+
+/**
+ * A title with its first date set to `day` (the time of day and the repeat kept), cleared
+ * (`null`), or added at the end when it has none. A range keeps its length. Returns the text
+ * unchanged when nothing applies (clearing a title without a date).
+ */
+export function withTitleDate(text: string, day: Date | null): string {
+  const found = titleDate(text);
+  if (!day) return found ? (text.slice(0, found.start) + text.slice(found.end)).replace(/ {2,}/g, " ").trim() : text;
+  const at = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  if (!found) return `${text.replace(/\s+$/, "")}${text.trim() ? " " : ""}${formatDateToken(at)}`;
+  const { date } = found;
+  if (date.hasTime) at.setHours(date.time?.[0] ?? date.value.getHours(), date.time?.[1] ?? date.value.getMinutes());
+  const end = date.end ? new Date(at.getTime() + (date.end.getTime() - date.value.getTime())) : undefined;
+  const token = formatDateToken(at, date.hasTime, date.repeat, { end, endHasTime: date.endHasTime, time: date.time });
+  return text.slice(0, found.start) + token + text.slice(found.end);
+}
+
+/** A title whose first date repeats by `repeat` (undefined: once). No date yet: today, repeating. A range becomes its start. */
+export function withTitleRepeat(text: string, repeat: DateRepeat | undefined): string {
+  const found = titleDate(text);
+  if (!found) return repeat ? `${text.replace(/\s+$/, "")}${text.trim() ? " " : ""}${formatDateToken(new Date(new Date().setHours(0, 0, 0, 0)), false, repeat)}` : text;
+  const { date } = found;
+  const rule = repeat ? repeatFor(date.value, repeat, date.value.getDate()) : undefined;
+  return text.slice(0, found.start) + formatDateToken(date.value, date.hasTime, rule, { time: date.time }) + text.slice(found.end);
+}
+
 /**
  * The mirror rule for one edit (see mirrors.ts): propagate, rename ids created inside a mirror
  * (the caret and selection follow), or refuse.
@@ -533,6 +566,16 @@ export function useOutliner(options: UseOutlinerOptions) {
    * Any other dispatch renders at once and so also carries every keystroke before it.
    */
   const deferred = React.useRef(false);
+  /** Rows kept visible past the active filter while they are the target (target.ts LingerState). */
+  const linger = React.useRef<LingerState>(NO_LINGER);
+  /** The board or mind map on screen: its visible order is what the target and linger mean. Null: the list. */
+  const viewNav = React.useRef<ViewNav | null>(null);
+  /** The rows the reader sees now, in order: the registered view's, else the list's. */
+  const shownRows = (): readonly { readonly id: string }[] => (viewNav.current ? navRows(viewNav.current.visibleIds()).rows : latest.current.rows);
+  /** The reader view at dispatch time (declared before `view`, assigned once it exists). */
+  const viewRef = React.useRef<OutlinerView>(null!);
+  /** The last action type that changed content (the touch adapter reads it). */
+  const lastEdit = React.useRef<{ readonly type: OutlineAction<OutlineItemData>["type"]; readonly seq: number } | null>(null);
   const renderSoon = React.useCallback(() => {
     if (deferred.current) return;
     deferred.current = true;
@@ -547,12 +590,28 @@ export function useOutliner(options: UseOutlinerOptions) {
     const isControlled = optionsRef.current.value !== undefined;
     const id = nextId.current++;
     const travel = action.type === "undo" || action.type === "redo" ? action.type : null;
-    const history = latestEditor(store.current).history;
+    const base = latestEditor(store.current);
+    const history = base.history;
     const from = travel === "undo" ? history.past.at(-1) : travel === "redo" ? history.future.at(-1) : undefined;
     const step = stepOutline(store.current, action, editorOptions.current, isControlled, id, afterEditRef.current);
     if (step.state === store.current) return step.result;
     if (step.proposal) seq.current++;
     store.current = step.state;
+    // Linger (target.ts): rows the reader acts on stay visible under a filter until the target moves on.
+    const after = latestEditor(step.state);
+    const edited = after.nodes !== base.nodes;
+    if (edited) lastEdit.current = { type: action.type, seq: (lastEdit.current?.seq ?? 0) + 1 };
+    const session = lingerSession(viewRef.current, after.hoistedId);
+    // Only rows the reader can see (or that this edit created) can linger: a range that spans
+    // filtered-out rows never brings them back.
+    const seen = session ? new Set(shownRows().map((row) => row.id)) : null;
+    const visible = (ids: readonly string[]) => (seen ? ids.filter((id) => seen.has(id) || !findOutlineNode(base.nodes, id)) : ids);
+    linger.current = nextLinger(linger.current, session, {
+      kind: action.type === "replace" ? "replace" : travel ? "history" : edited ? "edit" : "view",
+      before: visible(targetIdsOf(base)),
+      after: visible(targetIdsOf(after)),
+      afterPaths: (ids) => ids.flatMap((id) => getOutlinePath(after.nodes, id).slice(0, -1).map((node) => node.id)),
+    });
     if (options?.afterPaint) renderSoon();
     else bump();
     if (step.proposal) {
@@ -590,6 +649,14 @@ export function useOutliner(options: UseOutlinerOptions) {
     hideCompleted: false,
     noteDisplay: "show",
   });
+  viewRef.current = view;
+  // A remote replacement of the document drops every lingering row (target.ts).
+  if (reconciled?.outcome === "external") linger.current = NO_LINGER;
+  // A new filter session (query, Hide completed, mode, zoom) starts with nothing lingering, and
+  // going back to an earlier one never revives what lingered there.
+  const lingerKey = lingerSession(view, state.hoistedId);
+  if (linger.current.session !== lingerKey) linger.current = { session: lingerKey, ids: NO_LINGER.ids };
+  const lingerIds = linger.current.ids;
 
   /*
    * A half-typed last token (`due:`, `before:2026-1`, `is:todo du`) is unfinished, not wrong:
@@ -752,6 +819,8 @@ export function useOutliner(options: UseOutlinerOptions) {
     const searching = search && !search.diagnostics.length;
     const matches = new Map(search?.matches.map((match) => [match.id, match]));
     const contextIds = new Set(search?.contextAncestorIds);
+    // Lingering targets (and the path to them) stay through the filter until the cursor moves on.
+    const lingering = lingerIds.size ? lingerPaths(state.nodes, lingerIds) : null;
 
     const links = linkIndexOf(state.nodes);
     // Local backlinks plus links from other documents (a workspace host).
@@ -776,7 +845,14 @@ export function useOutliner(options: UseOutlinerOptions) {
       const counts = new Map<AgendaGroup, number>();
       for (const group of groupOf.values()) counts.set(group, (counts.get(group) ?? 0) + 1);
       let lastGroup: AgendaGroup | null = null;
-      for (const { match, location } of ordered) {
+      // A lingering row that stopped matching keeps the place it had in the results.
+      const listed: { readonly match?: (typeof ordered)[number]["match"]; readonly location: (typeof ordered)[number]["location"] }[] = [...ordered];
+      for (const id of lingerIds) {
+        if (matches.has(id)) continue;
+        const location = findOutlineNode(state.nodes, id);
+        if (location) listed.splice(Math.min(previous.get(id)?.index ?? listed.length, listed.length), 0, { location });
+      }
+      for (const { match, location } of listed) {
         if (!location) continue;
         const node = location.node as OutlineItem;
         const group = groupOf.get(node.id);
@@ -825,14 +901,15 @@ export function useOutliner(options: UseOutlinerOptions) {
       let ordinal = 0;
       const shown = items.filter(
         (node) =>
-          !(searching && !matches.has(node.id) && !contextIds.has(node.id)) &&
-          !(view.hideCompleted && isCompleted(node) && !matches.has(node.id)),
+          !!lingering?.shown.has(node.id) ||
+          (!(searching && !matches.has(node.id) && !contextIds.has(node.id)) &&
+            !(view.hideCompleted && isCompleted(node) && !matches.has(node.id))),
       );
       for (const node of shown) {
         const completed = isCompleted(node);
         const hasChildren = !!node.children?.length;
         const expanded = searching
-          ? contextIds.has(node.id) || (hasChildren && state.expandedIds.has(node.id))
+          ? contextIds.has(node.id) || !!lingering?.ancestors.has(node.id) || (hasChildren && state.expandedIds.has(node.id))
           : hasChildren && state.expandedIds.has(node.id);
         const source = copyPrefix === null ? mirrorOf(node) : undefined;
         const canonical = copyPrefix !== null && node.id.startsWith(copyPrefix) ? nodeById(node.id.slice(copyPrefix.length)) : undefined;
@@ -856,7 +933,7 @@ export function useOutliner(options: UseOutlinerOptions) {
           posInSet: ordinal,
           setSize: shown.length,
           refKey: refKeyOf(node),
-          context: searching ? !matches.has(node.id) : undefined,
+          context: searching ? !matches.has(node.id) && !lingerIds.has(node.id) : undefined,
           match: matches.get(node.id),
           summary: hasChildren && !expanded ? summarize(node) : undefined,
           // A mirror or a copy in one shows its source's backlinks (it is the same item).
@@ -877,7 +954,7 @@ export function useOutliner(options: UseOutlinerOptions) {
       : { nodes: state.nodes, expandedIds: state.expandedIds, hoistedId: state.hoistedId, view, isLocked, externalCounts, rows: out, index, hasRefs: out.some((row) => row.refKey !== undefined) };
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.nodes, state.expandedIds, state.hoistedId, hoisted, search, view, isLocked, titlesFor, externalCounts]);
+  }, [state.nodes, state.expandedIds, state.hoistedId, hoisted, search, view, isLocked, titlesFor, externalCounts, lingerIds]);
 
 
   const breadcrumbs = React.useMemo(
@@ -899,6 +976,17 @@ export function useOutliner(options: UseOutlinerOptions) {
           const node = nodeOf(id);
           if (!node) return [];
           return [{ type: "update", id, changes: { data: patch(node) } }];
+        }),
+      });
+    /** Rewrite titles as one transaction (rows whose title would not change are left out). */
+    const retitle = (ids: readonly string[], rewrite: (text: string) => string) =>
+      dispatch({
+        type: "transaction",
+        commands: ids.flatMap((id): OutlineCommand<OutlineItemData>[] => {
+          const node = nodeOf(id);
+          if (!node) return [];
+          const text = rewrite(node.text);
+          return text === node.text ? [] : [{ type: "update", id, changes: { text } }];
         }),
       });
     const sort = (parentId: string | null, by: OutlineSortKey, direction: "ascending" | "descending" = "ascending") => {
@@ -946,13 +1034,27 @@ export function useOutliner(options: UseOutlinerOptions) {
       const next = dispatch({ type: "paste-nodes", afterId, nodes, createId: idsInPasteOrder(nodes) });
       if (next.refusal || next.nodes === before) return 0;
       // Select what was pasted, so the next paste (or ⌘Z, Tab, Delete) acts on it — not on the last row.
-      // Pasted inside a mirror, the item lives at its source; the copy the user pasted into
-      // (`mirror~id`, right where they are working) is what gets selected.
-      const first = nodes[0]!.id;
-      const prefix = afterId ? hoistedCopyPrefix(next.nodes, afterId) : null;
-      const target = prefix && findOutlineNode(next.nodes, prefix + first) ? prefix + first : first;
-      if (findOutlineNode(next.nodes, target)) dispatch({ type: "select", id: target });
+      selectCreated(nodes.map((node) => node.id), next.nodes, afterId);
       return nodes.length;
+    };
+    /**
+     * The "result" select policy (target.ts): what an action created becomes the target. Pasted
+     * inside a mirror, the item lives at its source; the copy the user pasted into (`mirror~id`,
+     * right where they are working) is what gets selected.
+     */
+    const selectCreated = (ids: readonly string[], nodes: readonly OutlineItem[], afterId?: string) => {
+      const prefix = afterId ? hoistedCopyPrefix(nodes, afterId) : null;
+      const targets = ids
+        .map((id) => (prefix && findOutlineNode(nodes, prefix + id) ? prefix + id : id))
+        .filter((id) => findOutlineNode(nodes, id));
+      targets.forEach((id, index) => dispatch({ type: "select", id, toggle: index > 0 }));
+    };
+    /** Insert whole items after `afterId`; `select: "result"` targets them (row mode), "keep" leaves the caret on the last one. */
+    const pasteNodes = (nodes: readonly OutlineItem[], afterId: string | undefined, select: SelectPolicy) => {
+      const before = nodesNow();
+      const next = dispatch({ type: "paste-nodes", afterId, nodes, createId: createOutlineId });
+      if (select === "result" && !next.refusal && next.nodes !== before)
+        selectCreated(createdRoots(before, next.nodes).filter((id) => !id.includes("~")), next.nodes, afterId);
     };
     return {
       /**
@@ -978,10 +1080,12 @@ export function useOutliner(options: UseOutlinerOptions) {
         });
         return { completed: target, advanced };
       },
-      toggleCheckbox(ids: readonly string[]) {
+      /** Adds checkboxes (unless every item has one: then removes them). "added" / "removed", or null when nothing changed. */
+      toggleCheckbox(ids: readonly string[]): "added" | "removed" | null {
         const nodes = ids.map(nodeOf).filter(Boolean) as OutlineItem[];
         const add = nodes.some((node) => node.checked === undefined);
-        dispatch({
+        const before = nodesNow();
+        const result = dispatch({
           type: "transaction",
           commands: nodes.map((node) => ({
             type: "update",
@@ -991,9 +1095,23 @@ export function useOutliner(options: UseOutlinerOptions) {
               : { checked: null, data: clean({ ...node.data, completed: node.checked === true }) },
           })),
         });
+        return result.refusal || result.nodes === before ? null : add ? "added" : "removed";
       },
       setHeading(ids: readonly string[], heading: 1 | 2 | 3 | undefined) {
         updateData(ids, (node) => clean({ ...node.data, heading }));
+      },
+      /** The heading chord: a level the whole target already has turns it back to text (self-inverse). */
+      toggleHeading(ids: readonly string[], heading: 1 | 2 | 3 | undefined) {
+        const off = heading !== undefined && ids.length > 0 && ids.every((id) => nodeOf(id)?.data?.heading === heading);
+        updateData(ids, (node) => clean({ ...node.data, heading: off ? undefined : heading }));
+      },
+      /** Date ▸: set every target's first date to `day` (null clears it), one undo step. */
+      setDate(ids: readonly string[], day: Date | null) {
+        retitle(ids, (text) => withTitleDate(text, day));
+      },
+      /** Repeat ▸: every target's first date repeats by `repeat` (undefined: once), one undo step. */
+      setRepeat(ids: readonly string[], repeat: DateRepeat | undefined) {
+        retitle(ids, (text) => withTitleRepeat(text, repeat));
       },
       setColor(ids: readonly string[], color: OutlineColor | undefined) {
         updateData(ids, (node) => clean({ ...node.data, color }));
@@ -1007,6 +1125,7 @@ export function useOutliner(options: UseOutlinerOptions) {
         const on = !ids.every((id) => nodeOf(id)?.data?.numbered);
         updateData(ids, (node) => clean({ ...node.data, numbered: on }));
       },
+      /** Copies right after the last item; the copies become the target ("result" policy). */
       duplicate(ids: readonly string[]) {
         const last = ids.at(-1);
         if (!last) return;
@@ -1015,12 +1134,7 @@ export function useOutliner(options: UseOutlinerOptions) {
           id: createOutlineId(),
           ...(node.children ? { children: node.children.map(clone) } : {}),
         });
-        dispatch({
-          type: "paste-nodes",
-          afterId: last,
-          nodes: ids.map(nodeOf).filter(Boolean).map((node) => clone(node!)),
-          createId: createOutlineId,
-        });
+        pasteNodes(ids.map(nodeOf).filter(Boolean).map((node) => clone(node!)), last, "result");
       },
       /** Indent or outdent `ids`: "moved", "refused" (policy — it toasts on its own) or "noop". */
       shift(ids: readonly string[], direction: "indent" | "outdent"): "moved" | "refused" | "noop" {
@@ -1033,7 +1147,7 @@ export function useOutliner(options: UseOutlinerOptions) {
        * off the list. Reports what went: top-level items and their descendants (0 when refused).
        */
       remove(ids: readonly string[]): { readonly items: number; readonly descendants: number; readonly selected: string | null } {
-        const { rows } = latest.current;
+        const rows = shownRows();
         const before = latestEditor(store.current);
         const roots = selectionRoots(before.nodes, new Set(ids));
         const descendants = roots.reduce((sum, id) => {
@@ -1042,13 +1156,10 @@ export function useOutliner(options: UseOutlinerOptions) {
         }, 0);
         const next = dispatch({ type: "delete", ids });
         if (next.refusal || next.nodes === before.nodes) return { items: 0, descendants: 0, selected: null };
-        const removed = new Set(ids);
-        const gone = (row: OutlinerRow) => !findOutlineNode(next.nodes, row.id) || removed.has(row.id);
-        const first = rows.findIndex((row) => removed.has(row.id));
-        const neighbour =
-          rows.slice(first + 1).find((row) => !gone(row)) ?? rows.slice(0, Math.max(first, 0)).reverse().find((row) => !gone(row));
-        if (neighbour) dispatch({ type: "select", id: neighbour.id });
-        return { items: roots.length, descendants, selected: neighbour?.id ?? null };
+        // The "neighbour" select policy (target.ts): next visible survivor, else the previous one.
+        const neighbour = neighbourOf(rows, new Set(ids), (id) => !!findOutlineNode(next.nodes, id));
+        if (neighbour) dispatch({ type: "select", id: neighbour });
+        return { items: roots.length, descendants, selected: neighbour };
       },
       /** Move items to the end of `parentId` (null: top level). Returns how many moved (0: refused or nothing). */
       moveTo(ids: readonly string[], parentId: string | null): number {
@@ -1137,19 +1248,19 @@ export function useOutliner(options: UseOutlinerOptions) {
         });
       },
       /** Paste of another app's HTML (doc editors, note apps, the web): parsed inertly, never rendered. */
-      importHtml(html: string, afterId?: string) {
+      importHtml(html: string, afterId?: string, select: SelectPolicy = "keep") {
         const nodes = importOutlineHtml(html);
-        if (nodes.length) dispatch({ type: "paste-nodes", afterId, nodes, createId: createOutlineId });
+        if (nodes.length) pasteNodes(nodes, afterId, select);
         return nodes.length;
       },
-      importText(text: string, afterId?: string) {
+      importText(text: string, afterId?: string, select: SelectPolicy = "keep") {
         // A downloaded .json document is ours: lossless, identity-keeping.
         if (looksLikeOutlineJSON(text)) {
           const count = importJSON(text, afterId);
           if (count !== null) return count;
         }
         const nodes = importOutline(text);
-        if (nodes.length) dispatch({ type: "paste-nodes", afterId, nodes, createId: createOutlineId });
+        if (nodes.length) pasteNodes(nodes, afterId, select);
         return nodes.length;
       },
       /* ── Bookmarks: starred items and saved searches (host-persisted) ── */
@@ -1215,6 +1326,10 @@ export function useOutliner(options: UseOutlinerOptions) {
       return { undo: past.at(-1), redo: future.at(-1) };
     },
     latestSelection: () => latestEditor(store.current).selection,
+    /** The newest editor state (selection, caret, folds) for handlers that run before a render. */
+    latestState: () => latestEditor(store.current),
+    /** The last action that changed content, numbered (null before any): the touch adapter's cue. */
+    lastEdit: () => lastEdit.current,
     /** The newest document (what the next edit builds on), for imperative reads. */
     latestNodes: () => latestEditor(store.current).nodes as readonly OutlineItem[],
     /** Whether an item (or one of its ancestors) is locked by the host's policy. */
@@ -1232,6 +1347,16 @@ export function useOutliner(options: UseOutlinerOptions) {
     },
     canUndo: state.history.past.length > 0,
     canRedo: state.history.future.length > 0,
+    /** Rows a filter would hide that stay because they are still the target (target.ts). */
+    linger: linger.current,
+    /** A board or mind map registers how its cursor travels while it is on screen (null: back to the list). */
+    setViewNav: (nav: ViewNav | null) => {
+      viewNav.current = nav;
+    },
+    /** The registered view's travel, else null (the list). */
+    viewNav: () => viewNav.current,
+    /** What the target resolves against: the view on screen (board, mind map) or the list. */
+    viewRows: (): TargetRows => (viewNav.current ? navRows(viewNav.current.visibleIds()) : { rows, rowIndex }),
   };
 }
 

@@ -81,7 +81,6 @@ function FindReplacePanel({ seed }: { readonly seed?: { readonly query: string }
       // selection would turn taps into selection mode: the highlight alone marks it.
       if (!coarse) {
         ol.dispatch({ type: "select", id: target.id });
-        ui.setHead(target.id);
       }
       requestAnimationFrame(() => ui.scrollToRow(target.id, "center"));
     },
@@ -102,7 +101,7 @@ function FindReplacePanel({ seed }: { readonly seed?: { readonly query: string }
     const next = (current + by + matches.length) % matches.length;
     setIndex(next);
     reveal(matches[next]!);
-    ui.announce(L.matchPosition(next + 1, matches.length));
+    // The "n of m" status beside the field is the live region (one channel).
   };
 
   const replaceCurrent = () => {
@@ -127,15 +126,18 @@ function FindReplacePanel({ seed }: { readonly seed?: { readonly query: string }
     const plan = planReplace(ol.latestNodes(), matches, replacement, (id) => ol.isItemLocked(id));
     if (plan.commands.length) ol.dispatch({ type: "transaction", commands: plan.commands });
     const text = L.replaced(plan.replaced, plan.skipped);
-    ui.announce(text);
+    // A receipt with Undo is a toast, which speaks it; nothing replaced is only said.
     if (plan.replaced) ui.offerUndo(text);
+    else ui.announce(text);
     setIndex(0);
   };
   const close = () => {
     ui.setFindOpen(false);
     clearHighlights();
-    ui.focusList();
-    if (match) ui.scrollToRow(match.id);
+    // A match was revealed: the tree, on it (Esc lands where you were looking). No match: back
+    // where find was opened from, the row or the field and its caret.
+    if (match) ui.returnFocus(null, { kind: "row", id: match.id });
+    else ui.returnFocus(null);
   };
 
   useFindHighlights(ui.listRef, matches, match);

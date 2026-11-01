@@ -107,8 +107,11 @@ function useReplaceDate(request: DatePickerRequest) {
     const sameTime = date && request.time && date.getHours() === request.value.getHours() && date.getMinutes() === request.value.getMinutes();
     const token = date ? formatDateToken(date, hasTime, end ? undefined : repeat, { end: end?.at, endHasTime: end?.hasTime, time: sameTime ? request.time : undefined }) : "";
     const source = request.field === "note" ? (node.data?.note ?? "") : node.text;
-    const next = (source.slice(0, request.start) + token + source.slice(request.end)).replace(/ {2,}/g, " ");
-    ol.dispatch({ type: request.field === "note" ? "note" : "text", id: request.rowId, text: next });
+    // Opened from a menu on a row with no date yet: the new token is a word of its own.
+    const gap = date && request.start === request.end && request.start > 0 && !/\s$/.test(source.slice(0, request.start)) ? " " : "";
+    const next = (source.slice(0, request.start) + gap + token + source.slice(request.end)).replace(/ {2,}/g, " ");
+    // A pick is its own undo step, never merged into the previous pick on this row (no typing burst).
+    ol.dispatch({ type: request.field === "note" ? "note" : "text", id: request.rowId, text: next, time: Number.NEGATIVE_INFINITY });
     ui.announce(
       !date
         ? L.dateRemoved

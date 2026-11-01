@@ -109,6 +109,7 @@ function SettingsBody({
             { value: "shortcuts", label: L.shortcutSettings, icon: <Keyboard className="size-3.5" /> },
           ]}
           id="settings-tab"
+          tabs
           wide
         />
       </div>
@@ -118,6 +119,9 @@ function SettingsBody({
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={tab}
+            id={`settings-panel-${tab}`}
+            role="tabpanel"
+            aria-labelledby={`settings-tab-${tab}`}
             data-settings-tab={tab}
             initial={{ opacity: 0, x: tab === "shortcuts" ? 8 : -8 }}
             animate={{ opacity: 1, x: 0, transition: motionTokens.quick }}
@@ -187,7 +191,10 @@ function SettingRow({ label, hint, children }: { readonly label: string; readonl
   );
 }
 
-/** A radio group drawn as segments with a sliding pill (arrow keys move, RTL aware). */
+/**
+ * A radio group drawn as segments with a sliding pill (arrow keys move, RTL aware). With `tabs`
+ * it is the panel's section switcher instead: a tablist whose tabs name the panel they show.
+ */
 function Segmented<T extends string>({
   id,
   label,
@@ -195,6 +202,7 @@ function Segmented<T extends string>({
   onChange,
   options,
   wide,
+  tabs,
 }: {
   readonly id: string;
   readonly label: string;
@@ -202,12 +210,13 @@ function Segmented<T extends string>({
   readonly onChange: (value: T) => void;
   readonly options: readonly { readonly value: T; readonly label: string; readonly icon?: React.ReactNode; readonly iconOnly?: boolean }[];
   readonly wide?: boolean;
+  readonly tabs?: boolean;
 }) {
   const group = React.useRef<HTMLDivElement>(null);
   return (
     <div
       ref={group}
-      role="radiogroup"
+      role={tabs ? "tablist" : "radiogroup"}
       aria-label={label}
       data-setting={id}
       className={cn("relative flex h-8 shrink-0 items-center rounded-lg border border-hairline bg-muted/40 p-0.5 coarse:h-11", wide && "w-full")}
@@ -228,8 +237,11 @@ function Segmented<T extends string>({
           <button
             key={option.value}
             type="button"
-            role="radio"
-            aria-checked={on}
+            role={tabs ? "tab" : "radio"}
+            id={tabs ? `${id}-${option.value}` : undefined}
+            aria-selected={tabs ? on : undefined}
+            aria-controls={tabs && on ? `settings-panel-${option.value}` : undefined}
+            aria-checked={tabs ? undefined : on}
             aria-label={option.iconOnly ? option.label : undefined}
             title={option.iconOnly ? option.label : undefined}
             data-value={option.value}
@@ -270,6 +282,7 @@ function ShortcutSettings({ recording: recordingRef }: { readonly recording: Rea
   const L = ui.labels;
   const keymap = ui.keymap;
   const [filter, setFilter] = React.useState("");
+  const filterRef = React.useRef<HTMLInputElement>(null);
   const [recording, setRecording] = React.useState<ShortcutId | null>(null);
   const [pending, setPending] = React.useState<Pending | null>(null);
   recordingRef.current = recording !== null;
@@ -280,6 +293,32 @@ function ShortcutSettings({ recording: recordingRef }: { readonly recording: Rea
   const words = filter.trim().toLowerCase();
   const visible = SHORTCUTS.filter((def) => !words || `${def.label} ${def.group} ${shortcutLabel(keymap, def.id, apple)}`.toLowerCase().includes(words));
   const save = (shortcuts: OutlinerSettings["shortcuts"]) => ui.updateSettings({ shortcuts });
+  /*
+   * One tab stop per section: ↑/↓ (Home/End) rove between its shortcuts, → / ← between a
+   * shortcut and its reset button. Tab goes section to section instead of through 29 buttons.
+   */
+  const [roving, setRoving] = React.useState<Partial<Record<string, ShortcutId>>>({});
+  const rove = (event: React.KeyboardEvent<HTMLUListElement>) => {
+    if (recording !== null || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+    const list = event.currentTarget;
+    const at = (event.target as Element).closest("li");
+    const recorders = [...list.querySelectorAll<HTMLElement>("[data-shortcut-record]")];
+    const index = recorders.findIndex((el) => at?.contains(el));
+    if (index < 0) return;
+    const rtl = getComputedStyle(list).direction === "rtl";
+    const inward = event.key === (rtl ? "ArrowLeft" : "ArrowRight");
+    const outward = event.key === (rtl ? "ArrowRight" : "ArrowLeft");
+    const target =
+      event.key === "ArrowDown" ? recorders[Math.min(recorders.length - 1, index + 1)]
+      : event.key === "ArrowUp" ? recorders[Math.max(0, index - 1)]
+      : event.key === "Home" ? recorders[0]
+      : event.key === "End" ? recorders.at(-1)
+      : inward ? at?.querySelector<HTMLButtonElement>("[data-shortcut-reset]:not(:disabled)")
+      : outward ? recorders[index]
+      : null;
+    if (event.key.startsWith("Arrow") || event.key === "Home" || event.key === "End") event.preventDefault();
+    target?.focus();
+  };
 
   const record = (id: ShortcutId, event: React.KeyboardEvent) => {
     event.preventDefault();
@@ -310,6 +349,7 @@ function ShortcutSettings({ recording: recordingRef }: { readonly recording: Rea
         <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-hairline bg-surface px-2 focus-within:border-signal/50 coarse:h-11">
           <Search className="size-3.5 shrink-0 text-muted-foreground" />
           <input
+            ref={filterRef}
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder={L.filterShortcuts}
@@ -323,6 +363,8 @@ function ShortcutSettings({ recording: recordingRef }: { readonly recording: Rea
           onClick={() => {
             save({});
             setPending(null);
+            // The button disables itself: focus moves to the filter, never to <body> (Esc still closes).
+            requestAnimationFrame(() => filterRef.current?.focus({ preventScroll: true }));
           }}
           className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 coarse:h-11"
         >
@@ -338,10 +380,11 @@ function ShortcutSettings({ recording: recordingRef }: { readonly recording: Rea
       {SHORTCUT_GROUPS.map((group) => {
         const defs = visible.filter((def) => def.group === group);
         if (!defs.length) return null;
+        const stop = defs.find((def) => def.id === roving[group]) ?? defs[0]!;
         return (
           <section key={group} className="mt-3">
             <h3 className="mb-0.5 text-2xs font-medium tracking-wide text-muted-foreground uppercase">{group}</h3>
-            <ul className="divide-y divide-hairline">
+            <ul className="divide-y divide-hairline" aria-label={group} onKeyDown={rove}>
               {defs.map((def) => {
                 const keys = keymap.bindings.get(def.id) ?? [];
                 const shown = shortcutLabel(keymap, def.id, apple, ", ");
@@ -361,6 +404,8 @@ function ShortcutSettings({ recording: recordingRef }: { readonly recording: Rea
                         type="button"
                         data-shortcut-record={def.id}
                         data-recording={isRecording ? "" : undefined}
+                        tabIndex={stop.id === def.id ? 0 : -1}
+                        onFocus={() => roving[group] !== def.id && setRoving((current) => ({ ...current, [group]: def.id }))}
                         aria-label={L.changeShortcut(def.label, shown)}
                         onClick={() => {
                           setPending(null);
@@ -390,11 +435,18 @@ function ShortcutSettings({ recording: recordingRef }: { readonly recording: Rea
                       </button>
                       <button
                         type="button"
+                        data-shortcut-reset=""
+                        tabIndex={-1}
                         aria-label={L.resetShortcut(def.label)}
                         title={L.resetShortcut(def.label)}
                         disabled={!isOverridden(keymap, def.id)}
-                        onClick={() => save(resetShortcut(keymap.overrides, def.id))}
-                        className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-[opacity,color,background-color] hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-0 coarse:size-11"
+                        onClick={(event) => {
+                          save(resetShortcut(keymap.overrides, def.id));
+                          // This button hides once nothing is overridden: focus goes to the shortcut it reset.
+                          const item = event.currentTarget.closest("li");
+                          requestAnimationFrame(() => item?.querySelector<HTMLElement>("[data-shortcut-record]")?.focus({ preventScroll: true }));
+                        }}
+                        className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-[opacity,color,background-color] outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-signal/40 disabled:pointer-events-none disabled:opacity-0 coarse:size-11"
                       >
                         <RotateCcw className="size-3.5" />
                       </button>

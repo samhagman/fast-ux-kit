@@ -586,8 +586,17 @@ export function reduceOutlineEditor<T>(
   }
   if (action.type === "focus" || action.type === "reveal")
     return focus(action.id, action.start, action.end, action.field);
-  if (action.type === "clear-selection")
-    return { ...state, selection: new Set(), selectionAnchor: null };
+  if (action.type === "clear-selection") {
+    // The selection goes; the cursor stays. A range collapses onto its moving end (the caret),
+    // so the anchor and the cursor agree again and the next key still has a row to act on.
+    const visible = new Set(editorVisibleRows(state).map((row) => row.id));
+    const live = (id: string | null | undefined) => (id && visible.has(id) ? id : null);
+    return {
+      ...state,
+      selection: new Set(),
+      selectionAnchor: live(state.caret?.id) ?? live(state.selectionAnchor),
+    };
+  }
   if (action.type === "select-all") {
     const ids = editorVisibleRows(state).map((row) => row.id);
     return {
@@ -674,11 +683,18 @@ export function reduceOutlineEditor<T>(
   // Every remaining intent can mutate content, including history and replacement.
   if (options.readOnly !== false) return fail("read-only");
   const policy = options;
+  /**
+   * Commit a content change. The selection survives the edit (minus rows that no longer exist),
+   * so the rows the reader acted on stay the target: Space twice completes, then reopens.
+   * `keepSelection: false` restores the old reset for intents that land somewhere new (paste of
+   * whole items puts the caret on what was pasted) and for whole-document replacement.
+   */
   const finish = (
     result: OutlineCommandResult<T>,
     caret = state.caret,
     group: OutlineHistory<T>["group"] = null,
     expandedIds = state.expandedIds,
+    keepSelection = action.type !== "replace",
   ): OutlineEditorState<T> => {
     if (!result.ok) return fail(result.reason);
     if (action.type !== "replace" && sameOutlineContent(state.nodes, result.nodes))
@@ -706,6 +722,14 @@ export function reduceOutlineEditor<T>(
           ]
         : state.history.past
       : [...state.history.past, entry].slice(-Math.max(1, options.historyLimit ?? 100));
+    const selection = keepSelection
+      ? new Set([...state.selection].filter((id) => ids.has(id)))
+      : new Set<string>();
+    // A surviving range keeps its fixed end; otherwise the anchor is where the caret landed.
+    const selectionAnchor =
+      selection.size && state.selectionAnchor && ids.has(state.selectionAnchor)
+        ? state.selectionAnchor
+        : (caret?.id ?? null);
     return reconcileInteraction(
       {
         ...state,
@@ -713,8 +737,8 @@ export function reduceOutlineEditor<T>(
         caret: caret && ids.has(caret.id) ? caret : null,
         expandedIds,
         hoistedId: state.hoistedId && ids.has(state.hoistedId) ? state.hoistedId : null,
-        selection: new Set(),
-        selectionAnchor: caret?.id ?? null,
+        selection,
+        selectionAnchor,
         history: { past, future: [], group },
         revision: state.revision + 1,
         focusVersion: state.focusVersion + 1,
@@ -897,6 +921,7 @@ export function reduceOutlineEditor<T>(
       last ? { id: last.id, start: last.text.length, end: last.text.length } : state.caret,
       null,
       new Set([...state.expandedIds, ...outlineIds(copied)]),
+      false,
     );
   }
   if (action.type === "task") {
@@ -1210,6 +1235,11 @@ export function reduceOutlineEditor<T>(
         return state;
       ids.reverse();
     }
+    // Indent is all or nothing: a range whose first item has nothing above it at its
+    // level would otherwise leave that item where it is and tuck the rest under it. The whole
+    // range stays put, exactly like the single item would.
+    if (action.type === "indent" && ids.some((id) => !findOutlineNode(state.nodes, id)!.index))
+      return state;
 
     for (const id of ids) {
       let result: OutlineCommandResult<T>;

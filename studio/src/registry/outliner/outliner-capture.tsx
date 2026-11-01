@@ -31,9 +31,12 @@ export function QuickCapture({
   labels: L,
   phone,
   modKey,
+  onCloseAutoFocus,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  /** Where focus goes when it closes (the host's focus return); the dialog's default otherwise. */
+  readonly onCloseAutoFocus?: (event: Event) => void;
   /** Where it goes ("Inbox"); null when an inbox will be made on the first capture. */
   readonly inboxTitle: string | null;
   /** File it; false when nothing was filed. */
@@ -104,7 +107,7 @@ export function QuickCapture({
   if (phone)
     return (
       <Drawer open={open} onOpenChange={onOpenChange} repositionInputs={false}>
-        <DrawerContent data-capture-sheet="" onOpenAutoFocus={focusField} className="px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <DrawerContent data-capture-sheet="" onOpenAutoFocus={focusField} onCloseAutoFocus={onCloseAutoFocus} className="px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <DrawerTitle className="sr-only">{L.quickCapture}</DrawerTitle>
           <DrawerDescription className="sr-only">{L.captureTo(inboxTitle ?? L.inbox)}</DrawerDescription>
           <div className="pt-2">{field}</div>
@@ -113,7 +116,7 @@ export function QuickCapture({
     );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-capture-dialog="" onOpenAutoFocus={focusField} showCloseButton={false} className="top-[18%] translate-y-0 gap-0 p-3 sm:max-w-md">
+      <DialogContent data-capture-dialog="" onOpenAutoFocus={focusField} onCloseAutoFocus={onCloseAutoFocus} showCloseButton={false} className="top-[18%] translate-y-0 gap-0 p-3 sm:max-w-md">
         <DialogTitle className="sr-only">{L.quickCapture}</DialogTitle>
         <DialogDescription className="sr-only">{L.captureTo(inboxTitle ?? L.inbox)}</DialogDescription>
         {field}

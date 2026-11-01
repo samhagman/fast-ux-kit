@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { motionTokens } from "@/lib/motion";
 import { useOutlinerContext } from "./context";
-import { InlineText, inlineToSpeech } from "./inline";
+import { InlineChipsFocusable, InlineText, inlineToSpeech } from "./inline";
 import { RichNote } from "./rich-note-view";
 import { articleBlocks, type ArticleBlock } from "./article";
 import { COLOR_STYLES, type OutlineItem } from "./types";
@@ -51,9 +51,12 @@ export function OutlinerArticle({
         print && "max-w-none ps-0 text-[11.5pt] leading-[1.55] text-black",
       )}
     >
-      {blocks.map((block, index) => (
-        <ArticleBlockView key={block.node.id} block={block} index={index} parts={parts} print={print} />
-      ))}
+      {/* Read, not browsed row by row: its tags and item links are tab stops. */}
+      <InlineChipsFocusable.Provider value={!print}>
+        {blocks.map((block, index) => (
+          <ArticleBlockView key={block.node.id} block={block} index={index} parts={parts} print={print} />
+        ))}
+      </InlineChipsFocusable.Provider>
     </article>
   );
 }

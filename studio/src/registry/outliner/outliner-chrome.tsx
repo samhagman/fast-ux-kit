@@ -14,17 +14,11 @@ import {
   CornerDownRight,
   EyeOff,
   Focus,
-  Heading1,
-  Heading2,
-  Heading3,
   IndentDecrease,
   IndentIncrease,
   Keyboard,
-  ListOrdered,
   MoveRight,
-  Palette,
   Redo2,
-  Repeat2,
   Search,
   Star,
   History,
@@ -79,13 +73,15 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { inlineToPlain, inlineToSpeech } from "./inline";
-import { shortcutLabel, type Keymap, type ShortcutId } from "./keymap";
+import { FIXED_KEYS, SHORTCUT_GROUPS, SHORTCUTS, fixedKeyText, formatCombo, shortcutLabel, type Keymap, type ShortcutGroup, type ShortcutId } from "./keymap";
 import { useOutlinerContext, usePlatformKeys, type PlatformKeys } from "./context";
-import { COLOR_STYLES, OUTLINE_COLORS, type OutlineItem } from "./types";
+import type { OutlineItem } from "./types";
 import type { OutlinerRow } from "./use-outliner";
-import { deleteItems, useItemActions, type ItemAction, type ItemEntry, type ItemSubmenu } from "./item-actions";
+import { afterFocusReturn, deleteItems, flattenActions, filterValue, findEntry, itemActions, useItemActions, wordFilter, type ItemAction, type ItemEntry, type ItemSubmenu } from "./item-actions";
 import { mirrorOf } from "./mirrors";
-import { PrintCommandItem, ViewCommandItems } from "./outliner-views";
+import { PrintCommandItem } from "./outliner-views";
+import { resolveTarget } from "./target";
+import { toggleHideCompleted } from "./shortcut-actions";
 
 /* ───────────────────────────── Item menu ───────────────────────────── */
 
@@ -130,17 +126,28 @@ export function ItemMenuContent({
     if (entry.kind === "submenu")
       return (
         <M.Sub key={entry.id}>
-          <M.SubTrigger disabled={entry.disabled}>
-            {entry.icon} <bdi>{entry.label}</bdi>
+          <M.SubTrigger disabled={entry.disabled} data-command={entry.commandId} data-command-kind="page">
+            {entry.icon} <bdi data-command-label="">{entry.label}</bdi>
           </M.SubTrigger>
           <M.SubContent className="w-52">{entry.items.map((item) => render(item, true))}</M.SubContent>
         </M.Sub>
       );
     return (
-      <M.Item key={entry.id} inset={inSub && !entry.icon ? true : undefined} variant={entry.destructive ? "destructive" : undefined} disabled={entry.disabled} onSelect={entry.run}>
-        {entry.icon} <bdi>{entry.label}</bdi>
+      <M.Item
+        key={entry.id}
+        inset={inSub && !entry.icon ? true : undefined}
+        variant={entry.destructive ? "destructive" : undefined}
+        disabled={entry.disabled}
+        data-command={entry.commandId}
+        data-command-kind="action"
+        data-current={entry.current ? "" : undefined}
+        // An entry that opens its own surface (a field, the date picker, the palette) runs once
+        // this menu has let go of focus, so its focus return never undoes the new focus.
+        onSelect={entry.opensSurface ? () => afterFocusReturn(entry.run) : entry.run}
+      >
+        {entry.icon} <bdi data-command-label="">{entry.label}</bdi>
         {entry.current && <span className="ms-auto text-signal">●</span>}
-        {entry.shortcut && <M.Shortcut dir="ltr">{entry.shortcut}</M.Shortcut>}
+        {entry.shortcut && <M.Shortcut dir="ltr" data-command-hint="">{entry.shortcut}</M.Shortcut>}
       </M.Item>
     );
   };
@@ -212,25 +219,14 @@ export function OutlinerActionSheet() {
           const closed = last.current;
           const selection = ol.latestSelection();
           if (closed?.marked && selection.size === 1 && selection.has(closed.rowId)) ol.dispatch({ type: "clear-selection" });
-          // Focus goes back to the row the sheet acted on: its ⋯ button (focusing the tree
-          // itself would select a row and drop the phone into selection mode). A field or a
-          // dialog an action opened keeps its focus.
+          // Focus goes back to the row the sheet acted on: its ⋯ button, the trigger (focusing
+          // the tree itself would select a row and drop the phone into selection mode). A field or
+          // a dialog an action opened keeps its focus.
+          const trigger = closed ? ui.rootRef.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(closed.rowId)}"] [data-row-actions]`) : null;
+          ui.returnFocus(event, trigger ? { kind: "trigger", element: trigger } : null);
+          // The row was lifted under the toolbar while the sheet hid the ancestor strip: keep it clear of the strip.
+          if (closed) requestAnimationFrame(() => ui.scrollToRow(closed.rowId));
           event.preventDefault();
-          requestAnimationFrame(() => {
-            const active = document.activeElement;
-            if (active && active !== document.body && !active.closest("[data-outliner-sheet]")) return;
-            const root = ui.rootRef.current;
-            const actions = (id: string) => root?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"] [data-row-actions]`);
-            const target =
-              (closed && actions(closed.rowId)) ?? [...ol.latestSelection()].map(actions).find(Boolean) ?? null;
-            if (target) {
-              target.focus({ preventScroll: true });
-              // The row was lifted under the toolbar while the sheet hid the ancestor strip: keep it clear of the strip.
-              if (closed) ui.scrollToRow(closed.rowId);
-            }
-            // Never the tree on touch (it would select the first row and jump to the top): the toolbar.
-            else root?.querySelector<HTMLElement>("[data-view-menu-trigger]")?.focus({ preventScroll: true });
-          });
         }}
       >
         {request && row && (
@@ -239,7 +235,7 @@ export function OutlinerActionSheet() {
             row={row}
             onRun={(action) => {
               // "Select" asks for the selection on purpose: keep it after the sheet closes.
-              if (action.id === "select" && last.current) last.current = { ...last.current, marked: false };
+              if (action.commandId === "item.select" && last.current) last.current = { ...last.current, marked: false };
             }}
           />
         )}
@@ -314,11 +310,13 @@ function ActionSheetBody({ ids, row, onRun }: { readonly ids: readonly string[];
           entry.kind === "separator" ? (
             <div key={entry.id} role="separator" className="mx-2 my-1 h-px bg-hairline" />
           ) : entry.kind === "submenu" ? (
-            <SheetRow key={entry.id} entry={entry.id} label={entry.label} icon={entry.icon} disabled={entry.disabled} trailing={<ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" />} onClick={() => turn(entry)} />
+            <SheetRow key={entry.id} entry={entry.id} kind="page" label={entry.label} icon={entry.icon} disabled={entry.disabled} trailing={<ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" />} onClick={() => turn(entry)} />
           ) : (
             <SheetRow
               key={entry.id}
               entry={entry.id}
+              kind="action"
+              current={entry.current}
               label={entry.label}
               icon={entry.icon}
               disabled={entry.disabled}
@@ -340,10 +338,14 @@ function SheetRow({
   disabled,
   destructive,
   entry,
+  kind,
+  current,
   back,
   onClick,
 }: {
   readonly entry?: string;
+  readonly kind?: "page" | "action";
+  readonly current?: boolean;
   readonly back?: boolean;
   readonly label: string;
   readonly icon?: React.ReactNode;
@@ -357,6 +359,9 @@ function SheetRow({
       type="button"
       role="menuitem"
       data-entry={entry}
+      data-command={entry}
+      data-command-kind={kind}
+      data-current={current ? "" : undefined}
       data-sheet-back={back ? "" : undefined}
       disabled={disabled}
       onClick={onClick}
@@ -366,7 +371,7 @@ function SheetRow({
       )}
     >
       {icon}
-      <bdi className="block min-w-0 flex-1 truncate text-start">{label}</bdi>
+      <bdi data-command-label={back ? undefined : ""} className="block min-w-0 flex-1 truncate text-start">{label}</bdi>
       {trailing}
     </button>
   );
@@ -589,7 +594,7 @@ function useKeyboardOffset() {
 /* ───────────────────────────── Command palette / finder ───────────────────────────── */
 
 export function OutlinerCommandPalette() {
-  const { modKey, shift, isMac } = usePlatformKeys();
+  const { modKey, isMac } = usePlatformKeys();
   const { ol, ui } = useOutlinerContext();
   const L = ui.labels;
   const mode = ui.paletteMode;
@@ -619,16 +624,13 @@ export function OutlinerCommandPalette() {
   const tags = ui.paletteOpen ? ol.tags : [];
   const coarse = useMediaQuery("(pointer: coarse)");
   /*
-   * What item commands act on: the selection, else the cursor row (the anchor a tap or the
-   * keyboard left, or the item being edited). A phone rarely has a selection, and "Move to…"
-   * must still be there for the row you were on.
+   * What item commands act on: the one target (target.ts), the selection, else the cursor row (the
+   * row a tap or the keyboard left, or the item being edited). A phone rarely has a selection, and
+   * "Move to…" must still be there for the row you were on.
    */
-  const cursorRow = ol.state.selectionAnchor ?? ol.state.caret?.id ?? null;
-  const selection = ol.state.selection.size
-    ? [...ol.state.selection]
-    : cursorRow && findOutlineNode(ol.state.nodes, cursorRow)
-      ? [cursorRow]
-      : [];
+  const target = resolveTarget(ol.state, ol.viewRows(), false);
+  const selection = target.ids;
+  const targetRow = selection.length ? ol.rowOf(target.cursor ?? selection.at(-1)!) : null;
   const moving = picking ? (selection.length ? selection : ol.state.caret ? [ol.state.caret.id] : []) : [];
   // Never a destination inside what moves, nor inside a mirror's copy (or its source: a loop).
   const blocked = new Set(moving.flatMap((id) => collectAllIds(findOutlineNode(ol.state.nodes, id)?.node)));
@@ -640,8 +642,8 @@ export function OutlinerCommandPalette() {
       })
     : [];
   const query = ol.view.query.trim();
-  const selectedNode = selection.length === 1 ? (findOutlineNode(ol.state.nodes, selection[0]!)?.node as OutlineItem | undefined) : undefined;
   const hoistedNode = ol.hoisted;
+  const hoistedRow = ui.paletteOpen && hoistedNode ? ol.rowOf(hoistedNode.id) : null;
 
   const close = () => ui.setPaletteOpen(false);
   /**
@@ -659,6 +661,13 @@ export function OutlinerCommandPalette() {
   const run = (fn: () => void) => () => {
     fn();
     close();
+  };
+  /** A registry entry: a palette mode switches in place; a surface opens once the palette let go. */
+  const runAction = (action: ItemAction) => () => {
+    if (action.paletteMode) return action.run();
+    close();
+    if (action.opensSurface) afterFocusReturn(action.run);
+    else action.run();
   };
   const jump = (id: string) => {
     const path = getOutlinePath(ol.state.nodes, id);
@@ -737,101 +746,13 @@ export function OutlinerCommandPalette() {
           </CommandGroup>
         ) : (
           <>
-            {selection.length > 0 && !ol.readOnly && (
+            {targetRow && (
               <>
-                <CommandGroup
-                  heading={
-                    ol.state.selection.size
-                      ? `Selection · ${selection.length}`
-                      : `Item · ${inlineToPlain((findOutlineNode(ol.state.nodes, selection[0]!)?.node as OutlineItem | undefined)?.text ?? "") || L.untitled}`
-                  }
-                >
-                  <CommandItem onSelect={run(() => ui.announceToggle(ol.commands.toggleComplete(selection)))}>
-                    <CircleCheck /> Toggle complete
-                    <CommandShortcut dir="ltr">Space</CommandShortcut>
-                  </CommandItem>
-                  <CommandItem onSelect={run(() => ol.dispatch({ type: "indent", ids: selection }))}>
-                    <IndentIncrease /> Indent
-                    <CommandShortcut dir="ltr">Tab</CommandShortcut>
-                  </CommandItem>
-                  <CommandItem onSelect={run(() => ol.dispatch({ type: "outdent", ids: selection }))}>
-                    <IndentDecrease /> Outdent
-                    <CommandShortcut dir="ltr">{shift}Tab</CommandShortcut>
-                  </CommandItem>
-                  <CommandItem onSelect={() => ui.setPaletteMode("move")}>
-                    <MoveRight /> {L.moveTo}
-                    <CommandShortcut dir="ltr">{shift}{modKey}M</CommandShortcut>
-                  </CommandItem>
-                  <CommandItem onSelect={() => ui.setPaletteMode("mirror")}>
-                    <Repeat2 /> {L.mirrorTo}
-                  </CommandItem>
-                  {([1, 2, 3] as const).map((level) => {
-                    const Icon = level === 1 ? Heading1 : level === 2 ? Heading2 : Heading3;
-                    return (
-                      <CommandItem key={level} onSelect={run(() => ol.commands.setHeading(selection, level))}>
-                        <Icon /> Heading {level}
-                      </CommandItem>
-                    );
-                  })}
-                  <CommandItem onSelect={run(() => ol.commands.duplicate(selection))}>
-                    <Copy /> Duplicate
-                  </CommandItem>
-                  {selectedNode && <ViewCommandItems item={selectedNode} run={run} />}
-                  {selection.length === 1 && (
-                    <CommandItem
-                      onSelect={run(() => {
-                        const added = ol.commands.toggleBookmark(selection[0]!);
-                        ui.announce(added ? L.bookmarked : L.bookmarkRemoved);
-                      })}
-                    >
-                      <Star /> {ol.bookmarks.items.includes(ol.commands.identityOf(selection[0]!)) ? L.removeBookmark : L.bookmark}
-                    </CommandItem>
-                  )}
-                  <CommandItem onSelect={run(() => deleteItems({ ol, ui }, selection))}>
-                    <Trash2 /> Delete
-                    <CommandShortcut dir="ltr">⌫</CommandShortcut>
-                  </CommandItem>
-                </CommandGroup>
-                <CommandSeparator />
-              </>
-            )}
-            {selection.length > 0 && !ol.readOnly && (
-              <>
-                <CommandGroup heading="Format selection">
-                  <CommandItem onSelect={run(() => ol.commands.toggleCheckbox(selection))}>
-                    <CheckSquare /> Toggle checkbox
-                    <CommandShortcut dir="ltr">{shift}{modKey}C</CommandShortcut>
-                  </CommandItem>
-                  <CommandItem onSelect={run(() => ol.commands.toggleNumbered(selection))}>
-                    <ListOrdered /> Number children
-                  </CommandItem>
-                  {OUTLINE_COLORS.map((color) => (
-                    <CommandItem key={color} value={`color ${color}`} onSelect={run(() => ol.commands.setColor(selection, color))}>
-                      <span className={cn("size-2.5 rounded-full", COLOR_STYLES[color].dot)} /> Color: {COLOR_STYLES[color].label}
-                    </CommandItem>
-                  ))}
-                  <CommandItem value="color none clear" onSelect={run(() => ol.commands.setColor(selection, undefined))}>
-                    <Palette /> Clear color
-                  </CommandItem>
-                  {selection.length === 1 && (
-                    <>
-                      <CommandItem onSelect={run(() => ol.dispatch({ type: "hoist", id: selection[0]! }))}>
-                        <Focus /> Zoom in
-                        <CommandShortcut dir="ltr">{modKey}]</CommandShortcut>
-                      </CommandItem>
-                      <CommandItem
-                        onSelect={run(() => {
-                          const node = findOutlineNode(ol.state.nodes, selection[0]!)?.node as OutlineItem | undefined;
-                          ol.dispatch({ type: "focus", id: selection[0]!, field: "note", start: (node?.data?.note ?? "").length });
-                          ui.setEditing(true);
-                        })}
-                      >
-                        <StickyNote /> Edit note
-                        <CommandShortcut dir="ltr">{shift}↵</CommandShortcut>
-                      </CommandItem>
-                    </>
-                  )}
-                </CommandGroup>
+                <PaletteItemGroup
+                  heading={ol.state.selection.size ? `Selection · ${selection.length}` : `Item · ${inlineToPlain(targetRow.node.text) || L.untitled}`}
+                  entries={itemActions({ ol, ui, ids: selection, row: targetRow, isMac })}
+                  run={runAction}
+                />
                 <CommandSeparator />
               </>
             )}
@@ -900,7 +821,14 @@ export function OutlinerCommandPalette() {
               </React.Fragment>
             ))}
             <CommandGroup heading="Actions">
-              {hoistedNode && !ol.readOnly && <ViewCommandItems item={hoistedNode} run={run} showTarget />}
+              {hoistedRow && (
+                <RegistryItems
+                  entries={pageItems(itemActions({ ol, ui, ids: [hoistedRow.id], row: hoistedRow, isMac }), "item.view")}
+                  run={runAction}
+                  target={inlineToPlain(hoistedRow.node.text) || L.untitled}
+                  skipCurrent
+                />
+              )}
               <PrintCommandItem run={run} />
               <CommandItem onSelect={run(() => ol.dispatch({ type: "expand-all", expanded: true }))}>
                 <ChevronsUpDown /> Expand all
@@ -908,7 +836,7 @@ export function OutlinerCommandPalette() {
               <CommandItem onSelect={run(() => ol.dispatch({ type: "expand-all", expanded: false }))}>
                 <ChevronsDownUp /> Collapse all
               </CommandItem>
-              <CommandItem onSelect={run(() => ol.setView((view) => ({ ...view, hideCompleted: !view.hideCompleted })))}>
+              <CommandItem onSelect={run(() => toggleHideCompleted(ol, ui))}>
                 <EyeOff /> {ol.view.hideCompleted ? "Show completed" : "Hide completed"}
                 <CommandShortcut dir="ltr">{shortcutLabel(ui.keymap, "hideCompleted", isMac)}</CommandShortcut>
               </CommandItem>
@@ -1145,25 +1073,67 @@ export function OutlinerBookmarksMenu() {
   );
 }
 
-/**
- * Every typed word must appear (prefix-weighted); avoids fuzzy noise like "red" ⇒ "Freeze". A
- * word in the item's own title outranks the same word in its path ("launch comms" finds the
- * "Launch comms" item before its children).
- */
-function wordFilter(value: string, search: string) {
-  // Anything after U+0000 is a uniqueness key (an item id), never matched; U+0001 starts the path.
-  const [title = "", path = ""] = value.split("\u0000")[0]!.toLowerCase().split("\u0001");
-  const words = search.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return 1;
-  let score = 0;
-  for (const word of words) {
-    const inTitle = title.indexOf(word);
-    const at = inTitle >= 0 ? inTitle : path.indexOf(word);
-    if (at < 0) return 0;
-    const haystack = inTitle >= 0 ? title : path;
-    score += (at === 0 || /\s/.test(haystack[at - 1]!) ? 2 : 1) * (inTitle >= 0 ? 2 : 1);
-  }
-  return score / (words.length * 4);
+/** The registry's items in ⌘K: every leaf, flattened, its page shown before its label ("Date › Tomorrow"). */
+function PaletteItemGroup({ heading, entries, run }: { readonly heading: string; readonly entries: readonly ItemEntry[]; readonly run: (action: ItemAction) => () => void }) {
+  return (
+    <CommandGroup heading={heading} data-command-group="item">
+      <RegistryItems entries={entries} run={run} />
+    </CommandGroup>
+  );
+}
+
+function RegistryItems({
+  entries,
+  run,
+  target,
+  skipCurrent,
+}: {
+  readonly entries: readonly ItemEntry[];
+  readonly run: (action: ItemAction) => () => void;
+  /** Append "· Item title" (the Actions group, where the target is not obvious). */
+  readonly target?: string;
+  /** Leave out the current choice ("View as List" while it is a list). */
+  readonly skipCurrent?: boolean;
+}) {
+  return (
+    <>
+      {flattenActions(entries)
+        .filter(({ action }) => !(skipCurrent && action.current))
+        .map(({ action, path }) => (
+          <CommandItem
+            key={action.commandId}
+            value={filterValue(action, path) + (target ? `\u0002${target}` : "")}
+            disabled={action.disabled}
+            data-command={action.commandId}
+            data-command-kind="action"
+            data-current={action.current ? "" : undefined}
+            onSelect={run(action)}
+            className={cn(action.destructive && "text-destructive [&_svg]:text-destructive!")}
+          >
+            {action.icon ?? <span aria-hidden className="size-4 shrink-0" />}
+            <span className="flex min-w-0 flex-1 items-baseline gap-1 truncate">
+              {path.length > 0 && <span className="shrink-0 text-muted-foreground">{path.join(" › ")} ›</span>}
+              <bdi data-command-label="" className="truncate">
+                {action.label}
+              </bdi>
+              {target && <span className="ms-1 min-w-0 truncate text-muted-foreground">· {target}</span>}
+            </span>
+            {action.current && <span className="text-signal">●</span>}
+            {action.shortcut && (
+              <CommandShortcut dir="ltr" data-command-hint="">
+                {action.shortcut}
+              </CommandShortcut>
+            )}
+          </CommandItem>
+        ))}
+    </>
+  );
+}
+
+/** The entries of one page of the registry (empty when it is not there). */
+function pageItems(entries: readonly ItemEntry[], commandId: string): readonly ItemEntry[] {
+  const page = findEntry(entries, commandId);
+  return page?.kind === "submenu" ? page.items : [];
 }
 
 function collectAllIds(node?: OutlineItem): string[] {
@@ -1180,78 +1150,60 @@ function collectAllIds(node?: OutlineItem): string[] {
 
 /* ───────────────────────────── Shortcuts sheet ───────────────────────────── */
 
-function shortcutsFor({ modKey, shift, isMac }: PlatformKeys, keymap: Keymap): readonly { readonly group: string; readonly items: readonly (readonly [string, string])[] }[] {
+/**
+ * The ⌘/ sheet, generated: every fixed row key (keymap.ts FIXED_KEYS, what the row handler
+ * runs) and every remappable shortcut (SHORTCUTS, with the live profile and remaps), each group
+ * followed by the few keys that belong to a field or a gesture rather than to either table.
+ */
+export function shortcutsFor({ modKey, isMac }: PlatformKeys, keymap: Keymap): readonly { readonly group: string; readonly items: readonly (readonly [string, string])[] }[] {
   // Remappable keys come from the active keymap (profile + remaps), so this sheet never lies.
-  const k = (...ids: ShortcutId[]) => ids.map((id) => shortcutLabel(keymap, id, isMac) || "—").join(" · ");
+  const k = (id: ShortcutId) => shortcutLabel(keymap, id, isMac) || "—";
+  const combo = (value: string) => formatCombo(value, isMac);
   const power = keymap.profile === "power";
+  const alt = isMac ? "⌥" : "Alt ";
+  const extras: Record<ShortcutGroup, readonly (readonly [string, string])[]> = {
+    Document: [
+      ["Item actions (type to filter, ↵ runs)", `/ · ${combo("Shift+F10")}`],
+      ["Next · previous match", `${combo("Enter")} · ${combo("Shift+Enter")} in search`],
+      ["Flat results", `${combo("Alt+Enter")} in search`],
+      ["Toolbar · search · outline", `F6 · ${combo("Shift+F6")}`],
+    ],
+    Structure: [["Undo · Redo", `${combo("Mod+z")} · ${combo("Mod+Shift+z")}`]],
+    Folding: [],
+    Writing: [
+      ["New item (while editing)", combo("Enter")],
+      ["Edit note (from a title)", combo("Shift+Enter")],
+      [power ? "Line break in a note (↵ starts the next item)" : "Line break in a note", power ? combo("Mod+Shift+Enter") : combo("Enter")],
+      ["Indent · Outdent (while editing)", `Tab · ${combo("Shift+Tab")}`],
+      ["Merge with previous", `${combo("Backspace")} at start`],
+      ["Select item (leave the field)", "Esc"],
+    ],
+    Formatting: [["Tag · Mention · Date", "#tag · @name · !(2026-11-03)"]],
+  };
   return [
-  {
-    group: "Writing",
-    items: [
-      ["New item", "↵"],
-      ["Add / edit note", `${shift}↵`],
-      [power ? "Line break in a note (↵ starts the next item)" : "Line break in a note", power ? `${shift}${modKey}↵` : "↵"],
-      ["Indent · Outdent", `Tab · ${shift}Tab`],
-      ["Merge with previous", "⌫ at start"],
-      ["Complete", k("complete")],
-      ["Checkbox", k("checkbox")],
-      ["Heading 1 · 2 · 3", k("heading1", "heading2", "heading3")],
-      ["Normal text", k("heading0")],
-    ],
-  },
-  {
-    group: "Formatting",
-    items: [
-      ["Bold", k("bold")],
-      ["Italic", k("italic")],
-      ["Inline code", k("code")],
-      ["Strikethrough", k("strike")],
-      ["Highlight", k("highlight")],
-      ["Tag · Mention · Date", "#tag · @name · !(2026-11-03)"],
-    ],
-  },
-  {
-    group: "Structure",
-    items: [
-      ["Move up", k("moveUp")],
-      ["Move down", k("moveDown")],
-      ["Move to…", k("moveTo")],
-      ["Zoom in · out", k("zoomIn", "zoomOut")],
-      ["Copy item link", k("copyLink")],
-      ["Undo · Redo", `${modKey}Z · ${shift}${modKey}Z`],
-    ],
-  },
-  {
-    group: "Folding",
-    items: [
-      ["Fold · unfold", k("fold")],
-      ["Show 1 · 2 · 3 levels", k("levels1", "levels2", "levels3")],
-      ["Show all levels", k("levelsAll")],
-      ["Hide completed", k("hideCompleted")],
-    ],
-  },
-  {
-    group: "Selection",
-    items: [
-      ["Select item", "Esc while editing"],
-      ["Extend selection (also from a title)", `${shift}↑ · ${shift}↓`],
-      ["Add or remove a row", `${modKey}-click`],
-      ["Select all", `${modKey}A twice`],
-      ["Delete selected", "⌫"],
-      ["Copy · Cut · Paste", `${modKey}C · X · V`],
-      ["Copy while dragging", `${isMac ? "⌥" : "Alt"}-drag`],
-    ],
-  },
-  {
-    group: "Navigate",
-    items: [
-      ["Command palette", k("palette")],
-      ["Search", k("search")],
-      ["Find and replace", k("findReplace")],
-      ["Flat results", `${shift}↵ in search`],
-      ["Settings", k("settings")],
-    ],
-  },
+    {
+      group: "Rows",
+      items: [
+        ...FIXED_KEYS.map((def) => [def.label, fixedKeyText(def, isMac)] as const),
+        ["Add or remove a row", `${modKey}-click`],
+        ["Select all", `${combo("Mod+a")} twice`],
+        ["Copy · Cut · Paste", `${modKey}C · X · V`],
+        ["Copy while dragging", `${alt}-drag`],
+      ],
+    },
+    ...SHORTCUT_GROUPS.map((group) => ({
+      group,
+      items: [...SHORTCUTS.filter((def) => def.group === group).map((def) => [def.label, k(def.id)] as const), ...extras[group]],
+    })),
+    {
+      group: "Board and mind map",
+      items: [
+        ["Move a card or column across", `${combo("Alt+Shift+ArrowLeft")} · ${combo("Alt+Shift+ArrowRight")}`],
+        ["Mind map: zoom into a node", combo("Enter")],
+        ["Mind map: fit to screen", "0"],
+        ["Mind map: zoom the canvas", "+ · −"],
+      ],
+    },
   ];
 }
 

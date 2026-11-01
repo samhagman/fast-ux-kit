@@ -33,9 +33,12 @@ export function DocumentFinder({
   documentsOnly = false,
   title,
   enterAction,
+  onCloseAutoFocus,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  /** Where focus goes when it closes (the host's focus return); the dialog's default otherwise. */
+  readonly onCloseAutoFocus?: (event: Event) => void;
   readonly documents: readonly OutlineDocument[];
   readonly layout: OutlineWorkspaceLayout;
   readonly recent: readonly string[];
@@ -83,7 +86,7 @@ export function DocumentFinder({
     </CommandItem>
   );
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title={title ?? L.findDocument} description={L.findDocumentHelp} className="top-[18%] translate-y-0 sm:max-w-xl">
+    <CommandDialog open={open} onOpenChange={onOpenChange} onCloseAutoFocus={onCloseAutoFocus} title={title ?? L.findDocument} description={L.findDocumentHelp} className="top-[18%] translate-y-0 sm:max-w-xl">
       <Command shouldFilter={false} loop className="rounded-none bg-transparent">
         <CommandInput value={query} onValueChange={setQuery} placeholder={title ?? L.findDocumentPlaceholder} aria-label={title ?? L.findDocument} className="coarse:text-[16px]" />
         <CommandList className="max-h-[min(60vh,22rem)]">

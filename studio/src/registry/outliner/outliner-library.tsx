@@ -306,6 +306,8 @@ function LibraryEntry({
           aria-current={active ? "page" : undefined}
           aria-label={folder ? `${title}, ${L.folderContents(row.count)}` : undefined}
           data-lib-focus={focusKey}
+          // F6 into the sidebar lands on the open document (focus.ts).
+          data-focus-entry={active && !folder ? "" : undefined}
           {...(folder ? { "data-folder-open": row.id } : { "data-doc-open": row.id, "data-outline-drop": row.id })}
           onClick={() => (folder ? actions.toggleFolder(row.id) : actions.open(row.id))}
           onDoubleClick={() => !readOnly && actions.startRename({ kind: row.kind, id: row.id })}

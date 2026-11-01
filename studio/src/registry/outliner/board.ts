@@ -22,12 +22,20 @@ export interface BoardColumn {
   readonly cards: readonly OutlineItem[];
 }
 
-export function boardColumns(board: OutlineItem, options: { readonly hideCompleted?: boolean } = {}): BoardColumn[] {
+/**
+ * The columns and the cards they show. Hide completed drops done cards, except those still
+ * lingering (target.ts): a card completed with Space stays until the cursor leaves it.
+ */
+export function boardColumns(board: OutlineItem, options: { readonly hideCompleted?: boolean; readonly linger?: ReadonlySet<string> } = {}): BoardColumn[] {
+  const keep = (card: OutlineItem) => !isDone(card) || !!options.linger?.has(card.id);
   return (board.children ?? []).map((node) => ({
     node,
-    cards: options.hideCompleted ? (node.children ?? []).filter((card) => !isDone(card)) : (node.children ?? []),
+    cards: options.hideCompleted ? (node.children ?? []).filter(keep) : (node.children ?? []),
   }));
 }
+
+/** The board in reading order: each column's header, then its cards. */
+export const boardOrder = (columns: readonly BoardColumn[]): string[] => columns.flatMap((column) => [column.node.id, ...column.cards.map((card) => card.id)]);
 
 const isDone = (node: OutlineItem) => node.checked === true || node.data?.completed === true;
 

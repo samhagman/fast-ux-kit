@@ -6,8 +6,24 @@ import type { DateRepeat } from "./inline";
 import type { OutlinerSettings } from "./settings";
 import type { Keymap, ReservedShortcut } from "./keymap";
 import type { OutlineAttachHandler, OutlinerItemCommands } from "./seams";
+import type { FieldName } from "./target";
 
 export type PaletteMode = "all" | "move" | "mirror";
+
+/**
+ * Where focus goes back to when an overlay closes. Never <body>.
+ *
+ *   row      the tree, with `id` as the cursor row
+ *   text     the field, with its selection: `anchor` is the fixed end, `head` the moving end
+ *            (head < anchor is a backward selection); UTF-16 offsets into the stored source
+ *   trigger  touch: the control that opened the overlay (focusing the tree would select a row)
+ *
+ * Restore order: the saved place → if that row is gone, its neighbour → the tree.
+ */
+export type FocusReturn =
+  | { readonly kind: "row"; readonly id: string }
+  | { readonly kind: "text"; readonly id: string; readonly field: FieldName; readonly anchor: number; readonly head: number }
+  | { readonly kind: "trigger"; readonly element: HTMLElement };
 
 export interface OutlinerUi {
   /** True while a row field owns DOM focus (edit session). */
@@ -23,15 +39,13 @@ export interface OutlinerUi {
   readonly setSearchOpen: (open: boolean) => void;
   readonly listRef: React.RefObject<HTMLDivElement | null>;
   readonly rootRef: React.RefObject<HTMLDivElement | null>;
-  /** Focus the row list for keyboard selection mode. */
+  /** Focus the row list for keyboard selection mode (the board or the mind map when one is shown). */
   readonly focusList: () => void;
   readonly announce: (message: string) => void;
   readonly datePicker: DatePickerRequest | null;
   readonly setDatePicker: (request: DatePickerRequest | null) => void;
-  readonly head: string | null;
   /** DOM id of the search help strip (the search field's aria-describedby). */
   readonly searchHelpId: string;
-  readonly setHead: (id: string | null) => void;
   readonly labels: OutlinerLabels;
   /**
    * A toast with Undo bound to the history entry on top right now. It is dismissed as soon as any
@@ -45,10 +59,18 @@ export interface OutlinerUi {
   readonly sheet: ActionSheetRequest | null;
   readonly setSheet: (request: ActionSheetRequest | null) => void;
   /**
-   * Hand focus back after an overlay closes (menus, sheet, date picker, palette, dialogs): to the
-   * tree with `selectId` selected, unless something else took focus on purpose. Never <body>.
+   * Hand focus back after an overlay closes (search, menus, sheet, date picker, palette, dialogs),
+   * unless what it ran took focus on purpose. Never <body>.
+   *
+   *   omitted      where focus was when it last left the tree or a field (the bookmark)
+   *   FocusReturn  that place
+   *   a row id     an overlay about that row: the bookmark when it is on that row, else the row
    */
-  readonly returnFocus: (event: Event | null, selectId?: string | null) => void;
+  readonly returnFocus: (event: Event | null, to?: FocusReturn | string | null) => void;
+  /** Where focus is now (the tree, a field, a touch trigger), else the last bookmark. */
+  readonly captureFocus: () => FocusReturn | null;
+  /** Edit `id` where its caret was when Esc left it, else at the end of its title. */
+  readonly resumeEditing: (id: string) => void;
   /** Recurring-date and completion feedback for any complete action (row, menu, key, swipe). */
   readonly announceToggle: (summary: import("./use-outliner").ToggleSummary) => void;
   /** What a host plugged in (a workspace: documents in ⌘K, a title editor, search scope). */
@@ -64,6 +86,22 @@ export interface OutlinerUi {
   readonly setFindOpen: (open: boolean) => void;
   /** Copy a deep link to an item (host `linkFor`, else `?zoom=`), with a toast. */
   readonly copyLink: (id: string) => void;
+  /** The item menu (`/` in row mode, ⇧F10, the ContextMenu key): item-menu.tsx. */
+  readonly itemMenu: ItemMenuRequest | null;
+  readonly setItemMenu: (request: ItemMenuRequest | null) => void;
+}
+
+/**
+ * An open item menu: what it acts on, captured when it opened (revalidated on run: a target
+ * that is gone by then refuses), where it is drawn, and where focus goes back to.
+ */
+export interface ItemMenuRequest {
+  readonly rowId: string;
+  readonly ids: readonly string[];
+  /** Content revision at open (ol.currentSeq()). */
+  readonly revision: number;
+  readonly rect: { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
+  readonly returnTo: FocusReturn;
 }
 
 /** One extra ⌘K entry a host contributes (e.g. "Open document · Roadmap"). */

@@ -6,12 +6,13 @@
 //
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { load, mountOutliner, stopVite } from "./harness/outliner-dom.mjs";
+import { load, mountOutliner, stopVite, waitFor } from "./harness/outliner-dom.mjs";
 
-let fr, core;
+let fr, core, Toaster;
 before(async () => {
   fr = await load("/src/registry/outliner/find-replace.ts");
   core = await load("@fux/core");
+  ({ Toaster } = await load("/src/components/ui/sonner.tsx"));
 });
 after(() => stopVite());
 
@@ -101,7 +102,10 @@ test("replace all: only prose — never TeX, image addresses or alt text, site-p
 });
 
 test("component: ⌥⌘F opens the bar; typing reveals the first match; Enter steps; replace one, then all as ONE undo step", async () => {
-  const ui = await mountOutliner({ defaultValue: doc(), defaultExpandedIds: [], isLocked: (node) => node.id === "l" });
+  // With the page's toaster: a receipt that offers Undo is spoken by the toast region.
+  const { createElement, Fragment } = await import("react");
+  const props = { defaultValue: doc(), defaultExpandedIds: [], isLocked: (node) => node.id === "l" };
+  const ui = await mountOutliner(props, { wrap: (make) => createElement(Fragment, null, make(props), createElement(Toaster, { duration: 60_000 })) });
   await ui.select("n");
   await ui.key("f", { metaKey: true, altKey: true, code: "KeyF" });
   const input = document.querySelector('[data-find-replace] input[aria-label="Find"]');
@@ -138,7 +142,10 @@ test("component: ⌥⌘F opens the bar; typing reveals the first match; Enter st
   assert.equal(ui.ol().state.history.past.length, before + 2, "replace one + replace all: two undo steps");
   assert.match(document.querySelector("#ol-find-status").textContent, /of 1|No results/, "only the locked match is left");
   assert.equal(find(ui.value(), "l").text, "Locked launch");
-  assert.match(ui.live(), /locked match skipped/);
+  // One live channel: a receipt with Undo is the toast, which speaks it; the polite region does not repeat it.
+  const toasts = () => [...document.querySelectorAll("[data-sonner-toast]")].map((el) => el.textContent).join(" | ");
+  await waitFor(() => /locked match skipped/.test(toasts()));
+  assert.doesNotMatch(ui.live(), /locked match skipped/);
   await ui.act(() => ui.handle.current.undo());
   assert.equal(find(ui.value(), "a").data.note, "Launch prep\nsee #launch and launchpad", "one undo restores every replacement");
   assert.equal(find(ui.value(), "b").text, "Reship later", "(the single replace is its own step)");

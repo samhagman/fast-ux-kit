@@ -15,12 +15,47 @@ import {
 } from "@/components/ui/input-group"
 import { SearchIcon, CheckIcon } from "lucide-react"
 
+/**
+ * cmdk highlights its first option on open but only names it in `aria-activedescendant` after
+ * the first arrow key (it looks the option up before the option has re-rendered as selected).
+ * Mirror whichever option is highlighted onto the input and the list, so a screen reader hears
+ * the highlighted command as soon as the menu opens.
+ */
+function useActiveDescendant(root: HTMLElement | null) {
+  React.useLayoutEffect(() => {
+    if (!root || typeof MutationObserver === "undefined") return
+    const sync = () => {
+      const id = root.querySelector('[cmdk-item][aria-selected="true"]')?.id
+      for (const el of root.querySelectorAll("[cmdk-input],[cmdk-list]")) {
+        if (id && el.getAttribute("aria-activedescendant") !== id) el.setAttribute("aria-activedescendant", id)
+        else if (!id && el.hasAttribute("aria-activedescendant")) el.removeAttribute("aria-activedescendant")
+      }
+    }
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-selected", "aria-activedescendant"] })
+    return () => observer.disconnect()
+  }, [root])
+}
+
 function Command({
   className,
+  ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
+  const [root, setRoot] = React.useState<HTMLDivElement | null>(null)
+  useActiveDescendant(root)
+  const setRef = React.useCallback(
+    (el: HTMLDivElement | null) => {
+      setRoot(el)
+      if (typeof ref === "function") ref(el)
+      else if (ref) ref.current = el
+    },
+    [ref]
+  )
   return (
     <CommandPrimitive
+      ref={setRef}
       data-slot="command"
       className={cn(
         "flex size-full flex-col overflow-hidden rounded-xl! bg-popover p-1 text-popover-foreground",

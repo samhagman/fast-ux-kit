@@ -75,12 +75,13 @@ of other file types can come from a trusted `renderers` entry.
 
 | Seam | Type | What it does |
 |---|---|---|
-| `itemCommands` | `(ids) => OutlinerItemCommand[]` | Host actions on items, such as "Add to calendar", "Email this" or "Send to…". They appear in the ⋯ menu, the right-click menu and the phone action sheet, and run with the ids they act on. |
+| `itemCommands` | `(ids) => OutlinerItemCommand[]` | Host actions on items, such as "Add to calendar", "Email this" or "Send to…". They appear on every item surface: the `/` item menu (also ⇧F10), the ⋯ menu, the right-click menu, the phone action sheet and ⌘K. They run with the ids they act on. A command that throws (while listed, read or run) is reported as a toast and the rest of the menu keeps working. |
 | `paletteGroups` | `OutlinerPaletteGroup[]` | Document-level commands in ⌘K, such as "Email this outline" or "Import from…". |
 | `menuCommands` | `OutlinerPaletteCommand[]` | The same, at the top of the ⋯ menu (a bottom sheet on touch). This is a phone's way in. `OutlinerWorkspace` takes it too and lists it after its own entries. |
 | `ref.insertItems(nodes)` | `(nodes) => string[]` | A web clipper, an inbound email or an API call adds items as one undo step. Returns the new ids. |
 | `ref.exportAs(format)` | `"markdown" \| "opml" \| "text" \| "json"` | Send content out. |
 | `ref.search(query)` / `ref.focusItem(id)` / `ref.zoomTo(id)` | | Deep links and notifications open the right place. |
+| `ref.restoreFocus()` | | A host dialog closing (its own finder, a share sheet) hands the keyboard back where the reader left the outline: the tree on its row, or a field with its selection. Never `<body>`. |
 | `ref.openLink(id)` / `deepLinkTarget(nodes, id)` | | Open a deep link: an item with children opens zoomed into it; a leaf opens its parent's zoom with the leaf selected, never an empty page. |
 | Dates | `!(2026-11-03 10:00 every week)` tokens | A calendar sync reads due dates with `parseInline` from `inline.tsx` (its `date` segments). The search operators `due:`, `before:` and `after:` select what to sync. |
 | `renderers` | `OutlineRenderers` | Trusted embeds in notes (```` ```embed:<key> ````), drawn by the host's own React components. |

@@ -18,8 +18,8 @@ import type { OutlineItem, OutlineItemView } from "./types";
  * a board, an article, a mind map. For an editor, switching is an edit (one undo step); the
  * document's shape never changes. A read-only reader switches too, as local view state
  * (`view.views`, like folding): the document's `data.view` stays the author's default and is
- * never written. This file holds the switcher (a segmented control; a sheet on touch), the ⌘K
- * entries, print, and the lazy mind-map slot.
+ * never written. This file holds the switcher (a segmented control; a sheet on touch), print,
+ * and the lazy mind-map slot.
  */
 export const VIEWS: readonly OutlineItemView[] = ["list", "board", "article", "mindmap"];
 
@@ -194,37 +194,10 @@ export function ViewSwitcher({ item, disabled: noEdit }: { readonly item: Outlin
   );
 }
 
-/** ⌘K entries: "View as …" for the other views of `item`, plus print. */
-export function ViewCommandItems({
-  item,
-  run,
-  showTarget,
-}: {
-  readonly item: OutlineItem;
-  /** The palette's runner (closes the palette, then runs). */
-  readonly run: (action: () => void) => () => void;
-  /** Append "· Item title" (the Actions group, where the target is not obvious). */
-  readonly showTarget?: boolean;
-}) {
-  const { ol, ui } = useOutlinerContext();
-  const L = ui.labels;
-  const current = shownView(ol, item);
-  const target = showTarget ? <span className="ms-1 min-w-0 truncate text-muted-foreground">· {inlineToPlain(item.text) || L.untitled}</span> : null;
-  return (
-    <>
-      {VIEWS.filter((view) => view !== current).map((view) => {
-        const meta = viewMeta(view, L);
-        return (
-          <CommandItem key={view} value={`${meta.verb} ${meta.keywords} \u0000${item.id}`} onSelect={run(() => setItemView(ol, ui, item.id, view))}>
-            <meta.Icon /> {meta.verb}
-            {target}
-          </CommandItem>
-        );
-      })}
-    </>
-  );
-}
-
+/**
+ * ⌘K's print entry. The "View as ▸" entries are the item registry's (item-actions.tsx): every
+ * menu, the palette included, shows the same ones.
+ */
 export function PrintCommandItem({ run }: { readonly run: (action: () => void) => () => void }) {
   const { ol, ui } = useOutlinerContext();
   return (

@@ -11,8 +11,11 @@ import { useScopedDirection } from "@/lib/direction";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useOutlinerContext } from "./context";
 import { InlineText, inlineToSpeech } from "./inline";
+import { onRowKey } from "./row-keys";
+import { lingerShown, navRows, resolveTarget, type ViewNav } from "./target";
 import {
   fitMindMap,
+  foldMindMap,
   layoutMindMap,
   measureMindMapNode,
   metricsFor,
@@ -20,16 +23,18 @@ import {
   stepMindMap,
   type MindBox,
   type MindGraph,
-  type MindKey,
   type MindMapNode,
 } from "./mindmap";
 import { COLOR_STYLES, type OutlineItem } from "./types";
 
 /**
  * The mind map of a zoomed item. Pan by dragging (one finger on a phone), zoom with the wheel,
- * a pinch or the corner buttons. Click a node to zoom into it; its fold button (or Space) folds
- * it, which is the outline's own fold. Keyboard: the map is one tab stop; arrows travel,
- * Enter zooms in, Space folds, Home returns to the centre, 0 fits the map to the screen.
+ * a pinch or the corner buttons. Click a node to zoom into it; its fold button folds it, which is
+ * the outline's own fold. Keyboard: the map is one tab stop and its cursor is the outline's own
+ * (the core caret row, target.ts), so the shared row keys work here as in the list (row-keys.ts):
+ * Space completes, ←/→ fold on the way in or out, ⌘↵ / ⇧⌘C / "/" / ⌫ / ⌘Z as everywhere.
+ * Enter zooms into the node (a map has no field to edit in), Home returns to the centre, and the
+ * map's own 0 fits it to the screen, + / - zoom.
  *
  * Loaded on demand (outliner.tsx lazy-imports this file), so the layout engine and the canvas
  * only download when someone opens a mind map.
@@ -45,6 +50,7 @@ export default function OutlinerMindMap({ root }: { readonly root: OutlineItem }
 interface MindData extends Record<string, unknown> {
   readonly mind: MindMapNode;
   readonly focused: boolean;
+  readonly selected: boolean;
   readonly rtl: boolean;
   readonly domId: string;
   readonly onToggle: (id: string) => void;
@@ -63,9 +69,11 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
   const hostRef = React.useRef<HTMLDivElement>(null);
   // The outliner's direction scope (follows a host flipping `dir` at runtime).
   const rtl = useScopedDirection() === "rtl";
+  // Completed nodes the reader is still acting on stay through Hide completed (target.ts linger).
+  const linger = React.useMemo(() => lingerShown(ol.state.nodes, ol.linger), [ol.state.nodes, ol.linger]);
   const graph = React.useMemo(
-    () => mindMapGraph(root, ol.state.expandedIds, { hideCompleted: ol.view.hideCompleted, oneSided: narrow }),
-    [root, ol.state.expandedIds, ol.view.hideCompleted, narrow],
+    () => mindMapGraph(root, ol.state.expandedIds, { hideCompleted: ol.view.hideCompleted, oneSided: narrow, linger }),
+    [root, ol.state.expandedIds, ol.view.hideCompleted, narrow, linger],
   );
   const [boxes, setBoxes] = React.useState<Map<string, MindBox> | null>(null);
   /** What the current boxes were laid out for (fit once per root, width class and direction). */
@@ -90,10 +98,10 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
   // the node positions each frame). New nodes grow out of their parent's old position.
   const shown = useGlide(boxes, graph, !!reduce);
 
-  const [focusId, setFocusId] = React.useState<string>(root.id);
-  React.useEffect(() => {
-    if (!graph.nodes.has(focusId)) setFocusId(root.id);
-  }, [graph, focusId, root.id]);
+  // The cursor is the outline's (target.ts): the caret row, or its nearest shown neighbour.
+  const target = resolveTarget(ol.state, navRows(graph.order), false);
+  const focusId = target.cursor && graph.nodes.has(target.cursor) ? target.cursor : root.id;
+  const selection = ol.state.selection;
   const domPrefix = React.useId();
   const domId = (id: string) => `${domPrefix}-mind-${id}`;
 
@@ -119,12 +127,12 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
           height: box.height,
           draggable: false,
           selectable: false,
-          data: { mind, focused: id === focusId, rtl, domId: domId(id), onToggle: toggle },
+          data: { mind, focused: id === focusId, selected: selection.has(id), rtl, domId: domId(id), onToggle: toggle },
         },
       ];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, graph, focusId, rtl, toggle]);
+  }, [shown, graph, focusId, selection, rtl, toggle]);
 
   const edges = React.useMemo<Edge[]>(() => {
     if (!shown) return [];
@@ -196,42 +204,62 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
     ol.dispatch({ type: "hoist", id });
   };
 
+  /** How the cursor travels here: visual arrows, mirrored for right-to-left. */
+  const live = React.useRef({ graph, rtl });
+  live.current = { graph, rtl };
+  const nav = React.useMemo<ViewNav>(
+    () => ({
+      view: "mindmap",
+      visibleIds: () => live.current.graph.order,
+      next(id, dir) {
+        const { graph, rtl } = live.current;
+        if (dir === "first") return graph.rootId;
+        if (dir === "last") return graph.order.at(-1) ?? null;
+        const step = stepMindMap(graph, id, dir, rtl);
+        return step && "id" in step ? step.id : null;
+      },
+      foldAt: (id, dir) => foldMindMap(live.current.graph, id, dir, live.current.rtl),
+      // Tab never restructures the map: it leaves it, as from any other widget.
+      leaves: new Set(["item.indent", "item.outdent"]),
+    }),
+    [],
+  );
+  React.useLayoutEffect(() => {
+    ol.setViewNav(nav);
+    return () => {
+      if (ol.viewNav() === nav) ol.setViewNav(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav]);
+
   const onKeyDown = (event: React.KeyboardEvent) => {
-    const keys: Record<string, MindKey> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", Home: "home" };
-    const key = keys[event.key];
-    if (key) {
-      event.preventDefault();
-      event.stopPropagation();
-      const step = stepMindMap(graph, focusId, key, rtl);
-      if (!step) return;
-      if ("unfold" in step) {
-        toggle(step.unfold);
-        return;
-      }
-      setFocusId(step.id);
-      reveal(step.id);
-      return;
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      event.stopPropagation();
-      zoomInto(focusId);
-    } else if (event.key === " " && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      // Plain Space only (⌘⇧Space is quick capture).
-      event.preventDefault();
-      event.stopPropagation();
-      const mind = graph.nodes.get(focusId);
-      if (mind?.hasChildren && mind.depth > 0) toggle(focusId);
-    } else if (event.key === "0" && !event.metaKey && !event.ctrlKey) {
+    if (event.target !== event.currentTarget) return;
+    const plain = !event.metaKey && !event.ctrlKey && !event.altKey;
+    // The map's own keys: fit and zoom the canvas.
+    if (event.key === "0" && plain) {
       event.preventDefault();
       fit(reduce ? 0 : 260);
-    } else if ((event.key === "=" || event.key === "+") && !event.metaKey && !event.ctrlKey) {
+      return;
+    }
+    if ((event.key === "=" || event.key === "+") && plain) {
       event.preventDefault();
       void flow.zoomIn({ duration: reduce ? 0 : 160 });
-    } else if (event.key === "-" && !event.metaKey && !event.ctrlKey) {
+      return;
+    }
+    if (event.key === "-" && plain) {
       event.preventDefault();
       void flow.zoomOut({ duration: reduce ? 0 : 160 });
+      return;
     }
+    // Everything else is the shared row handler. Enter opens the node: there is no field here.
+    onRowKey(event, ol, ui, nav, { reveal, enter: zoomInto });
+    // The canvas library must not also act on a key the map used.
+    if (event.defaultPrevented) event.stopPropagation();
+  };
+  /** Keyboard entry: the map is one tab stop; landing on it puts the cursor on the centre. */
+  const onFocus = (event: React.FocusEvent) => {
+    if (event.target !== event.currentTarget || target.cursor) return;
+    ol.dispatch({ type: "select", id: root.id });
   };
 
   const title = inlineToSpeech(root.text) || L.untitled;
@@ -241,6 +269,7 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: boxes ? 1 : 0.001 }}
       transition={motionTokens.base}
+      data-focus-entry=""
       data-mindmap=""
       className="ol-mindmap relative h-full min-h-[360px] w-full touch-none overflow-hidden border-y border-hairline bg-[color-mix(in_srgb,var(--muted)_35%,var(--surface))] group/map outline-none sm:rounded-lg sm:border"
       role="tree"
@@ -248,6 +277,7 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
       aria-activedescendant={domId(focusId)}
       tabIndex={0}
       onKeyDown={onKeyDown}
+      onFocus={onFocus}
     >
       <ReactFlow<MindFlowNode, Edge>
         nodes={nodes}
@@ -263,10 +293,7 @@ function MindMapCanvas({ root }: { readonly root: OutlineItem }) {
         minZoom={0.2}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        onNodeClick={(_, node) => {
-          setFocusId(node.id);
-          zoomInto(node.id);
-        }}
+        onNodeClick={(_, node) => zoomInto(node.id)}
         onlyRenderVisibleElements={graph.order.length > 150}
       />
       {/* Corner controls: zoom and fit (44 px on touch). A phone keeps them in the start
@@ -356,7 +383,7 @@ function useGlide(target: Map<string, MindBox> | null, graph: MindGraph, reduce:
 }
 
 function MindMapNodeView({ data }: NodeProps<MindFlowNode>) {
-  const { mind, focused, rtl, domId, onToggle } = data;
+  const { mind, focused, selected, rtl, domId, onToggle } = data;
   const { ui } = useOutlinerContext();
   const node = mind.node;
   const metrics = metricsFor(mind.depth);
@@ -372,7 +399,7 @@ function MindMapNodeView({ data }: NodeProps<MindFlowNode>) {
       id={domId}
       role="treeitem"
       aria-level={mind.depth + 1}
-      aria-selected={focused}
+      aria-selected={selected || focused}
       aria-expanded={mind.hasChildren ? !mind.folded : undefined}
       aria-label={`${inlineToSpeech(node.text) || ui.labels.untitled}${task ? (done ? ", done" : ", to do") : ""}${mind.folded ? `, folded, ${mind.hidden} inside` : ""}`}
       data-mind-node={mind.id}
@@ -388,6 +415,8 @@ function MindMapNodeView({ data }: NodeProps<MindFlowNode>) {
         // (the canvas itself draws none).
         focused && "group-focus-visible/map:ring-3 group-focus-visible/map:ring-signal/35",
         focused && mind.depth > 0 && "group-focus-visible/map:border-signal/70",
+        // A range (⇧arrows, Select ▸): every member is marked, the cursor also has the ring.
+        selected && mind.depth > 0 && "border-signal/45 bg-signal-muted/40",
       )}
       style={{ paddingInline: metrics.padX, paddingBlock: metrics.padY }}
     >

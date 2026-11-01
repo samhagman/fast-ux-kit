@@ -564,6 +564,15 @@ function Runs({
 
 const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
+/**
+ * Whether tags, mentions, item links and dates are tab stops. Off in the outline, whose
+ * tree is one tab stop (its rows reach these through ⌘K and the item menu); on where text is
+ * read rather than browsed row by row (the article view). A chip with nothing to do stays out.
+ */
+export const InlineChipsFocusable = React.createContext(false);
+/** The ring a focusable chip shows under keyboard focus. */
+const chipFocus = "outline-none focus-visible:ring-2 focus-visible:ring-signal/45";
+
 /** Inline code short enough to keep on one line: one word, at most 24 characters. */
 export const isShortCode = (text: string) => text.length <= 24 && !/\s/.test(text);
 
@@ -583,6 +592,8 @@ function Segment({
   readonly onDate?: (segment: InlineSegment, el: HTMLElement) => void;
 }) {
   const runs = <Runs segment={segment} marks={marks} />;
+  const focusable = React.useContext(InlineChipsFocusable);
+  const stopFor = (handler: unknown) => (focusable && handler ? 0 : -1);
   switch (segment.kind) {
     case "text":
     case "escape":
@@ -637,7 +648,7 @@ function Segment({
       return (
         <button
           type="button"
-          tabIndex={-1}
+          tabIndex={stopFor(onTag)}
           dir="auto"
           data-src={segment.contentStart}
           onPointerDown={stop}
@@ -647,6 +658,7 @@ function Segment({
           }}
           className={cn(
             "inline rounded-[4px] px-0.5 font-medium transition-colors",
+            chipFocus,
             segment.kind === "tag"
               ? "text-signal hover:bg-signal-muted"
               : "text-foreground/80 hover:bg-muted",
@@ -662,7 +674,7 @@ function Segment({
       return (
         <button
           type="button"
-          tabIndex={-1}
+          tabIndex={stopFor(onRef)}
           onPointerDown={stop}
           onClick={(event) => {
             stop(event);
@@ -671,6 +683,7 @@ function Segment({
           title={missing ? "Linked item was deleted" : live ? inlineToPlain(live) : undefined}
           className={cn(
             "inline-flex max-w-full items-baseline gap-0.5 rounded-[4px] px-0.5 align-bottom underline decoration-dotted underline-offset-[3px]",
+            chipFocus,
             missing ? "text-muted-foreground line-through" : "text-signal hover:bg-signal-muted",
           )}
         >
@@ -692,7 +705,7 @@ function Segment({
       return (
         <button
           type="button"
-          tabIndex={-1}
+          tabIndex={stopFor(onDate)}
           dir="auto"
           data-src={segment.contentStart}
           data-repeat={segment.date?.repeat ? formatRepeat(segment.date.repeat) : undefined}
@@ -710,6 +723,7 @@ function Segment({
             tone === "soon" && "border-warning/30 bg-warning/10 text-foreground/85",
             tone === "later" && "border-border bg-muted/60 text-muted-foreground",
             marked && "ring-2 ring-warning/45 ring-offset-0",
+            chipFocus,
           )}
         >
           {segment.date?.repeat ? <Repeat aria-hidden className="size-3" /> : segment.date?.end ? <CalendarRange aria-hidden className="size-3" /> : <CalendarDays aria-hidden className="size-3" />}

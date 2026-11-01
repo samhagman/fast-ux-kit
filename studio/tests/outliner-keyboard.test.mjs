@@ -208,7 +208,7 @@ test("the shortcut sheet shows the active profile and remaps", async () => {
   assert.equal(sheet.dataset.shortcutSheet, "power");
   const row = (label) => [...sheet.querySelectorAll("dl > div")].find((el) => el.querySelector("dt").textContent === label)?.querySelector("dd").textContent;
   assert.match(row("Move up"), /Ctrl ↑/, "power's ⌘↑ (Ctrl on this platform)");
-  assert.match(row("Show 1 · 2 · 3 levels"), /Ctrl Alt 1/);
+  assert.match(row("Show 1 level"), /Ctrl Alt 1/);
   assert.match(row("Copy item link"), /Ctrl Alt L/, "a remap shows");
   await ui.unmount();
 });

@@ -1,6 +1,6 @@
 import * as React from "react";
 import "./outliner.css";
-import { AnimatePresence, LayoutGroup, MotionConfig, motion, useAnimate, useMotionValue, useMotionValueEvent, useTransform, animate as animateValue } from "motion/react";
+import { AnimatePresence, LayoutGroup, MotionConfig, motion, useAnimate, useIsPresent, useMotionValue, useMotionValueEvent, useTransform, animate as animateValue } from "motion/react";
 import {
   CalendarDays,
   ChevronRight,
@@ -57,6 +57,8 @@ import {
   useOutlinerContext,
   usePlatformKeys,
   type ActionSheetRequest,
+  type FocusReturn,
+  type ItemMenuRequest,
   type OutlinerHostSlots,
   type OutlinerPaletteCommand,
   type OutlinerPaletteGroup,
@@ -92,10 +94,14 @@ import {
   OutlinerShortcuts,
   deleteItems,
 } from "./outliner-chrome";
+import { afterFocusReturn } from "./item-actions";
+import { bookmarkFor, cycleRegion, isSoleOutliner, neighbourOf, registerOutliner } from "./focus";
 import { resolveSettings, settingsStyle, type OutlinerSettings } from "./settings";
-import { buildKeymap, isComposingKey, matchShortcut, primaryShortcut, type ReservedShortcut, type ShortcutId } from "./keymap";
+import { buildKeymap, isComposingKey, isItemMenuKey, matchShortcut, primaryShortcut, type ReservedShortcut, type ShortcutId } from "./keymap";
+import { listNav, onRowKey } from "./row-keys";
+import { resolveTarget, type SelectPolicy } from "./target";
 import { useApplePlatform } from "@/lib/platform";
-import { FORMAT_MARKS, runGlobalShortcut, runItemShortcut, showLevels } from "./shortcut-actions";
+import { FORMAT_MARKS, runGlobalShortcut, runItemShortcut, showLevels, toggleHideCompleted } from "./shortcut-actions";
 import { deepLinkTarget, itemFromHref, itemHref, writeLinkToClipboard } from "./permalink";
 import { attachmentMarkup, type OutlineAttachHandler, type OutlinerItemCommands } from "./seams";
 import { copyDropCommands } from "./copy-drop";
@@ -104,6 +110,7 @@ import { FindReplaceBar } from "./outliner-find-replace";
 import { OutlinerSettingsPanel } from "./outliner-settings";
 import { FoldTasks } from "./outliner-fold-tasks";
 import { ResponsiveMenu, type MenuEntry } from "./outliner-menu";
+import { OutlinerItemMenu, suppressKeyboardContextMenu, useSlashMenu } from "./item-menu";
 import "./outliner-settings.css";
 
 export interface OutlinerProps extends UseOutlinerOptions {
@@ -166,6 +173,11 @@ export interface OutlinerProps extends UseOutlinerOptions {
 export interface OutlinerHandle {
   /** Focus the tree (keyboard selection mode). */
   focus(): void;
+  /**
+   * Put the keyboard back where the reader left this outline: the tree on its row, or a field
+   * with its selection (a dialog of the host's closing). Never <body>.
+   */
+  restoreFocus(): void;
   /** Reveal (unfold, zoom out if needed), select and scroll to an item; `edit` puts the caret in it. */
   focusItem(id: string, options?: { readonly edit?: boolean }): boolean;
   /** Zoom into an item (null: the document root). */
@@ -237,7 +249,16 @@ export function Outliner({
   reservedShortcuts,
   ...options
 }: OutlinerProps) {
-  const ol = useOutliner(options);
+  // Undo and redo are said aloud, whichever control did them: keys, the toolbar, a toast.
+  const travelled = React.useRef<((direction: "undo" | "redo") => void) | null>(null);
+  const hostTravel = options.onHistoryTravel;
+  const ol = useOutliner({
+    ...options,
+    onHistoryTravel: (travel) => {
+      travelled.current?.(travel.direction);
+      hostTravel?.(travel);
+    },
+  });
   /* ── Preferences: controlled (`settings`) or owned (`defaultSettings`); never stored here ── */
   const [ownSettings, setOwnSettings] = React.useState(() => resolveSettings(defaultSettings));
   const settings = React.useMemo(() => (settingsProp ? resolveSettings(settingsProp) : ownSettings), [settingsProp, ownSettings]);
@@ -286,8 +307,7 @@ export function Outliner({
   const [message, setMessage] = React.useState("");
   const [datePicker, setDatePicker] = React.useState<OutlinerUi["datePicker"]>(null);
   const [sheet, setSheet] = React.useState<ActionSheetRequest | null>(null);
-  /** Moving end of a keyboard range selection (the anchor stays put). */
-  const [head, setHead] = React.useState<string | null>(null);
+  const [itemMenu, setItemMenu] = React.useState<ItemMenuRequest | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const direction = useResolvedDirection(rootRef, dir);
@@ -386,24 +406,119 @@ export function Outliner({
   const registerScroller = React.useCallback((scroll: ((id: string, align: "auto" | "center") => boolean) | null) => {
     scroller.current = scroll;
   }, []);
-  /**
-   * every overlay (menus, sheet, date picker, palette, dialogs) closes back to the tree,
-   * never to <body>, unless the action it ran moved focus somewhere on purpose (a field).
+  /*
+   * focus return (focus.ts). Whenever focus leaves the tree or a field, where it was is
+   * bookmarked (with the rows shown then, for the neighbour rule). Every overlay closes back to
+   * that bookmark, or to a place it names, never to <body>, unless what it ran took focus.
    */
-  const returnFocus = React.useCallback((event: Event | null, selectId?: string | null) => {
+  const bookmark = React.useRef<{ readonly place: FocusReturn; readonly rows: readonly OutlinerRow[] } | null>(null);
+  /** A field is being given focus back (its row renders a frame or two later): nothing else takes it meanwhile. */
+  const restoring = React.useRef(false);
+  /** The caret Esc left a field with: Enter on that row resumes there, until the cursor moves on. */
+  const leftCaret = React.useRef<Extract<FocusReturn, { kind: "text" }> | null>(null);
+  if (leftCaret.current && ol.state.caret?.id !== leftCaret.current.id) leftCaret.current = null;
+  const coarsePointer = () => !!window.matchMedia?.("(pointer: coarse)").matches;
+  const takeBookmark = (el: Element) => {
+    const { ol } = live.current;
+    const place = bookmarkFor(el, {
+      tree: listRef.current,
+      cursor: () => resolveTarget(ol.state, ol.viewRows(), false).cursor ?? ol.state.selectionAnchor ?? ol.state.hoistedId,
+      coarse: coarsePointer(),
+    });
+    if (!place) return;
+    bookmark.current = { place, rows: ol.rows };
+    if (place.kind === "text") leftCaret.current = place;
+  };
+  /** The keyboard surface of the view shown: the tree, the board, the mind map, else the article's scroller. */
+  const focusView = React.useCallback(() => {
+    const root = rootRef.current;
+    const surface = listRef.current ?? root?.querySelector<HTMLElement>("[data-mindmap]") ?? root?.querySelector<HTMLElement>("[data-outliner-scroll][tabindex]");
+    surface?.focus({ preventScroll: true });
+    return !!surface && document.activeElement === surface;
+  }, []);
+  /** Touch: the control an overlay came from, else the cursor row's ⋯, else the view menu, else the toolbar. */
+  const focusTrigger = React.useCallback((element: HTMLElement | null) => {
+    const root = rootRef.current;
+    const { state } = live.current.ol;
+    const actions = (id: string | null | undefined) => (id ? root?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"] [data-row-actions]`) : null);
+    const target =
+      (element?.isConnected && !element.closest("[inert]") ? element : null) ||
+      actions(state.selectionAnchor) ||
+      [...state.selection].map(actions).find(Boolean) ||
+      root?.querySelector<HTMLElement>("[data-view-menu-trigger]") ||
+      root?.querySelector<HTMLElement>("[data-slot=outliner] > div button:not(:disabled)");
+    target?.focus({ preventScroll: true });
+  }, []);
+  /** Put focus at `place` now. A row that is gone hands over to its neighbour; nothing lands on <body>. */
+  const restoreFocus = React.useCallback((place: FocusReturn | null, rows: readonly OutlinerRow[], named = false) => {
+    const { ol } = live.current;
+    if (place?.kind === "trigger") return focusTrigger(place.element);
+    const exists = (id: string) => !!findOutlineNode(ol.latestNodes(), id);
+    const shown = (id: string) => ol.rowIndex.has(id) || !!rootRef.current?.querySelector(`[data-row="${CSS.escape(id)}"]`);
+    if (place?.kind === "text" && !ol.readOnly && exists(place.id) && shown(place.id)) {
+      const start = Math.min(place.anchor, place.head);
+      const end = Math.max(place.anchor, place.head);
+      ol.dispatch({ type: "focus", id: place.id, start, end, ...(place.field === "note" ? { field: "note" as const } : {}) });
+      setEditing(true);
+      // The core caret has no direction: a backward selection gets it back once the field took
+      // focus. A field that never appears (the row could not be edited) leaves focus on the view.
+      let frames = 0;
+      restoring.current = true;
+      const settle = () => {
+        const el = document.activeElement;
+        if (el instanceof HTMLTextAreaElement && el.dataset.field === place.field && el.closest<HTMLElement>("[data-row]")?.dataset.row === place.id) {
+          restoring.current = false;
+          if (place.head < place.anchor && el.selectionStart === start && el.selectionEnd === end) el.setSelectionRange(start, end, "backward");
+        } else if (++frames < 10) requestAnimationFrame(settle);
+        else {
+          restoring.current = false;
+          if (!el || el === document.body) focusView();
+        }
+      };
+      requestAnimationFrame(settle);
+      return;
+    }
+    const id = place ? place.id : null;
+    const gone = !!id && !exists(id);
+    // The view on screen decides what is shown (a board's cards, a mind map's nodes), else the list.
+    const view = ol.viewRows();
+    const target = gone ? neighbourOf(id, rows, (candidate) => view.rowIndex.has(candidate)) : id;
+    setEditing(false);
+    // A bookmark yields to a cursor something else moved meanwhile; a named row, or the neighbour of a gone one, is selected.
+    const cursor = resolveTarget(ol.state, view, false).cursor;
+    const select = named || gone || !cursor;
+    if (select && target && view.rowIndex.has(target) && !ol.state.selection.has(target)) ol.dispatch({ type: "select", id: target });
+    if (!focusView()) {
+      // A view still loading (the mind map's engine): try again for a few frames.
+      let tries = 0;
+      const retry = () => {
+        if (focusView() || ++tries > 30 || (document.activeElement && document.activeElement !== document.body)) return;
+        requestAnimationFrame(retry);
+      };
+      requestAnimationFrame(retry);
+    }
+    if (select && target && view.rowIndex.has(target)) scrollToRow(target);
+  }, [focusView, focusTrigger, scrollToRow]);
+  const captureFocus = React.useCallback((): FocusReturn | null => {
+    const active = document.activeElement;
+    if (active && active !== document.body) takeBookmark(active);
+    return bookmark.current?.place ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const returnFocus = React.useCallback((event: Event | null, to?: FocusReturn | string | null) => {
+    const saved = bookmark.current;
+    // A row id: an overlay about that row goes back to where you were on it (a field's caret), else to the row.
+    const named: FocusReturn | null =
+      typeof to === "string" ? (saved && saved.place.kind !== "trigger" && saved.place.id === to ? saved.place : { kind: "row", id: to }) : (to ?? null);
+    const place = named ?? saved?.place ?? null;
+    const rows = saved?.rows ?? live.current.ol.rows;
     // Touch has no keyboard cursor: focusing the tree would select a row and drop the phone into
-    // selection mode. Let the overlay hand focus back to its own trigger instead (never <body>).
-    if (!selectId && event && window.matchMedia?.("(pointer: coarse)").matches) {
+    // selection mode. The overlay hands focus back to its own trigger (never <body>).
+    if (coarsePointer() && (place?.kind === "trigger" || (!to && event))) {
       requestAnimationFrame(() => {
-        if (document.activeElement && document.activeElement !== document.body) return;
-        // No trigger to go back to (a dialog opened from a menu): the cursor row's ⋯, else the toolbar.
-        const root = rootRef.current;
-        const anchor = live.current.ol.state.selectionAnchor;
-        const target =
-          (anchor && root?.querySelector<HTMLElement>(`[data-row="${CSS.escape(anchor)}"] [data-row-actions]`)) ||
-          root?.querySelector<HTMLElement>("[data-view-menu-trigger]") ||
-          root?.querySelector<HTMLElement>("[data-slot=outliner] > div button:not(:disabled)");
-        target?.focus({ preventScroll: true });
+        const active = document.activeElement;
+        if (active && active !== document.body && active.isConnected && !active.closest("[data-slot=drawer-content]")) return;
+        focusTrigger(place?.kind === "trigger" ? place.element : null);
       });
       return;
     }
@@ -411,24 +526,36 @@ export function Outliner({
     const before = document.activeElement;
     requestAnimationFrame(() => {
       const active = document.activeElement;
-      const lost = !active || active === document.body || active === before || !!active.closest("[data-slot$=menu-trigger],[data-slot=drawer-content],[data-slot=popover-content]");
-      if (!lost && rootRef.current?.contains(active)) return;
-      if (!lost && active !== listRef.current) return;
-      const { ol } = live.current;
-      if (selectId && ol.rows.some((row) => row.id === selectId) && !ol.state.selection.has(selectId)) ol.dispatch({ type: "select", id: selectId });
-      listRef.current?.focus({ preventScroll: true });
-      if (selectId) scrollToRow(selectId);
+      // A place in the outline (the tree, a field) that the action itself focused stays put.
+      const inPlace = active === listRef.current || (active instanceof HTMLTextAreaElement && !!active.dataset.field && !!rootRef.current?.contains(active));
+      const lost =
+        !active ||
+        active === document.body ||
+        (active === before && !inPlace) ||
+        !active.isConnected ||
+        !!active.closest("[data-slot$=menu-trigger],[data-slot=drawer-content],[data-slot=popover-content]");
+      if (!lost) return;
+      restoreFocus(place, rows, !!named);
     });
-  }, [scrollToRow]);
+  }, [restoreFocus, focusTrigger]);
+  /** Enter in row mode: back to the caret Esc left, else the end of the title. */
+  const resumeEditing = React.useCallback((id: string) => {
+    const { ol } = live.current;
+    const left = leftCaret.current;
+    if (left && left.id === id) return restoreFocus(left, ol.rows);
+    ol.dispatch({ type: "focus", id, start: ol.rowOf(id)?.node.text.length ?? 0 });
+    setEditing(true);
+  }, [restoreFocus]);
   // A repeated sentence ("Indented" twice) must be read again: alternate a no-break space so the
   // live region's text actually changes.
   const announce = React.useCallback((text: string) => setMessage((prev) => (prev === text ? `${text}\u00a0` : text)), []);
+  travelled.current = (direction) => announce(direction === "undo" ? labels.undone : labels.redone);
   const announceToggle = React.useCallback((summary: ToggleSummary) => {
     const { labels } = live.current;
     if (summary.advanced.length) {
       const next = summary.advanced[0]!.next;
       const text = labels.nextOccurrence(next.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }));
-      announce(text);
+      // The Undo toast speaks it (one live channel).
       offerUndo(text);
     } else announce(summary.completed ? labels.markedComplete : labels.markedIncomplete);
   }, [offerUndo]);
@@ -447,12 +574,10 @@ export function Outliner({
       setSearchOpen,
       listRef,
       rootRef,
-      focusList: () => listRef.current?.focus({ preventScroll: true }),
+      focusList: focusView,
       announce,
       datePicker,
       setDatePicker,
-      head,
-      setHead,
       searchHelpId,
       labels,
       offerUndo,
@@ -461,6 +586,8 @@ export function Outliner({
       sheet,
       setSheet,
       returnFocus,
+      captureFocus,
+      resumeEditing,
       announceToggle,
       host: paletteHost,
       settings,
@@ -471,8 +598,10 @@ export function Outliner({
       findOpen,
       setFindOpen,
       copyLink,
+      itemMenu,
+      setItemMenu,
     }),
-    [editing, paletteOpen, paletteMode, shortcutsOpen, searchOpen, datePicker, head, searchHelpId, labels, offerUndo, scrollToRow, registerScroller, sheet, returnFocus, announceToggle, paletteHost, settings, updateSettings, keymap, settingsOpen, findOpen, copyLink],
+    [editing, paletteOpen, paletteMode, shortcutsOpen, searchOpen, datePicker, searchHelpId, labels, offerUndo, scrollToRow, registerScroller, sheet, returnFocus, captureFocus, resumeEditing, focusView, announceToggle, paletteHost, settings, updateSettings, keymap, settingsOpen, findOpen, copyLink, itemMenu],
   );
 
   /** Reveal (unfold, zoom out if needed), select and scroll to an item; `edit` puts the caret in it. */
@@ -497,6 +626,7 @@ export function Outliner({
     ref,
     (): OutlinerHandle => ({
       focus: () => listRef.current?.focus({ preventScroll: true }),
+      restoreFocus: () => uiRef.current.returnFocus(null),
       focusItem: (id, opts) => focusItem(id, opts),
       openLink: (id) => {
         const { ol } = live.current;
@@ -576,8 +706,12 @@ export function Outliner({
     toast(labels.changeRejected(rejection.count), { id: "outliner-veto", icon: <Ban className="size-3.5" /> });
   }, [rejection, labels]);
 
-  // ⌘K / ⌘F / ⌘/ also work when focus has fallen back to <body> (after a dialog, Back, etc).
+  /*
+   * Keys on <body> (after a dialog, Back, a fresh load): ⌘K / ⌘F / ⌘/, undo, ↓ and "/" reach this
+   * outliner when it was the last one used, or it is the only one mounted and not inert.
+   */
   const lastActive = React.useRef(false);
+  React.useEffect(() => (rootRef.current ? registerOutliner(rootRef.current) : undefined), []);
   React.useEffect(() => {
     const onPointer = (event: Event) => {
       // Dialogs portal outside the root; they don't count as leaving the outliner.
@@ -586,9 +720,10 @@ export function Outliner({
       lastActive.current = !!rootRef.current?.contains(target);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (document.activeElement !== document.body || !lastActive.current) return;
+      if (document.activeElement !== document.body || event.defaultPrevented) return;
       // A workspace keeps other documents mounted but inert: they never answer the keyboard.
       if (rootRef.current?.closest("[inert]")) return;
+      if (!lastActive.current && !isSoleOutliner(rootRef.current)) return;
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
       if (mod && (key === "z" || (key === "y" && event.ctrlKey && !event.metaKey))) {
@@ -600,6 +735,15 @@ export function Outliner({
         runGlobalShortcut(matchShortcut(live.current.keymap, event, "global")!, { ui: uiRef.current });
       } else if (!mod && (key === "arrowdown" || key === "arrowup" || key === "j" || key === "k")) {
         listRef.current?.focus();
+      } else if ((key === "/" && !mod && !event.altKey) || isItemMenuKey(event)) {
+        // A "/" typed while a closing menu still holds focus on <body> (one frame): once focus is
+        // back, it opens the item menu as it would have on the tree.
+        event.preventDefault();
+        const init = { key: event.key, code: event.code, shiftKey: event.shiftKey, bubbles: true, cancelable: true };
+        afterFocusReturn(() => {
+          if (document.activeElement === document.body) focusView();
+          if (document.activeElement === listRef.current) listRef.current!.dispatchEvent(new KeyboardEvent("keydown", init));
+        });
       }
     };
     document.addEventListener("pointerdown", onPointer, true);
@@ -610,7 +754,25 @@ export function Outliner({
       document.removeEventListener("focusin", onPointer, true);
       document.removeEventListener("keydown", onKey);
     };
-  }, []);
+  }, [focusView]);
+  /*
+   * Zooming into a board or a mind map (or "View as" switching the view) unmounts the tree that
+   * had focus, and the browser drops it on <body>: the new view's surface takes it. A view that
+   * loads lazily (the mind map's engine) gets a few frames to appear.
+   */
+  const viewKey = `${ol.state.hoistedId ?? ""}:${ol.hoisted ? shownView(ol, ol.hoisted) : "list"}:${ol.view.query.trim() ? "search" : ""}`;
+  React.useEffect(() => {
+    if (coarsePointer()) return;
+    let frame = 0;
+    let tries = 0;
+    const rescue = () => {
+      if (document.activeElement !== document.body || !lastActive.current || restoring.current) return;
+      if (!focusView() && ++tries < 30) frame = requestAnimationFrame(rescue);
+    };
+    frame = requestAnimationFrame(rescue);
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewKey]);
   // Closing a dialog returns focus to the document (unless something else took it).
   const overlayOpen = paletteOpen || shortcutsOpen;
   // The selection a dialog was opened over comes back when it closes (if nothing replaced it).
@@ -631,7 +793,8 @@ export function Outliner({
   React.useEffect(() => {
     if (overlayOpen) return;
     const id = requestAnimationFrame(() => {
-      if (document.activeElement === document.body && lastActive.current) listRef.current?.focus({ preventScroll: true });
+      // The same place the dialog's own close returns to (whichever runs first wins; the other sees focus home).
+      if (document.activeElement === document.body && lastActive.current && !restoring.current && !coarsePointer()) restoreFocus(bookmark.current?.place ?? null, bookmark.current?.rows ?? live.current.ol.rows);
     });
     return () => cancelAnimationFrame(id);
   }, [overlayOpen]);
@@ -644,6 +807,11 @@ export function Outliner({
     // Safety valve: "editing" with no editor mounted (it never appeared) must not trap the keyboard.
     if (key === "escape" && editing && target.tagName !== "TEXTAREA" && !target.closest("[role=dialog]")) {
       setEditing(false);
+      return;
+    }
+    // F6 / ⇧F6: the next region (sidebar → toolbar → search → tree). Tab stays indent.
+    if (event.key === "F6" && !mod && !event.altKey && !event.defaultPrevented && !isComposingKey(event)) {
+      if (cycleRegion(target, event.shiftKey)) event.preventDefault();
       return;
     }
     if (mod && (key === "z" || (key === "y" && event.ctrlKey && !event.metaKey)) && !event.defaultPrevented) {
@@ -673,7 +841,11 @@ export function Outliner({
         ref={rootRef}
         dir={dir}
         onKeyDown={onRootKeyDown}
-        onBlur={() => {
+        // ⇧F10 / the ContextMenu key opened the item menu: no browser menu on top of it.
+        onContextMenu={suppressKeyboardContextMenu}
+        onBlur={(event) => {
+          // Where focus was (the tree, a field and its selection): overlays hand it back.
+          takeBookmark(event.target);
           // Field swaps (title ⇄ note, row → row) unmount the focused textarea, which blurs
           // with no relatedTarget. Decide after the swap settles, from the real active element.
           requestAnimationFrame(() => {
@@ -705,6 +877,7 @@ export function Outliner({
         <OutlinerShortcuts />
         <OutlinerDatePicker />
         <OutlinerActionSheet />
+        <OutlinerItemMenu />
         <div aria-live="polite" className="sr-only">
           {message}
         </div>
@@ -749,7 +922,7 @@ function OutlinerHeader({ title }: { readonly title: string }) {
   const narrow = useMediaQuery("(max-width: 639px)");
   const phoneSearch = narrow && (ui.searchOpen || !!ol.view.query);
   return (
-    <div data-outliner-toolbar="" className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-2 coarse:gap-0 coarse:px-1">
+    <div data-outliner-toolbar="" data-focus-region="toolbar" className="flex h-11 shrink-0 items-center gap-1 border-b border-hairline px-2 coarse:gap-0 coarse:px-1">
       {ui.host.headerStart && <div className={cn("flex shrink-0 items-center", phoneSearch && "hidden")}>{ui.host.headerStart}</div>}
       <nav aria-label="Breadcrumb" className={cn("flex min-w-0 flex-1 items-center", phoneSearch && "hidden")}>
         <AnimatePresence initial={false}>
@@ -896,8 +1069,30 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
   const input = React.useRef<HTMLInputElement>(null);
   const open = ui.searchOpen || !!ol.view.query;
   React.useEffect(() => {
-    if (ui.searchOpen) input.current?.focus();
+    if (!ui.searchOpen) return;
+    input.current?.focus();
+    // Reopened over a query: select it, so typing replaces it (as ⌘F into an open field does).
+    input.current?.select();
   }, [ui.searchOpen]);
+  /*
+   * Enter / ⇧Enter step to the next / previous match and wrap; the field keeps focus so
+   * the next Enter steps again, and ↓ takes you into the tree on the match. The first Enter for
+   * a query starts at the first (⇧: the last) match.
+   */
+  const stepped = React.useRef<string | null>(null);
+  const stepMatch = (back: boolean) => {
+    const matches = ol.rows.filter((row) => !row.context);
+    if (!matches.length) return;
+    const query = ol.view.query;
+    const cursor = resolveTarget(ol.state, ol, false).cursor;
+    const at = stepped.current === query && cursor ? matches.findIndex((row) => row.id === cursor) : -1;
+    const next = at < 0 ? (back ? matches.length - 1 : 0) : (at + (back ? -1 : 1) + matches.length) % matches.length;
+    stepped.current = query;
+    const id = matches[next]!.id;
+    ol.dispatch({ type: "select", id });
+    ui.scrollToRow(id);
+    ui.announce(`${L.matchPosition(next + 1, matches.length)}: ${inlineToSpeech(matches[next]!.node.text) || L.untitled}`);
+  };
   const reportQuery = ui.host.searchScope?.onQueryChange;
   React.useEffect(() => reportQuery?.(ol.view.query), [reportQuery, ol.view.query]);
   // A half-typed operator ("due:") is unfinished, not wrong: the help strip offers completions.
@@ -927,6 +1122,7 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
             <input
               ref={input}
               value={ol.view.query}
+              data-focus-region="search"
               aria-label={L.searchOutline}
               aria-invalid={diagnostics.length > 0}
               aria-describedby={ui.searchHelpId}
@@ -944,18 +1140,26 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
                   event.stopPropagation();
                   ol.setView((view) => ({ ...view, query: "" }));
                   ui.setSearchOpen(false);
-                  ui.focusList();
-                } else if (event.key === "Enter" && event.shiftKey) {
+                  // Back where search was opened from: the tree row, or the field and its caret.
+                  ui.returnFocus(null);
+                } else if (event.key === "Enter" && event.altKey) {
+                  // Flat results (⌥↵; ⇧↵ steps back through the matches).
                   event.preventDefault();
                   setMode("flat");
                 } else if ((event.key === "ArrowDown" || event.key === "Enter") && everywhere) {
                   // All documents: into the results list (the host's), first result.
                   event.preventDefault();
                   ui.rootRef.current?.querySelector<HTMLElement>("[data-scope-results] [data-scope-result]")?.focus();
-                } else if (event.key === "ArrowDown" || event.key === "Enter") {
+                } else if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) {
                   event.preventDefault();
+                  stepMatch(event.shiftKey);
+                } else if (event.key === "ArrowDown") {
+                  // Into the tree: on the match Enter stepped to, else the first match.
+                  event.preventDefault();
+                  const cursor = resolveTarget(ol.state, ol, false).cursor;
+                  const onMatch = stepped.current === ol.view.query && ol.rows.some((row) => row.id === cursor && !row.context);
                   const first = ol.rows.find((row) => !row.context);
-                  if (first) ol.dispatch({ type: "select", id: first.id });
+                  if (!onMatch && first) ol.dispatch({ type: "select", id: first.id });
                   ui.focusList();
                 }
               }}
@@ -1017,7 +1221,7 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                {ol.view.searchMode === "flat" ? L.showInOutline : L.flatResults} <Kbd dir="ltr">⇧↵</Kbd>
+                {ol.view.searchMode === "flat" ? L.showInOutline : L.flatResults} <Kbd dir="ltr">⌥↵</Kbd>
               </TooltipContent>
             </Tooltip>}
             <button
@@ -1026,6 +1230,8 @@ function OutlinerSearchField({ wide = false }: { readonly wide?: boolean }) {
               onClick={() => {
                 ol.setView((view) => ({ ...view, query: "" }));
                 ui.setSearchOpen(false);
+                // This button leaves with the field: focus goes back, never to <body>.
+                ui.returnFocus(null);
               }}
               className={cn(iconButton, "me-1")}
             >
@@ -1098,7 +1304,7 @@ function ViewMenu() {
       icon: <EyeOff />,
       checked: ol.view.hideCompleted,
       hint: hint("hideCompleted"),
-      run: () => ol.setView((view) => ({ ...view, hideCompleted: !view.hideCompleted })),
+      run: () => toggleHideCompleted(ol, ui),
     },
     {
       kind: "page",
@@ -1188,15 +1394,18 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
   const hoisted = ol.hoisted;
   const selection = ol.state.selection;
   const caretId = ui.editing ? ol.state.caret?.id : undefined;
+  // One cursor (target.ts): the row the next key acts on is the one drawn and announced.
+  const target = resolveTarget(ol.state, ol, ui.editing);
+  const litCursor = ui.editing ? null : target.cursor;
   // The cursor row's parent guide lights up (the chain of guides the cursor sits on).
   const litParents = React.useMemo(() => {
-    const cursor = caretId ?? ol.state.selectionAnchor;
+    const cursor = caretId ?? litCursor;
     const chain = new Set<string>();
     if (!cursor) return chain;
     const byId = (id: string) => ol.rows[ol.rowIndex.get(id) ?? -1];
     for (let row = byId(cursor); row?.parentId; row = byId(row.parentId)) chain.add(row.parentId);
     return chain;
-  }, [caretId, ol.state.selectionAnchor, ol.rows, ol.rowIndex]);
+  }, [caretId, litCursor, ol.rows, ol.rowIndex]);
   // A row's guides light from its parent upward while that ancestor is on the cursor's path.
   const rowIndex = ol.rowIndex;
   const rowById = { get: (id: string) => ol.rows[rowIndex.get(id) ?? -1] };
@@ -1214,19 +1423,24 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
   React.useEffect(() => {
     lastRejection.current = ol.rejection;
   });
-  const anchor = !ui.editing ? ol.state.selectionAnchor : null;
-  const cursorId = !ui.editing ? (ui.head && selection.has(ui.head) ? ui.head : anchor) : null;
-  React.useEffect(() => {
-    if (ui.head && selection.size && !selection.has(ui.head)) ui.setHead(null);
-  }, [selection, ui]);
+  // Touch has no keyboard cursor: there it marks only a selected row (selection mode).
+  const cursorId = !ui.editing && target.cursor && (!coarse || selection.has(target.cursor)) ? target.cursor : null;
+  useTouchSelectionClear(ol, ui, coarse);
   // The cursor row is conveyed by aria-activedescendant; range size is not, so say it.
   const selectedCount = selection.size;
   const lastCount = React.useRef(selectedCount);
+  // Undo and redo say "Undone" / "Redone" themselves; the range they bring back is not news.
+  const futureLength = ol.state.history.future.length;
+  const lastFuture = React.useRef(futureLength);
+  const travelled = lastFuture.current !== futureLength;
+  React.useEffect(() => {
+    lastFuture.current = futureLength;
+  });
   React.useEffect(() => {
     const previous = lastCount.current;
     lastCount.current = selectedCount;
     // Only growing/shrinking ranges: collapses come from actions (delete, Esc) that announce themselves.
-    if (selectedCount === previous || selectedCount <= 1) return;
+    if (travelled || selectedCount === previous || selectedCount <= 1) return;
     const timer = setTimeout(() => ui.announce(`${selectedCount} items selected`), 150);
     return () => clearTimeout(timer);
   }, [selectedCount, ui]);
@@ -1272,7 +1486,6 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
     if (cameFrom) {
       ui.focusList();
       ol.dispatch({ type: "select", id: cameFrom });
-      ui.setHead(cameFrom);
       landed(() =>
         requestAnimationFrame(() => {
           const el = ui.listRef.current?.querySelector(`[data-row="${CSS.escape(cameFrom)}"]`);
@@ -1338,10 +1551,11 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
     const handle = (event: ClipboardEvent) => {
       const { ol, ui } = live.current;
       if (document.activeElement !== ui.listRef.current || ui.editing || !event.clipboardData) return;
-      const ids = [...ol.state.selection];
+      const ids = resolveTarget(ol.state, ol.viewRows(), false).ids;
       if (event.type === "paste") {
         if (ol.readOnly) return;
-        const count = readClipboard(event.clipboardData, ol, ids.at(-1) ?? ol.rows.at(-1)?.id);
+        // Row mode: what was pasted becomes the target ("result"), so Tab or ⌫ act on it next.
+        const count = readClipboard(event.clipboardData, ol, ids.at(-1) ?? ol.rows.at(-1)?.id, "result");
         if (count === null) return;
         event.preventDefault();
         ui.announce(ui.labels.pasted(count));
@@ -1378,7 +1592,7 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
       row={row}
       editingField={caretId === row.id ? (ol.state.caret?.field ?? "title") : undefined}
       selected={!ui.editing && selection.has(row.id)}
-      cursor={!ui.editing && cursorId === row.id && selection.has(row.id)}
+      cursor={cursorId === row.id}
       litLevels={litLevelsFor(row)}
       dragging={(!drag.state?.copy && drag.state?.ids.includes(row.id)) ?? false}
       flat={searching && ol.view.searchMode === "flat"}
@@ -1414,9 +1628,13 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
     <div
       ref={setScrollEl}
       data-outliner-scroll
+      data-focus-region="tree"
+      // An article has no cursor: its scroller takes focus (arrows and Page keys scroll it), never <body>.
+      tabIndex={article ? -1 : undefined}
       className={cn(
         "relative min-h-0 flex-1 scroll-pb-20 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
         mindmap && "flex flex-col",
+        article && "outline-none focus-visible:ring-2 focus-visible:ring-signal/30 focus-visible:ring-inset",
       )}
     >
       <OutlinerPrintHost owner={ui.rootRef} title={title} parts={articleParts} />
@@ -1450,16 +1668,17 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
             )}
             <div
               ref={ui.listRef}
+              data-focus-entry=""
               role="tree"
               aria-label={hoisted ? inlineToSpeech(hoisted.text) : title}
               aria-multiselectable
-              aria-activedescendant={cursorId && selection.has(cursorId) ? rowDomId(cursorId) : undefined}
+              aria-activedescendant={cursorId ? rowDomId(cursorId) : undefined}
               tabIndex={ui.editing ? -1 : 0}
               onFocus={(event) => {
                 // Keyboard entry: the tree is one tab stop; landing on it selects a row.
                 // (The newest selection: a click that selected and then focused must not be undone.)
                 if (event.target !== event.currentTarget || ol.latestSelection().size || !ol.rows.length) return;
-                const first = ol.rows.find((row) => row.id === ol.state.selectionAnchor) ?? ol.rows[0]!;
+                const first = ol.rows.find((row) => row.id === target.cursor) ?? ol.rows[0]!;
                 ol.dispatch({ type: "select", id: first.id });
               }}
               onKeyDown={(event) => onSelectionKey(event, ol, ui)}
@@ -1473,7 +1692,7 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
                   </AnimatePresence>
                 </LayoutGroup>
               ) : (
-                <VirtualRows rows={ol.rows} renderRow={renderRow} scrollEl={scrollEl} listRef={ui.listRef} focusId={caretId ?? cursorId} editing={ui.editing} register={ui.registerScroller} pinnedId={ui.sheet?.rowId ?? null} />
+                <VirtualRows rows={ol.rows} renderRow={renderRow} scrollEl={scrollEl} listRef={ui.listRef} focusId={caretId ?? cursorId} editing={ui.editing} register={ui.registerScroller} pinnedIds={[ui.sheet?.rowId, cursorId]} />
               )}
               </LiveContext.Provider>
               <DropIndicator drag={drag.state} />
@@ -2242,7 +2461,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
   row,
   editingField,
   selected,
-  cursor,
+  cursor: cursorProp,
   litLevels,
   dragging,
   flat,
@@ -2258,6 +2477,10 @@ const OutlineRowView = React.memo(function OutlineRowView({
 }: RowViewProps) {
   const live = useLive();
   const labels = live.current.ui.labels;
+  // A row on its way out (deleted, filtered) keeps its last props while it fades: it is never
+  // the cursor, so exactly one row ever carries it (and the active descendant).
+  const present = useIsPresent();
+  const cursor = cursorProp && present;
   const { node, details } = row;
   const titleRef = React.useRef<HTMLSpanElement>(null);
   const heading = details.heading;
@@ -2278,7 +2501,6 @@ const OutlineRowView = React.memo(function OutlineRowView({
     if (!editable) {
       // Locked or read-only rows can't be edited, but a click still selects them.
       ol.dispatch({ type: "select", id: row.id });
-      ui.setHead(row.id);
       ui.focusList();
       return;
     }
@@ -2364,6 +2586,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
       aria-selected={selected}
       aria-label={`${row.agenda ? `${labels.agendaGroups[row.agenda.group]}: ` : ""}${spoken}${row.completed ? ", completed" : ""}${noteText ? ", has note" : ""}${row.locked ? ", locked" : ""}${row.mirror && row.mirror !== "copy" ? ", mirror" : ""}${row.backlinks ? `, ${labels.linkedFrom(row.backlinks).toLowerCase()}` : ""}`}
       data-row={row.id}
+      data-cursor={cursor || undefined}
       className="relative"
     >
       {row.agenda && (
@@ -2405,7 +2628,6 @@ const OutlineRowView = React.memo(function OutlineRowView({
             if (editingId) ol.dispatch({ type: "select", id: editingId });
           }
           ol.dispatch({ type: "select", id: row.id, extend: event.shiftKey, toggle: event.metaKey || event.ctrlKey });
-          ui.setHead(row.id);
           ui.focusList();
         }}
       >
@@ -2482,7 +2704,6 @@ const OutlineRowView = React.memo(function OutlineRowView({
                 if (readOnly) return;
                 ui.setEditing(false);
                 ol.dispatch({ type: "select", id: row.id, extend: event.shiftKey, toggle: event.metaKey || event.ctrlKey });
-                ui.setHead(row.id);
                 ui.focusList();
                 return;
               }
@@ -2530,7 +2751,6 @@ const OutlineRowView = React.memo(function OutlineRowView({
                 // working). Touch has no keyboard cursor; a field being edited keeps its caret.
                 if (!coarse && !ui.editing) {
                   ol.dispatch({ type: "select", id: row.id });
-                  ui.setHead(row.id);
                   ui.focusList();
                 }
               }}
@@ -2640,6 +2860,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
               type="button"
               tabIndex={-1}
               data-row-actions
+              aria-haspopup="menu"
               aria-label={rangeMode && cursor ? labels.actionsForSelection(live.current.ol.state.selection.size) : labels.actionsFor(spoken)}
               onClick={(event) => {
                 event.stopPropagation();
@@ -2660,6 +2881,10 @@ const OutlineRowView = React.memo(function OutlineRowView({
               <button
                 type="button"
                 tabIndex={-1}
+                data-row-menu=""
+                // The tree is one tab stop (Tab indents), so the keyboard opens these same
+                // entries from the row itself: ⇧F10, the ContextMenu key, or "/".
+                aria-keyshortcuts="Shift+F10 ContextMenu /"
                 aria-label={rangeMode && cursor ? labels.actionsForSelection(live.current.ol.state.selection.size) : labels.actionsFor(spoken)}
                 onClick={(event) => event.stopPropagation()}
                 className={cn(
@@ -2702,7 +2927,7 @@ function writeClipboard(data: DataTransfer, ol: OutlinerController, ids: readonl
   data.setData(OUTLINE_MIME, ol.commands.exportAs("json", ids));
 }
 /** Paste: our JSON first, then structured HTML from other apps, then Markdown/OPML/indented text. */
-function readClipboard(data: DataTransfer, ol: OutlinerController, afterId?: string): number | null {
+function readClipboard(data: DataTransfer, ol: OutlinerController, afterId?: string, select: SelectPolicy = "keep"): number | null {
   const json = data.getData(OUTLINE_MIME);
   if (json) {
     const count = ol.commands.importJSON(json, afterId);
@@ -2710,13 +2935,13 @@ function readClipboard(data: DataTransfer, ol: OutlinerController, afterId?: str
   }
   const html = data.getData("text/html");
   if (html && htmlHasStructure(html)) {
-    const count = ol.commands.importHtml(html, afterId);
+    const count = ol.commands.importHtml(html, afterId, select);
     // A paste stays quiet unless something was lost (images, embeds, tables …).
     if (count) reportImport(html, { format: "html", quiet: true, items: count });
     if (count) return count;
   }
   const text = data.getData("text/plain");
-  return text ? ol.commands.importText(text, afterId) : null;
+  return text ? ol.commands.importText(text, afterId, select) : null;
 }
 
 /**
@@ -2732,7 +2957,7 @@ function VirtualRows({
   focusId,
   editing = false,
   register,
-  pinnedId = null,
+  pinnedIds = [],
 }: {
   readonly rows: readonly OutlinerRow[];
   readonly renderRow: (row: OutlinerRow) => React.ReactNode;
@@ -2742,8 +2967,11 @@ function VirtualRows({
   /** Entering edit mode on a row scrolled out of the window must bring it back (its editor mounts there). */
   readonly editing?: boolean;
   readonly register: OutlinerUi["registerScroller"];
-  /** A row that stays mounted whatever the window (the phone sheet's target: it is lifted into view and its ⋯ takes focus back). */
-  readonly pinnedId?: string | null;
+  /**
+   * Rows that stay mounted whatever the window: the phone sheet's target (it is lifted into view
+   * and its ⋯ takes focus back) and the cursor row (aria-activedescendant must name a real row).
+   */
+  readonly pinnedIds?: readonly (string | null | undefined)[];
 }) {
   const [margin, setMargin] = React.useState(0);
   React.useLayoutEffect(() => {
@@ -2761,8 +2989,8 @@ function VirtualRows({
     getItemKey: (index) => rows[index]!.id,
     rangeExtractor: (range) => {
       const indexes = defaultRangeExtractor(range);
-      const pinned = pinnedId ? rows.findIndex((row) => row.id === pinnedId) : -1;
-      return pinned < 0 || indexes.includes(pinned) ? indexes : [...indexes, pinned].sort((a, b) => a - b);
+      const pinned = pinnedIds.flatMap((id) => (id ? [rows.findIndex((row) => row.id === id)] : [])).filter((index) => index >= 0 && !indexes.includes(index));
+      return pinned.length ? [...new Set([...indexes, ...pinned])].sort((a, b) => a - b) : indexes;
     },
   });
   // ui.scrollToRow reaches rows outside the window (delete's new selection, links, crumbs).
@@ -3104,9 +3332,12 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
    * (the transition, an undo, a refusal) shows the document again.
    */
   const [draft, setDraft] = React.useState<{ readonly text: string; readonly seq: number } | null>(null);
-  const value = draft && draft.seq > ol.renderedSeq ? draft.text : committed;
+  const stored = draft && draft.seq > ol.renderedSeq ? draft.text : committed;
   const ac = useAutocomplete(ol, row, field);
+  // "/" in a title: the item menu, its query transient (never stored, never in history).
+  const slash = useSlashMenu({ ol, ui, row, field, ref });
   const listId = React.useId();
+  const value = slash.value ?? stored;
 
   // Autosize: native field-sizing where supported, otherwise measure on value and width changes.
   React.useLayoutEffect(() => {
@@ -3144,6 +3375,10 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
     const el = event.currentTarget;
     // IME: the Enter (or Tab) that picks a candidate never splits, indents or submits.
     if (isComposingKey(event)) return;
+    if (slash.onKeyDown(event)) {
+      suppressSelect.current = true;
+      return;
+    }
     if (ac.onKeyDown(event)) {
       suppressSelect.current = true;
       return;
@@ -3176,7 +3411,6 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
       ui.setEditing(false);
       ui.focusList();
       dispatch({ type: "select", id: row.id });
-      ui.setHead(row.id);
       return;
     }
     const wrap = (open: string, close = open) => {
@@ -3298,7 +3532,6 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
         ui.setEditing(false);
         dispatch({ type: "select", id: row.id });
         if (target) dispatch({ type: "select", id: target.id, extend: true });
-        ui.setHead(target?.id ?? row.id);
         ui.focusList();
         return;
       }
@@ -3375,6 +3608,7 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
   return (
     <>
     <AutocompletePopover anchor={ref.current} state={ac} listId={listId} />
+    {slash.panel}
     <textarea
       ref={ref}
       rows={1}
@@ -3383,12 +3617,14 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
       aria-label={field === "title" ? "Item text" : "Item note"}
       role="combobox"
       aria-autocomplete="list"
-      aria-expanded={ac.open}
-      aria-controls={ac.open ? listId : undefined}
-      aria-activedescendant={ac.open ? `${listId}-${ac.active}` : undefined}
+      aria-expanded={ac.open || slash.open}
+      aria-controls={slash.aria ? slash.aria.controls : ac.open ? listId : undefined}
+      aria-activedescendant={slash.aria ? slash.aria.activedescendant : ac.open ? `${listId}-${ac.active}` : undefined}
       spellCheck
       onMouseDown={() => (suppressSelect.current = false)}
       onChange={(event) => {
+        // Typing the `/query` itself: shown, never stored (the menu filters on it).
+        if (slash.onChange(event.target)) return;
         const text = event.target.value;
         const caret = event.target.selectionStart;
         // The host hears about it now (its own render is a transition); ours follows the paint.
@@ -3403,6 +3639,7 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
         // React can deliver a trailing select for a field that just lost focus (e.g. after
         // Shift+Enter moved to the note); only the focused field may report the caret.
         if (suppressSelect.current || !el.isConnected || document.activeElement !== el) return;
+        if (slash.onSelect(el)) return;
         ac.sync(el);
         ol.dispatch({
           type: "caret",
@@ -3459,85 +3696,45 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
 /* ───────────────────────────── Row-selection keyboard mode ───────────────────────────── */
 
 function onSelectionKey(event: React.KeyboardEvent, ol: ReturnType<typeof useOutliner>, ui: OutlinerUi) {
-  if (ui.editing || event.target !== event.currentTarget) return;
-  const mod = event.metaKey || event.ctrlKey;
-  const key = event.key;
-  const rows = ol.rows;
-  const selection = [...ol.state.selection];
-  // Movement starts from the moving end of a range (head), falling back to the anchor.
-  const anchor =
-    ui.head && (ol.state.selection.has(ui.head) || !ol.state.selection.size) ? ui.head : ol.state.selectionAnchor;
-  const index = rows.findIndex((row) => row.id === anchor);
-  const prevent = () => event.preventDefault();
-  const go = (next: number, extend = false) => {
-    const target = rows[Math.max(0, Math.min(rows.length - 1, next))];
-    if (!target) return;
-    ol.dispatch({ type: "select", id: target.id, extend });
-    ui.setHead(target.id);
-    ui.listRef.current?.querySelector(`[data-row="${CSS.escape(target.id)}"]`)?.scrollIntoView({ block: "nearest" });
-  };
-  // Remappable shortcuts first (profile + remaps): moving, folding, zoom, levels, complete …
-  const action = mod || event.altKey ? matchShortcut(ui.keymap, event, "row") : null;
-  if (action && runItemShortcut(action, { ol, ui, ids: selection.length ? selection : anchor ? [anchor] : [], rowId: anchor ?? selection.at(-1) ?? null })) {
-    prevent();
-    return;
-  }
-  if (mod && key.toLowerCase() === "z") {
-    prevent();
-    ol.dispatch({ type: event.shiftKey ? "redo" : "undo" });
-  } else if (key === "ArrowDown" && (event.altKey || mod) && event.shiftKey) {
-    // A remapped move key no longer moves; it must not fall through to plain travel either.
-    prevent();
-  } else if (key === "ArrowUp" && (event.altKey || mod) && event.shiftKey) {
-    prevent();
-  } else if (key === "ArrowDown") {
-    prevent();
-    go(index < 0 ? 0 : index + 1, event.shiftKey);
-  } else if (key === "ArrowUp") {
-    prevent();
-    go(index < 0 ? rows.length - 1 : index - 1, event.shiftKey);
-  } else if (key === "Home") {
-    prevent();
-    go(0, event.shiftKey);
-  } else if (key === "End") {
-    prevent();
-    go(rows.length - 1, event.shiftKey);
-  } else if (key === "ArrowRight" && anchor) {
-    prevent();
-    const row = rows[index];
-    if (row?.hasChildren && !row.expanded) ol.dispatch({ type: "toggle", id: row.id });
-    else go(index + 1);
-  } else if (key === "ArrowLeft" && anchor) {
-    prevent();
-    const row = rows[index];
-    if (row?.hasChildren && row.expanded) ol.dispatch({ type: "toggle", id: row.id });
-    else if (row?.parentId) go(rows.findIndex((candidate) => candidate.id === row.parentId));
-  } else if (key === "Enter" && anchor && !ol.readOnly && !mod) {
-    prevent();
-    const row = rows[index];
-    ol.dispatch({ type: "focus", id: anchor, start: row?.node.text.length ?? 0 });
-    ui.setEditing(true);
-  } else if (key === " " && selection.length && !mod && !event.altKey) {
-    // Plain Space only: ⌘⇧Space (quick capture) must not also complete the selection.
-    prevent();
-    ui.announceToggle(ol.commands.toggleComplete(selection));
-  } else if (key === "Tab" && selection.length) {
-    prevent();
-    const outcome = ol.commands.shift(selection, event.shiftKey ? "outdent" : "indent");
-    // Refusals toast on their own; a no-op (nothing to indent under) says so instead of lying.
-    if (outcome === "moved") ui.announce(event.shiftKey ? "Outdented" : "Indented");
-    else if (outcome === "noop") ui.announce(event.shiftKey ? "Can't outdent further" : "Can't indent here");
-  } else if ((key === "Backspace" || key === "Delete") && selection.length && !ol.readOnly) {
-    prevent();
-    deleteItems({ ol, ui }, selection);
-  } else if (key === "Escape") {
-    prevent();
-    if (anchor) ui.setHead(anchor);
+  // The shared row handler (row-keys.ts) with the list's travel; PageUp/PageDown page by what fits.
+  onRowKey(event, ol, ui, listNav(ol), {
+    page: (from, dir) => {
+      const index = from ? (ol.rowIndex.get(from) ?? -1) : -1;
+      const rows = ol.rows;
+      const step = rowsPerPage(ui, from);
+      const to = index < 0 ? (dir === "down" ? 0 : rows.length - 1) : index + (dir === "down" ? step : -step);
+      return rows[Math.max(0, Math.min(rows.length - 1, to))]?.id ?? null;
+    },
+  });
+}
+
+/**
+ * The touch adapter: touch selection mode ends after a one-shot action (Complete, Duplicate,
+ * a sheet action), as it did when every edit cleared the selection. Edits keep the selection now
+ * (the keyboard target), so touch lets it go here. Moves keep it, as they always did,
+ * and delete keeps the neighbour it selected.
+ */
+const KEEPS_TOUCH_SELECTION: ReadonlySet<string> = new Set(["move", "drop", "indent", "outdent", "undo", "redo", "delete"]);
+function useTouchSelectionClear(ol: OutlinerController, ui: OutlinerUi, coarse: boolean) {
+  const seen = React.useRef(ol.lastEdit()?.seq ?? 0);
+  React.useEffect(() => {
+    const last = ol.lastEdit();
+    if (!last || last.seq === seen.current) return;
+    seen.current = last.seq;
+    if (!coarse || ui.editing || KEEPS_TOUCH_SELECTION.has(last.type) || !ol.latestSelection().size) return;
     ol.dispatch({ type: "clear-selection" });
-  } else if (mod && key.toLowerCase() === "a") {
-    prevent();
-    ol.dispatch({ type: "select-all" });
-  }
+  });
+}
+
+/** Rows a PageUp/PageDown step crosses: what fits in the scroll viewport, by the cursor row's height. */
+function rowsPerPage(ui: OutlinerUi, cursor: string | null): number {
+  const list = ui.listRef.current;
+  const scroller = list?.closest<HTMLElement>("[data-outliner-scroll]");
+  const row = cursor ? list?.querySelector<HTMLElement>(`[data-row="${CSS.escape(cursor)}"]`) : null;
+  const height = row?.getBoundingClientRect().height || 28;
+  const viewport = scroller?.clientHeight || 0;
+  // jsdom and an unmeasured layout report 0: a sensible page, never a no-op.
+  return viewport ? Math.max(1, Math.floor(viewport / height) - 1) : 10;
 }
 
 function subtreeIds(node: OutlinerRow["node"]): string[] {
@@ -3785,8 +3982,8 @@ function useRowDrag() {
               if (plan.parentId) current.dispatch({ type: "expand", ids: [plan.parentId], expanded: true });
               current.dispatch({ type: "select", id: created[0]! });
               for (const id of created.slice(1)) current.dispatch({ type: "select", id, toggle: true });
+              // The Undo toast speaks it (one live channel).
               ui.offerUndo(ui.labels.copiedHere(created.length));
-              ui.announce(ui.labels.copiedHere(created.length));
             }
           } else if (plan) {
             current.dispatch({ type: "drop", ids, parentId: plan.parentId, index: plan.index });

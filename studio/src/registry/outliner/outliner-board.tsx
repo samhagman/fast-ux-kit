@@ -10,11 +10,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/compon
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { InlineText, inlineToPlain, inlineToSpeech, sourceOffsetFromPoint } from "./inline";
 import { useOutlinerContext } from "./context";
-import { ItemMenuContent, deleteItems } from "./outliner-chrome";
+import { ItemMenuContent } from "./outliner-chrome";
+import { matchShortcut } from "./keymap";
+import { onRowKey } from "./row-keys";
+import { lingerShown, navRows, resolveTarget, type NavDirection, type ViewNav } from "./target";
 import { rowForNode, type OutlinerRow } from "./use-outliner";
 import { COLOR_STYLES, type OutlineItem } from "./types";
 import {
   boardColumns,
+  boardOrder,
   cardDrop,
   cardMeta,
   columnDrop,
@@ -66,7 +70,9 @@ export function OutlinerBoard({ board, parts }: { readonly board: OutlineItem; r
   const L = ui.labels;
   const { RowField, TaskCheckbox } = parts;
   const coarse = useMediaQuery("(pointer: coarse)");
-  const columns = React.useMemo(() => boardColumns(board, { hideCompleted: ol.view.hideCompleted }), [board, ol.view.hideCompleted]);
+  // A card completed under Hide completed stays while it is still the target (target.ts linger).
+  const linger = React.useMemo(() => lingerShown(ol.state.nodes, ol.linger), [ol.state.nodes, ol.linger]);
+  const columns = React.useMemo(() => boardColumns(board, { hideCompleted: ol.view.hideCompleted, linger }), [board, ol.view.hideCompleted, linger]);
   const boardLocked = ol.isItemLocked(board.id);
   // Locks inherit down the tree: a column's lock covers its cards.
   const lockedIds = React.useMemo(() => {
@@ -85,7 +91,10 @@ export function OutlinerBoard({ board, parts }: { readonly board: OutlineItem; r
 
   const selection = ol.state.selection;
   const caret = ui.editing ? ol.state.caret : null;
-  const cursorId = !ui.editing && ol.state.selectionAnchor && locateOnBoard(columns, ol.state.selectionAnchor) ? ol.state.selectionAnchor : null;
+  // The cursor is the outline's (target.ts), resolved against what the board shows. Just zoomed in
+  // (the caret still on the board item itself), there is none yet: entering lands on the first card.
+  const target = resolveTarget(ol.state, navRows(boardOrder(columns)), false);
+  const cursorId = !ui.editing && (selection.size || ol.state.caret?.id !== board.id) ? target.cursor : null;
   const cardCount = columns.reduce((sum, column) => sum + column.cards.length, 0);
   const animate = cardCount <= ANIMATE_CARDS;
   const listRef = ui.listRef;
@@ -97,7 +106,6 @@ export function OutlinerBoard({ board, parts }: { readonly board: OutlineItem; r
     );
   const select = (id: string, event?: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean }) => {
     ol.dispatch({ type: "select", id, extend: !!event?.shiftKey, toggle: !!(event?.metaKey || event?.ctrlKey) });
-    ui.setHead(id);
     ui.focusList();
     reveal(id);
   };
@@ -139,83 +147,80 @@ export function OutlinerBoard({ board, parts }: { readonly board: OutlineItem; r
     return true;
   };
 
-  /* ── Keyboard: arrows travel, ⌥⇧/⌘⇧ arrows move, Enter edits, Space completes ── */
+  /* ── Keyboard: the shared row keys (row-keys.ts) plus the board's own moves ── */
+  const live = React.useRef({ columns, rtl });
+  live.current = { columns, rtl };
+  const travel = React.useMemo<ViewNav>(() => {
+    const steps: Record<NavDirection, BoardStep> = { up: "up", down: "down", left: "left", right: "right", first: "home", last: "end" };
+    return {
+      view: "board",
+      visibleIds: () => boardOrder(live.current.columns),
+      next(id, dir) {
+        const { columns, rtl } = live.current;
+        let step = steps[dir];
+        // ←/→ are visual: a right-to-left board runs its columns the other way.
+        if (rtl() && (step === "left" || step === "right")) step = step === "left" ? "right" : "left";
+        return idAt(columns, stepBoard(columns, locateOnBoard(columns, id), step));
+      },
+      // Tab never nests a card under another: it leaves the board, as from any other widget.
+      leaves: new Set(["item.indent", "item.outdent"]),
+    };
+  }, []);
+  React.useLayoutEffect(() => {
+    ol.setViewNav(travel);
+    return () => {
+      if (ol.viewNav() === travel) ol.setViewNav(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [travel]);
+
+  /** The board's own structure keys: a card moves within and across columns, a column header moves its column. */
+  const moveKey = (event: React.KeyboardEvent): boolean => {
+    const mod = event.metaKey || event.ctrlKey;
+    const chord = matchShortcut(ui.keymap, event, "row");
+    const sideways = (event.key === "ArrowLeft" || event.key === "ArrowRight") && (event.altKey || mod) && event.shiftKey;
+    const vertical = chord === "moveUp" || chord === "moveDown";
+    if (!sideways && !vertical) return false;
+    const here = locateOnBoard(columns, cursorId);
+    event.preventDefault();
+    if (!here) return true;
+    const id = idAt(columns, here)!;
+    if (!editableId(id)) {
+      toast(ol.readOnly ? L.readOnly : L.locked, { id: "outliner-refusal" });
+      return true;
+    }
+    const flip = (step: "left" | "right") => (rtl() ? (step === "left" ? "right" : "left") : step);
+    const dir = vertical ? (chord === "moveUp" ? "up" : "down") : flip(event.key === "ArrowLeft" ? "left" : "right");
+    if (here.card < 0) {
+      // A column header moves the whole column left/right.
+      if (dir !== "left" && dir !== "right") return true;
+      const to = here.column + (dir === "left" ? -1 : 1);
+      if (to < 0 || to >= columns.length) return true;
+      const others = columns.filter((_, i) => i !== here.column);
+      const drop = columnDrop(board, id, dir === "left" ? others[to]!.node.id : (others[to + 1]?.node.id ?? null));
+      if (drop) moveTo([id], drop, "column");
+    } else if (dir === "left" || dir === "right") {
+      const to = here.column + (dir === "left" ? -1 : 1);
+      const column = columns[to];
+      if (!column || !editableId(column.node.id)) return true;
+      const before = column.cards[Math.min(here.card, column.cards.length)]?.id ?? null;
+      const drop = cardDrop(board, [id], column.node.id, before);
+      if (drop) moveTo([id], drop, "card");
+    } else {
+      const cards = columns[here.column]!.cards;
+      const to = here.card + (dir === "up" ? -1 : 1);
+      if (to < 0 || to >= cards.length) return true;
+      const others = cards.filter((card) => card.id !== id);
+      const drop = cardDrop(board, [id], columns[here.column]!.node.id, others[to]?.id ?? null);
+      if (drop) moveTo([id], drop, "card");
+    }
+    reveal(id);
+    return true;
+  };
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (ui.editing || event.target !== event.currentTarget) return;
-    const mod = event.metaKey || event.ctrlKey;
-    const key = event.key;
-    const here = locateOnBoard(columns, cursorId);
-    const flip = (step: BoardStep): BoardStep => (rtl() && (step === "left" || step === "right") ? (step === "left" ? "right" : "left") : step);
-    const steps: Record<string, BoardStep> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Home: "home", End: "end" };
-    const step = steps[key];
-    if (step && (event.altKey || mod) && event.shiftKey && here) {
-      event.preventDefault();
-      const id = idAt(columns, here)!;
-      if (!editableId(id)) {
-        toast(ol.readOnly ? L.readOnly : L.locked, { id: "outliner-refusal" });
-        return;
-      }
-      const dir = flip(step);
-      if (here.card < 0) {
-        // A column header moves the whole column left/right.
-        if (dir !== "left" && dir !== "right") return;
-        const to = here.column + (dir === "left" ? -1 : 1);
-        if (to < 0 || to >= columns.length) return;
-        const others = columns.filter((_, i) => i !== here.column);
-        const drop = columnDrop(board, id, dir === "left" ? others[to]!.node.id : (others[to + 1]?.node.id ?? null));
-        if (drop) moveTo([id], drop, "column");
-      } else if (dir === "left" || dir === "right") {
-        const to = here.column + (dir === "left" ? -1 : 1);
-        const column = columns[to];
-        if (!column || !editableId(column.node.id)) return;
-        const before = column.cards[Math.min(here.card, column.cards.length)]?.id ?? null;
-        const drop = cardDrop(board, [id], column.node.id, before);
-        if (drop) moveTo([id], drop, "card");
-      } else if (dir === "up" || dir === "down") {
-        const cards = columns[here.column]!.cards;
-        const to = here.card + (dir === "up" ? -1 : 1);
-        if (to < 0 || to >= cards.length) return;
-        const others = cards.filter((card) => card.id !== id);
-        const drop = cardDrop(board, [id], columns[here.column]!.node.id, others[to]?.id ?? null);
-        if (drop) moveTo([id], drop, "card");
-      }
-      reveal(id);
-      return;
-    }
-    if (step) {
-      event.preventDefault();
-      const next = idAt(columns, stepBoard(columns, here, flip(step)));
-      if (next) {
-        ol.dispatch({ type: "select", id: next, extend: event.shiftKey && !!here });
-        ui.setHead(next);
-        reveal(next);
-      }
-      return;
-    }
-    const ids = selection.size ? [...selection] : cursorId ? [cursorId] : [];
-    if (key === "Enter" && cursorId) {
-      event.preventDefault();
-      if (mod) ui.announceToggle(ol.commands.toggleComplete(ids));
-      else edit(cursorId);
-    } else if (key === " " && ids.length && !ol.readOnly && !mod && !event.altKey) {
-      event.preventDefault();
-      ui.announceToggle(ol.commands.toggleComplete(ids));
-    } else if ((key === "Backspace" || key === "Delete") && ids.length && !ol.readOnly) {
-      event.preventDefault();
-      deleteItems({ ol, ui }, ids);
-    } else if (key === "Escape") {
-      event.preventDefault();
-      ol.dispatch({ type: "clear-selection" });
-    } else if (mod && key === "]" && cursorId) {
-      event.preventDefault();
-      open(cursorId);
-    } else if (mod && key === "[") {
-      event.preventDefault();
-      ol.dispatch({ type: "hoist", id: ol.breadcrumbs.at(-2)?.id ?? null });
-    } else if (mod && key.toLowerCase() === "z") {
-      event.preventDefault();
-      ol.dispatch({ type: event.shiftKey ? "redo" : "undo" });
-    }
+    if (moveKey(event)) return;
+    onRowKey(event, ol, ui, travel, { reveal });
   };
 
   /* ── Field navigation while editing a card or a column title ── */
@@ -569,6 +574,7 @@ export function OutlinerBoard({ board, parts }: { readonly board: OutlineItem; r
     <div className="relative">
       <div
         ref={listRef}
+        data-focus-entry=""
         role="group"
         aria-roledescription={L.board}
         aria-label={inlineToSpeech(board.text) || L.untitled}

@@ -54,6 +54,7 @@ import {
 import { LibraryPanel, type LibraryActions, type RenameTarget } from "./outliner-library";
 import { DocumentFinder } from "./outliner-finder";
 import { CaptureFab, QuickCapture } from "./outliner-capture";
+import { cycleRegion } from "./focus";
 import { ResultSortControl, sortResults, type ResultSort } from "./result-sort";
 import { tagsInQuery } from "./tag-pane";
 import "./outliner-library.css";
@@ -655,6 +656,21 @@ export function OutlinerWorkspace({
   /* ── ⌘O finder and ⌘⇧Space capture, from anywhere in the workspace ── */
   const [finderOpen, setFinderOpen] = React.useState(false);
   const lastPointer = React.useRef<"pane" | "sidebar" | null>(null);
+  const lastFocus = React.useRef<HTMLElement | null>(null);
+  /**
+   * ⌘O and capture close back where they were opened from: a sidebar control stays itself;
+   * from a document, that outline's own bookmark (the tree row, or a field and its caret).
+   */
+  const returnFocus = (event: Event) => {
+    const from = lastFocus.current;
+    event.preventDefault();
+    if (from?.isConnected && !from.closest("[inert]") && !from.closest("[data-document]") && rootRef.current?.contains(from)) {
+      from.focus({ preventScroll: true });
+      return;
+    }
+    const handle = activeRef.current ? handles.current.get(activeRef.current) : null;
+    handle?.restoreFocus();
+  };
   const activeRef = React.useRef(activeId);
   activeRef.current = activeId;
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -692,11 +708,18 @@ export function OutlinerWorkspace({
       const target = event.target as Element | null;
       lastPointer.current = !rootRef.current?.contains(target) ? null : target?.closest("[data-document]") ? "pane" : "sidebar";
     };
+    // The last place focus was outside a dialog: where ⌘O and capture hand it back.
+    const onFocus = (event: FocusEvent) => {
+      const target = event.target as Element | null;
+      if (target instanceof HTMLElement && !target.closest("[role=dialog]")) lastFocus.current = target;
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("focusin", onFocus, true);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPointer, true);
+      window.removeEventListener("focusin", onFocus, true);
     };
   }, []);
   const revealFolderRow = (folderId: string) => {
@@ -955,11 +978,21 @@ export function OutlinerWorkspace({
   };
 
   return (
-    <div ref={rootRef} data-slot="outliner-workspace" className={cn("relative flex min-h-0 overflow-hidden rounded-xl border bg-surface", className)}>
+    <div
+      ref={rootRef}
+      data-slot="outliner-workspace"
+      // F6 / ⇧F6 walk sidebar → toolbar → search → tree across the whole workspace (focus.ts).
+      data-focus-scope=""
+      onKeyDown={(event) => {
+        if (event.key !== "F6" || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+        if (cycleRegion(event.target as Element, event.shiftKey)) event.preventDefault();
+      }}
+      className={cn("relative flex min-h-0 overflow-hidden rounded-xl border bg-surface", className)}>
       <AnimatePresence initial={false}>
         {desktop && !collapsed && (
           <motion.aside
             key="documents"
+            data-focus-region="sidebar"
             aria-label={L.documents}
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 248, opacity: 1 }}
@@ -1040,6 +1073,7 @@ export function OutlinerWorkspace({
       <QuickCapture
         open={captureOpen}
         onOpenChange={setCaptureOpen}
+        onCloseAutoFocus={returnFocus}
         inboxTitle={inboxOf(docs, layout)?.title || null}
         onCapture={(text) => capture(text) !== null}
         labels={L}
@@ -1049,6 +1083,7 @@ export function OutlinerWorkspace({
       <DocumentFinder
         open={!!moving}
         onOpenChange={(next) => !next && setMoving(null)}
+        onCloseAutoFocus={returnFocus}
         documents={docs.filter((doc) => doc.id !== moving?.sourceId)}
         layout={layout}
         recent={recent}
@@ -1072,6 +1107,7 @@ export function OutlinerWorkspace({
       <DocumentFinder
         open={finderOpen}
         onOpenChange={setFinderOpen}
+        onCloseAutoFocus={returnFocus}
         documents={docs}
         layout={layout}
         recent={recent}

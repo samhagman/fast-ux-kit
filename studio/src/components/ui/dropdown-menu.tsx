@@ -206,10 +206,29 @@ function DropdownMenuShortcut({
   )
 }
 
+/** Closes the submenu it is in (Esc goes back one level, not out of the whole menu). */
+const DropdownMenuSubClose = React.createContext<((open: boolean) => void) | null>(null)
+
 function DropdownMenuSub({
+  open: openProp,
+  defaultOpen,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
-  return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />
+  const [own, setOwn] = React.useState(defaultOpen ?? false)
+  const open = openProp ?? own
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (openProp === undefined) setOwn(next)
+      onOpenChange?.(next)
+    },
+    [openProp, onOpenChange]
+  )
+  return (
+    <DropdownMenuSubClose.Provider value={setOpen}>
+      <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" open={open} onOpenChange={setOpen} {...props} />
+    </DropdownMenuSubClose.Provider>
+  )
 }
 
 function DropdownMenuSubTrigger({
@@ -238,10 +257,22 @@ function DropdownMenuSubTrigger({
 
 function DropdownMenuSubContent({
   className,
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  const setOpen = React.useContext(DropdownMenuSubClose)
   return (
     <DropdownMenuPrimitive.SubContent
+      onEscapeKeyDown={(event) => {
+        onEscapeKeyDown?.(event)
+        if (event.defaultPrevented || !setOpen) return
+        // One level back: this submenu closes and its trigger (in the parent menu) takes focus.
+        event.preventDefault()
+        const content = (event.target as Element | null)?.closest?.("[data-slot$=menu-sub-content]")
+        const trigger = content ? document.getElementById(content.getAttribute("aria-labelledby") ?? "") : null
+        setOpen(false)
+        trigger?.focus()
+      }}
       data-slot="dropdown-menu-sub-content"
       className={cn("z-50 min-w-[96px] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
       {...props}

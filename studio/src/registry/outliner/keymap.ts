@@ -163,6 +163,8 @@ export const RESERVED_SHORTCUTS: readonly ReservedShortcut[] = [
   { combo: "Mod+Shift+Space", label: "Quick capture", owner: "host" },
   browser("Mod+w", "Close tab"),
   browser("Mod+t", "New tab"),
+  // Every desktop browser bookmarks the page on ⌘D / Ctrl+D before the outliner could answer.
+  browser("Mod+d", "Bookmark page"),
   browser("Mod+n", "New window"),
   browser("Mod+q", "Quit"),
   browser("Mod+r", "Reload"),
@@ -407,12 +409,24 @@ const KEY_GLYPHS: Record<string, string> = {
   PageUp: "PgUp",
   PageDown: "PgDn",
 };
+/** Windows and Linux name the keys rather than draw Apple's glyphs. Arrows keep their arrows. */
+const KEY_NAMES: Record<string, string> = {
+  ...KEY_GLYPHS,
+  Enter: "Enter",
+  Backspace: "Backspace",
+  Delete: "Del",
+};
 
-/** A combo as the platform writes it: "⌥⌘1" on Apple, "Ctrl Alt 1" elsewhere. */
+/**
+ * A combo as the platform writes it: "⌥⌘1" on Apple; elsewhere the platform's own order and
+ * names, "Ctrl Alt Shift 1", "Shift Enter", "Del".
+ */
 export function formatCombo(combo: string, apple: boolean): string {
   const parsed = parseCombo(combo);
   if (!parsed) return combo;
-  const key = KEY_GLYPHS[parsed.key] ?? (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  const names = apple ? KEY_GLYPHS : KEY_NAMES;
+  const key = names[parsed.key] ?? (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
+  if (!apple) return [parsed.mod && "Ctrl", parsed.alt && "Alt", parsed.shift && "Shift", key].filter(Boolean).join(" ");
   const parts = [parsed.mod && "mod", parsed.alt && "alt", parsed.shift && "shift", key].filter((part): part is string => !!part);
   return formatShortcut(apple, ...parts);
 }
@@ -429,3 +443,98 @@ export function primaryShortcut(keymap: Keymap, id: ShortcutId, apple: boolean):
 
 /** The standard profile with no remaps (built last: it needs every helper above). */
 export const DEFAULT_KEYMAP = buildKeymap();
+
+/* ───────────────────────────── Fixed keys ───────────────────────────── */
+
+/**
+ * The keys that are never remapped (Space, Tab, arrows …) as data: key → command id. The row
+ * handler runs whatever this table says, and the shortcut sheet can list it. Command ids are the
+ * item registry's ids (`item.*`) or the cursor's own moves (`cursor.*`, `selection.*`).
+ */
+export type FixedCommand =
+  | "cursor.up"
+  | "cursor.down"
+  | "cursor.first"
+  | "cursor.last"
+  | "cursor.pageUp"
+  | "cursor.pageDown"
+  | "cursor.in"
+  | "cursor.out"
+  | "item.edit"
+  | "item.note"
+  | "item.complete"
+  | "item.indent"
+  | "item.outdent"
+  | "item.delete"
+  | "selection.escape";
+
+export interface FixedKey {
+  readonly command: FixedCommand;
+  /** `event.key` names (Space is " "). */
+  readonly keys: readonly string[];
+  /** ⇧ extends the selection instead of moving the cursor (movement keys). */
+  readonly extends?: boolean;
+  /** true: needs ⇧; false: never with ⇧; absent: either. */
+  readonly shift?: boolean;
+  /** Never with ⌘/Ctrl/⌥ (those chords belong to the keymap: ⌘↵ completes, ⌘⇧Space captures). */
+  readonly plain?: boolean;
+  /** How the shortcut sheet names it. */
+  readonly label: string;
+  /** The combo menus show as its hint (formatCombo), per platform; absent: no hint. */
+  readonly hint?: { readonly apple: string; readonly other: string };
+}
+
+/** Row mode (the tree has focus, no field is being edited). */
+export const FIXED_KEYS: readonly FixedKey[] = [
+  { command: "cursor.up", keys: ["ArrowUp"], extends: true, label: "Previous item" },
+  { command: "cursor.down", keys: ["ArrowDown"], extends: true, label: "Next item" },
+  { command: "cursor.first", keys: ["Home"], extends: true, label: "First item" },
+  { command: "cursor.last", keys: ["End"], extends: true, label: "Last item" },
+  { command: "cursor.pageUp", keys: ["PageUp"], extends: true, label: "Page up" },
+  { command: "cursor.pageDown", keys: ["PageDown"], extends: true, label: "Page down" },
+  { command: "cursor.in", keys: ["ArrowRight"], label: "Unfold · next item" },
+  { command: "cursor.out", keys: ["ArrowLeft"], label: "Fold · parent" },
+  { command: "item.edit", keys: ["Enter"], shift: false, plain: true, label: "Edit" },
+  { command: "item.note", keys: ["Enter"], shift: true, plain: true, label: "Edit note", hint: { apple: "Shift+Enter", other: "Shift+Enter" } },
+  { command: "item.complete", keys: [" "], plain: true, label: "Complete", hint: { apple: "Space", other: "Space" } },
+  { command: "item.indent", keys: ["Tab"], shift: false, label: "Indent", hint: { apple: "Tab", other: "Tab" } },
+  { command: "item.outdent", keys: ["Tab"], shift: true, label: "Outdent", hint: { apple: "Shift+Tab", other: "Shift+Tab" } },
+  // Apple keyboards say ⌫ for the key that deletes; elsewhere Del is the key people press.
+  { command: "item.delete", keys: ["Backspace", "Delete"], label: "Delete", hint: { apple: "Backspace", other: "Delete" } },
+  { command: "selection.escape", keys: ["Escape"], label: "Collapse selection · clear search" },
+];
+
+/** A fixed key's menu hint ("⌫" on Apple, "Del" elsewhere), or undefined. */
+export function fixedKeyHint(command: FixedCommand, apple: boolean): string | undefined {
+  const hint = FIXED_KEYS.find((def) => def.command === command)?.hint;
+  return hint ? formatCombo(apple ? hint.apple : hint.other, apple) : undefined;
+}
+
+/** Opens the item menu in row mode and in a field: ⇧F10 and the ContextMenu key. "/" is typed. */
+export function isItemMenuKey(event: ComboEvent): boolean {
+  if (isComposingKey(event) || event.metaKey || event.ctrlKey || event.altKey) return false;
+  return event.key === "ContextMenu" || (event.key === "F10" && !!event.shiftKey);
+}
+
+/**
+ * The fixed command a key runs in row mode, or null. Remappable chords are matched first
+ * (matchShortcut); a chord nobody claimed falls back to its plain key (⌘↑ travels like ↑).
+ */
+export function matchFixedKey(event: ComboEvent): { readonly command: FixedCommand; readonly extend: boolean } | null {
+  if (isComposingKey(event)) return null;
+  const shift = !!event.shiftKey;
+  const modified = !!(event.metaKey || event.ctrlKey || event.altKey);
+  for (const def of FIXED_KEYS) {
+    if (!def.keys.includes(event.key)) continue;
+    if (def.shift !== undefined && def.shift !== shift) continue;
+    if (def.plain && modified) continue;
+    return { command: def.command, extend: !!def.extends && shift };
+  }
+  return null;
+}
+
+/** A fixed key as the shortcut sheet writes it: "↑", "⇧Tab", "⌫ · ⌦" (and "⇧ extends" for moves). */
+export function fixedKeyText(def: FixedKey, apple: boolean): string {
+  const keys = def.keys.map((key) => formatCombo(`${def.shift ? "Shift+" : ""}${key === " " ? "Space" : key}`, apple)).join(" · ");
+  return def.extends ? `${keys} (${apple ? "⇧" : "Shift"} extends)` : keys;
+}
