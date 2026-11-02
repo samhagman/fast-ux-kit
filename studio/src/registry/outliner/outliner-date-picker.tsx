@@ -107,6 +107,12 @@ function useReplaceDate(request: DatePickerRequest) {
     const sameTime = date && request.time && date.getHours() === request.value.getHours() && date.getMinutes() === request.value.getMinutes();
     const token = date ? formatDateToken(date, hasTime, end ? undefined : repeat, { end: end?.at, endHasTime: end?.hasTime, time: sameTime ? request.time : undefined }) : "";
     const source = request.field === "note" ? (node.data?.note ?? "") : node.text;
+    // Opened on a token that has changed or gone since (typed over, another surface, an undo).
+    if (request.src !== undefined && source.slice(request.start, request.end) !== request.src) {
+      ui.announce(L.tokenRefused);
+      ui.setDatePicker(null);
+      return;
+    }
     // Opened from a menu on a row with no date yet: the new token is a word of its own.
     const gap = date && request.start === request.end && request.start > 0 && !/\s$/.test(source.slice(0, request.start)) ? " " : "";
     const next = (source.slice(0, request.start) + gap + token + source.slice(request.end)).replace(/ {2,}/g, " ");

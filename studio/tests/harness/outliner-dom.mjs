@@ -40,6 +40,14 @@ export async function domEnv() {
   window.HTMLElement.prototype.setPointerCapture ??= () => {};
   window.HTMLElement.prototype.hasPointerCapture ??= () => false;
   window.scrollTo = globalThis.scrollTo = () => {};
+  // No layout in jsdom: the editor's measurements (coordsAtPos, endOfTextblock) read empty rects.
+  const rect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON() {} });
+  window.Range.prototype.getClientRects ??= function () {
+    return { length: 0, item: () => null, [Symbol.iterator]: function* () {} };
+  };
+  window.Range.prototype.getBoundingClientRect ??= rect;
+  window.document.elementFromPoint ??= () => null;
+  globalThis.DOMRect ??= window.DOMRect ?? class { constructor(x = 0, y = 0, width = 0, height = 0) { Object.assign(this, { x, y, width, height, left: x, top: y, right: x + width, bottom: y + height }); } };
   globalThis.CSS = { escape: (value) => String(value).replace(/["\\]/g, "\\$&"), supports: () => false };
   const error = console.error;
   console.error = (...args) => (/not wrapped in act|DialogContent|aria-describedby/.test(String(args[0])) ? undefined : error(...args));
@@ -48,6 +56,8 @@ export async function domEnv() {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   React = await import("react");
   act = React.act;
+  // The live title field's chunk, loaded before anything mounts, so a title is never briefly a textarea.
+  await (await load("/src/registry/outliner/live-field/load.ts")).loadLiveField();
   ({ createRoot } = await import("react-dom/client"));
 }
 
@@ -70,6 +80,66 @@ function contextOf(container) {
     if (fiber.child) stack.push(fiber.child);
   }
   throw new Error("no outliner context in the tree");
+}
+
+/** Whether `el` is a row field: the live field (title or note), or a plain textarea. */
+export const isField = (el) => !!el && (el.tagName === "TEXTAREA" || el.dataset?.olEditor !== undefined);
+const isLive = (el) => !!el?.liveField;
+
+/**
+ * Type `text` at the field's caret, one character at a time, the way a keyboard delivers it.
+ * The live field takes each character through the editor's text input (its rules see a typed
+ * space); a textarea gets its value set and an input event.
+ */
+export function typeText(el, text) {
+  if (!isLive(el)) {
+    const start = el.selectionStart,
+      end = el.selectionEnd;
+    const value = el.value.slice(0, start) + text + el.value.slice(end);
+    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set.call(el, value);
+    el.setSelectionRange(start + text.length, start + text.length);
+    el.dispatchEvent(new window.Event("input", { bubbles: true }));
+    return;
+  }
+  const { view } = el.editor;
+  for (const char of text) {
+    const { from, to } = view.state.selection;
+    const deflt = () => view.state.tr.insertText(char, from, to);
+    if (!view.someProp("handleTextInput", (f) => f(view, from, to, char, deflt))) view.dispatch(deflt());
+  }
+}
+
+/**
+ * Make the field read `value`, as typing it would: what differs from the current value is
+ * selected and typed over (appending types at the end). For a textarea, its value is set.
+ */
+export function setFieldValue(el, value) {
+  if (!isLive(el)) {
+    const proto = el.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
+    el.setSelectionRange(value.length, value.length);
+    el.dispatchEvent(new window.Event("input", { bubbles: true }));
+    return;
+  }
+  const current = el.value;
+  let from = 0;
+  while (from < current.length && from < value.length && current[from] === value[from]) from++;
+  let end = current.length;
+  let endB = value.length;
+  while (end > from && endB > from && current[end - 1] === value[endB - 1]) {
+    end--;
+    endB--;
+  }
+  // appending: keep the typed order natural (the caret at the end, the rest typed after it)
+  if (value.startsWith(current)) {
+    from = end = current.length;
+    endB = value.length;
+  }
+  el.setSelectionRange(from, end);
+  if (end > from && endB === from) {
+    const { view } = el.editor;
+    view.dispatch(view.state.tr.deleteSelection());
+  } else typeText(el, value.slice(from, endB));
 }
 
 export async function mountOutliner(props, { wrap } = {}) {
@@ -97,7 +167,19 @@ export async function mountOutliner(props, { wrap } = {}) {
     root: () => container.querySelector("[data-slot=outliner]"),
     tree: () => container.querySelector("[role=tree]"),
     row: (id) => container.querySelector(`[data-row="${id}"]`),
-    field: () => (document.activeElement?.tagName === "TEXTAREA" ? document.activeElement : null),
+    field: () => (isField(document.activeElement) ? document.activeElement : null),
+    /** Type at the caret of the focused field. */
+    type: (text) =>
+      act(async () => {
+        typeText(document.activeElement, text);
+        await tick();
+      }),
+    /** Make the focused field read `value` (see setFieldValue). */
+    setValue: (value) =>
+      act(async () => {
+        setFieldValue(document.activeElement, value);
+        await tick();
+      }),
     value: () => handle.current.getValue(),
     live: () => container.querySelector("[data-slot=outliner] > [aria-live=polite]")?.textContent ?? "",
     selection: () => [...contextOf(container).ol.latestSelection()],

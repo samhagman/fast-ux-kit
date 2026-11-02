@@ -102,6 +102,13 @@ export const DEFAULT_LABELS = {
     children ? `Cut ${plural(items, "item")} and ${plural(children, "child", "children")}` : `Cut ${plural(items, "item")}`,
   copied: (count: number) => `Copied ${plural(count, "item")}`,
   pasted: (count: number) => `Pasted ${plural(count, "item")}`,
+  /** Said when the live field refuses or adjusts an edit (it never changes text silently). */
+  formatRefused: "That format can't be applied here",
+  pastedLiteral: "Pasted as plain text: its formatting can't be written here",
+  tokenRefused: "Not changed: the text moved on meanwhile",
+  mergeRefused: "Items not joined: one of them changed meanwhile",
+  splitRefused: "Item not split: it changed meanwhile",
+  editConflict: "Another change came first: your last edit was not applied",
   copiedMarkdown: "Copied as Markdown",
   copiedLink: "Item link copied",
   undoAction: "Undo",

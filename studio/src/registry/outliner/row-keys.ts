@@ -99,7 +99,17 @@ export function onRowKey(event: React.KeyboardEvent, ol: OutlinerController, ui:
       return;
     }
     case "item.edit": {
-      if (!cursor || ol.readOnly) return;
+      if (ol.readOnly) return;
+      if (!cursor) {
+        // An empty level (a new document, a zoom into a leaf): Enter starts its first item, as
+        // the empty state's button does.
+        if (ol.rows.length || ol.view.query.trim() || extra?.enter) return;
+        prevent();
+        const id = ol.commands.addChild(ol.state.hoistedId);
+        ol.dispatch({ type: "focus", id });
+        ui.setEditing(true);
+        return;
+      }
       prevent();
       if (extra?.enter) extra.enter(cursor);
       // Back to the caret Esc left, else the end of the title.

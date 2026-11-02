@@ -40,7 +40,6 @@ import {
 import { toast } from "sonner";
 import { createOutlineId, findOutlineNode, getOutlinePath, planOutlineDrop } from "@fux/core";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
-import { textareaAtVisualBoundary, textareaCaretRect } from "@fux/text-geometry";
 import { cn } from "@/lib/utils";
 import { DirectionScope, useResolvedDirection, type Dir } from "@/lib/direction";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -76,6 +75,7 @@ import { exportOutline, htmlHasStructure } from "./interchange";
 import { isBoard } from "./board";
 import { OutlinerBoard, type BoardParts } from "./outliner-board";
 import { RichContentProvider, RichNote, type OutlineRenderers } from "./rich-note-view";
+import { NOTE_CLASS } from "./rich-note";
 import { OutlinerArticle, type ArticleParts } from "./outliner-article";
 import { OutlinerPrintHost, requestPrint } from "./outliner-print";
 import { MindMapSlot, ViewSwitcher, printCurrent, shownView } from "./outliner-views";
@@ -95,7 +95,10 @@ import {
   deleteItems,
 } from "./outliner-chrome";
 import { afterFocusReturn } from "./item-actions";
-import { bookmarkFor, cycleRegion, isSoleOutliner, neighbourOf, registerOutliner } from "./focus";
+import { bookmarkFor, cycleRegion, fieldAllSelected, fieldAt, fieldAtVisualBoundary, fieldCaretRect, isEditingField, isLiveField, isSoleOutliner, neighbourOf, registerOutliner, setFieldSelection, type CaretField } from "./focus";
+import { loadLiveField, useLiveField } from "./live-field/load";
+import type { FieldHost, FieldNotice } from "./live-field/field-session";
+import { fieldHost } from "./live-field/outliner-host";
 import { resolveSettings, settingsStyle, type OutlinerSettings } from "./settings";
 import { buildKeymap, isComposingKey, isItemMenuKey, matchShortcut, primaryShortcut, type ReservedShortcut, type ShortcutId } from "./keymap";
 import { listNav, onRowKey } from "./row-keys";
@@ -466,9 +469,9 @@ export function Outliner({
       restoring.current = true;
       const settle = () => {
         const el = document.activeElement;
-        if (el instanceof HTMLTextAreaElement && el.dataset.field === place.field && el.closest<HTMLElement>("[data-row]")?.dataset.row === place.id) {
+        if (isEditingField(el) && el.dataset.field === place.field && el.closest<HTMLElement>("[data-row]")?.dataset.row === place.id) {
           restoring.current = false;
-          if (place.head < place.anchor && el.selectionStart === start && el.selectionEnd === end) el.setSelectionRange(start, end, "backward");
+          if (place.head < place.anchor && el.selectionStart === start && el.selectionEnd === end) setFieldSelection(el, place);
         } else if (++frames < 10) requestAnimationFrame(settle);
         else {
           restoring.current = false;
@@ -527,7 +530,7 @@ export function Outliner({
     requestAnimationFrame(() => {
       const active = document.activeElement;
       // A place in the outline (the tree, a field) that the action itself focused stays put.
-      const inPlace = active === listRef.current || (active instanceof HTMLTextAreaElement && !!active.dataset.field && !!rootRef.current?.contains(active));
+      const inPlace = active === listRef.current || (isEditingField(active) && !!rootRef.current?.contains(active));
       const lost =
         !active ||
         active === document.body ||
@@ -712,6 +715,14 @@ export function Outliner({
    */
   const lastActive = React.useRef(false);
   React.useEffect(() => (rootRef.current ? registerOutliner(rootRef.current) : undefined), []);
+  // The live title field's code arrives while the page is idle, before the first edit asks for it.
+  React.useEffect(() => {
+    if (ol.readOnly) return;
+    const idle = window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 200));
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout;
+    const id = idle(() => void loadLiveField().catch(() => {}));
+    return () => cancel(id);
+  }, [ol.readOnly]);
   React.useEffect(() => {
     const onPointer = (event: Event) => {
       // Dialogs portal outside the root; they don't count as leaving the outliner.
@@ -805,7 +816,7 @@ export function Outliner({
     const key = event.key.toLowerCase();
     const target = event.target as HTMLElement;
     // Safety valve: "editing" with no editor mounted (it never appeared) must not trap the keyboard.
-    if (key === "escape" && editing && target.tagName !== "TEXTAREA" && !target.closest("[role=dialog]")) {
+    if (key === "escape" && editing && !isEditingField(target) && target.tagName !== "TEXTAREA" && !target.closest("[role=dialog]")) {
       setEditing(false);
       return;
     }
@@ -824,7 +835,7 @@ export function Outliner({
       // ⌘K, ⌘F, ⌘/, ⌘⇧M, ⌥⌘F … whatever the keymap says (remaps included).
       const action = matchShortcut(keymap, event, "global");
       if (action && runGlobalShortcut(action, { ui })) event.preventDefault();
-      else if (target.tagName !== "TEXTAREA" && target.tagName !== "INPUT") {
+      else if (!isEditingField(target) && target.tagName !== "TEXTAREA" && target.tagName !== "INPUT" && !target.isContentEditable) {
         // From the toolbar, the zoomed title, a menu button: the actions that need no row.
         const rowless = matchShortcut(keymap, event, "row");
         if (rowless && ROWLESS_SHORTCUTS.has(rowless) && runItemShortcut(rowless, { ol, ui, ids: [], rowId: null })) event.preventDefault();
@@ -850,7 +861,9 @@ export function Outliner({
           // with no relatedTarget. Decide after the swap settles, from the real active element.
           requestAnimationFrame(() => {
             const active = document.activeElement;
-            if (!rootRef.current?.contains(active) || active?.tagName !== "TEXTAREA") setEditing(false);
+            // A field's own popup (a chip's editor) keeps the field: it hands focus straight back.
+            if (active?.closest("[data-field-overlay]")) return;
+            if (!rootRef.current?.contains(active) || (!isEditingField(active) && active?.tagName !== "TEXTAREA" && !(active as HTMLElement | null)?.isContentEditable)) setEditing(false);
           });
         }}
         data-slot="outliner"
@@ -1496,6 +1509,19 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
       );
       ui.announce(`Zoomed out to ${ol.hoisted ? inlineToSpeech(ol.hoisted.text, live.current.resolveRef) : "the document"}`);
     } else {
+      // Zooming into the row being edited: it is now the heading, whose title keeps the caret
+      // (ZoomTitle), so no row is being edited. Focus left on its old row (which only animates
+      // out, and may have taken the caret back) or on <body> goes to that title, else to the
+      // zoomed level in row mode.
+      const caretRow = ol.state.caret?.id;
+      if (ui.editing && caretRow && !ol.rowIndex.has(caretRow)) ui.setEditing(false);
+      const active = document.activeElement;
+      const row = active?.closest<HTMLElement>("[data-row]")?.dataset.row;
+      if (!active || active === document.body || !active.isConnected || (row !== undefined && !ol.rowIndex.has(row))) {
+        const title = ui.rootRef.current?.querySelector<HTMLElement>("[data-zoom-title]");
+        if (title) title.focus({ preventScroll: true });
+        else ui.focusList();
+      }
       landed(() => {});
       ui.announce(ol.hoisted ? `Zoomed into ${inlineToSpeech(ol.hoisted.text, live.current.resolveRef)}` : "Document root");
     }
@@ -1692,7 +1718,7 @@ function OutlinerBody({ title, placeholder }: { readonly title: string; readonly
                   </AnimatePresence>
                 </LayoutGroup>
               ) : (
-                <VirtualRows rows={ol.rows} renderRow={renderRow} scrollEl={scrollEl} listRef={ui.listRef} focusId={caretId ?? cursorId} editing={ui.editing} register={ui.registerScroller} pinnedIds={[ui.sheet?.rowId, cursorId]} />
+                <VirtualRows rows={ol.rows} renderRow={renderRow} scrollEl={scrollEl} listRef={ui.listRef} focusId={caretId ?? cursorId} editing={ui.editing} register={ui.registerScroller} pinnedIds={[ui.sheet?.rowId, cursorId, caretId]} />
               )}
               </LiveContext.Provider>
               <DropIndicator drag={drag.state} />
@@ -1918,7 +1944,7 @@ function DocumentTitle({ title }: { readonly title: string }) {
   const ratio = tasks.total ? tasks.done / tasks.total : 0;
   return (
     <header className="mb-3 ps-[30px]">
-      {hoisted ? <ZoomTitle /> : <RootTitle title={title} />}
+      {hoisted ? <ZoomTitle key={hoisted.id} /> : <RootTitle title={title} />}
       {hoisted?.data?.note && (
         <div dir="auto" className="mt-0.5 text-ui text-muted-foreground">
           <RichNote source={hoisted.data.note} />
@@ -2089,8 +2115,16 @@ function SearchHelp() {
 function ZoomTitle() {
   const { ol, ui } = useOutlinerContext();
   const hoisted = ol.hoisted!;
-  const [editing, setEditing] = React.useState(false);
+  // Zoomed into the title being typed in (⌘] while editing): the caret carries on here.
+  const carried = React.useRef(ui.editing && ol.state.caret?.id === hoisted.id && ol.state.caret.field !== "note" ? ol.state.caret.start : null);
+  const [editing, setEditingState] = React.useState(carried.current !== null);
+  const setEditing = (next: boolean) => {
+    if (!next) carried.current = null;
+    setEditingState(next);
+  };
   const ref = React.useRef<HTMLTextAreaElement>(null);
+  const liveModule = useLiveField();
+  const host = useFieldHost(ol);
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -2105,7 +2139,73 @@ function ZoomTitle() {
   const heading = hoisted.data?.heading;
   const starred = ol.bookmarks.items.includes(ol.commands.identityOf(hoisted.id));
   const className = "block w-full text-[22px] leading-8 font-semibold tracking-[-0.015em]";
-  const title = editing ? (
+  /** Enter starts the first child; Esc stops editing. */
+  const firstChild = () => {
+    setEditing(false);
+    const id = createOutlineId();
+    ol.dispatch({ type: "insert", id, parentId: hoisted.id, index: 0 });
+    ui.setEditing(true);
+  };
+  const LiveField = liveModule?.LiveField;
+  const title = editing && LiveField ? (
+    <LiveField
+      rowId={hoisted.id}
+      field="title"
+      host={host}
+      committed={hoisted.text}
+      renderedSeq={ol.renderedSeq}
+      autoFocus={{ caret: carried.current ?? hoisted.text.length }}
+      attributes={{ "aria-label": "Zoomed item title", role: "textbox", spellcheck: "true", dir: "auto", "data-zoom-title": "" }}
+      className={cn(className, "min-h-8 caret-signal")}
+      resolveRef={(id) => findOutlineNode(ol.state.nodes, id)?.node.text ?? ol.external?.resolve(id) ?? null}
+      hooks={{
+        key: (event) => {
+          const mod = event.metaKey || event.ctrlKey;
+          const lower = event.key.toLowerCase();
+          const stop = () => {
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          };
+          if (event.key === "Escape") {
+            stop();
+            setEditing(false);
+            // the keyboard goes on in the zoomed level's rows, never from <body>
+            ui.focusList();
+            return true;
+          }
+          if (event.key === "Enter" && !mod && !event.altKey) {
+            stop();
+            firstChild();
+            return true;
+          }
+          if (mod && (lower === "z" || (lower === "y" && event.ctrlKey && !event.metaKey))) {
+            stop();
+            ol.dispatch({ type: lower === "y" || event.shiftKey ? "redo" : "undo" });
+            return true;
+          }
+          const action = matchShortcut(ui.keymap, event, "text");
+          const style = action ? FORMAT_STYLES[action] : undefined;
+          if (style) {
+            stop();
+            event.currentTarget.liveField.format(style);
+            return true;
+          }
+          if (action === "zoomOut") {
+            // ⌘[ undoes ⌘]: out to the level above, on this item's row
+            stop();
+            setEditing(false);
+            ol.dispatch({ type: "hoist", id: ol.breadcrumbs.at(-2)?.id ?? null });
+            return true;
+          }
+          return false;
+        },
+        notice: (notice) => ui.announce(noticeText(ui, notice)),
+        undo: (redo) => ol.dispatch({ type: redo ? "redo" : "undo" }),
+        blur: () => setEditing(false),
+      }}
+    />
+  ) : editing ? (
     <textarea
       ref={ref}
       autoFocus
@@ -2119,10 +2219,7 @@ function ZoomTitle() {
         if (event.key === "Escape") setEditing(false);
         if (event.key === "Enter") {
           event.preventDefault();
-          setEditing(false);
-          const id = createOutlineId();
-          ol.dispatch({ type: "insert", id, parentId: hoisted.id, index: 0 });
-          ui.setEditing(true);
+          firstChild();
         }
       }}
       className={cn(className, "resize-none overflow-hidden border-0 bg-transparent p-0 caret-signal outline-none")}
@@ -2799,6 +2896,7 @@ const OutlineRowView = React.memo(function OutlineRowView({
                         field: "title",
                         start: segment.start,
                         end: segment.end,
+                        src: node.text.slice(segment.start, segment.end),
                         value: segment.date.value,
                         hasTime: segment.date.hasTime,
                         repeat: segment.date.repeat,
@@ -3317,9 +3415,62 @@ export interface BoardFieldNav {
   readonly removeEmpty: (id: string, next: string | null) => void;
 }
 
+/** The style each formatting shortcut toggles in the live title field. */
+const FORMAT_STYLES: Partial<Record<ShortcutId, "bold" | "italic" | "code" | "strike" | "highlight">> = {
+  bold: "bold",
+  italic: "italic",
+  code: "code",
+  strike: "strike",
+  highlight: "highlight",
+};
+
+/** A key event as a row field reads it: React's for a title's loading textarea, the live field's own otherwise. */
+type FieldKey = Pick<React.KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey" | "preventDefault" | "stopPropagation"> & {
+  readonly code?: string;
+  readonly isComposing?: boolean;
+  readonly keyCode?: number;
+  readonly nativeEvent?: { readonly isComposing?: boolean; readonly keyCode?: number };
+  readonly currentTarget: CaretField;
+  getModifierState?(key: string): boolean;
+};
+
+/** One live field's host for the life of a component (it reads the newest controller). */
+function useFieldHost(ol: OutlinerController): FieldHost {
+  const latest = React.useRef(ol);
+  latest.current = ol;
+  return React.useMemo(() => fieldHost(() => latest.current, React.startTransition), []);
+}
+
+/** What a field notice says (the outliner announces it, never silently drops an edit). */
+function noticeText(ui: OutlinerUi, notice: FieldNotice): string {
+  const L = ui.labels;
+  switch (notice.kind) {
+    case "format-refused":
+      return L.formatRefused;
+    case "paste-literal":
+      return L.pastedLiteral;
+    case "token-refused":
+      return L.tokenRefused;
+    case "merge-refused":
+      return L.mergeRefused;
+    case "split-refused":
+      return L.splitRefused;
+    case "edit-conflict":
+      return L.editConflict;
+  }
+}
+
 export function RowField({ row, field, board }: { readonly row: OutlinerRow; readonly field: "title" | "note"; readonly board?: BoardFieldNav }) {
   const { ol, ui } = useOutlinerContext();
-  const ref = React.useRef<HTMLTextAreaElement>(null);
+  // Titles and notes edit in the live field once its code has loaded (asked for while idle at
+  // mount). Until then a title edits in a plain textarea and a note shows as it reads.
+  const liveModule = useLiveField();
+  const LiveField = liveModule?.LiveField;
+  const host = useFieldHost(ol);
+  const ref = React.useRef<CaretField | null>(null);
+  const textareaRef = React.useCallback((el: HTMLTextAreaElement | null) => {
+    if (el || ref.current instanceof HTMLTextAreaElement) ref.current = el;
+  }, []);
   /** Set when a handled key moves the caret elsewhere; React's synthetic select for the same
    *  keydown would otherwise report this field's stale selection and undo that move. */
   const suppressSelect = React.useRef(false);
@@ -3342,7 +3493,7 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
   // Autosize: native field-sizing where supported, otherwise measure on value and width changes.
   React.useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || NATIVE_FIELD_SIZING) return;
+    if (!(el instanceof HTMLTextAreaElement) || NATIVE_FIELD_SIZING) return;
     const fit = () => {
       el.style.height = "0px";
       el.style.height = `${el.scrollHeight}px`;
@@ -3351,13 +3502,14 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
     const observer = new ResizeObserver(fit);
     observer.observe(el.parentElement ?? el);
     return () => observer.disconnect();
-  }, [value]);
+  }, [value, LiveField]);
 
-  // Focus + caret placement whenever the core moves the caret to this field.
+  // Focus + caret placement whenever the core moves the caret to this field (the live field
+  // places its own caret from the same core caret).
   const caret = ol.state.caret;
   React.useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || !caret || caret.id !== row.id) return;
+    if (!(el instanceof HTMLTextAreaElement) || !caret || caret.id !== row.id) return;
     if ((caret.field ?? "title") !== field) return;
     // Typing in this very field: the browser already placed and revealed the caret. Skipping
     // the forced layout of scrollIntoView keeps each keystroke to one layout pass.
@@ -3369,23 +3521,25 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
     el.scrollIntoView({ block: "nearest" });
     // focusVersion changes signal deliberate caret moves (split, merge, undo, navigation).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ol.state.focusVersion, row.id, field]);
+  }, [ol.state.focusVersion, row.id, field, LiveField]);
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  /** The popups' keys first (the item menu, then suggestions). */
+  const onMenuKey = (event: FieldKey): boolean => {
+    if (slash.onKeyDown(event) || ac.onKeyDown(event)) {
+      suppressSelect.current = true;
+      return true;
+    }
+    return false;
+  };
+
+  /** Every other key a row field answers: true when it was handled. */
+  const onFieldKey = (event: FieldKey): boolean => {
     const el = event.currentTarget;
-    // IME: the Enter (or Tab) that picks a candidate never splits, indents or submits.
-    if (isComposingKey(event)) return;
-    if (slash.onKeyDown(event)) {
-      suppressSelect.current = true;
-      return;
-    }
-    if (ac.onKeyDown(event)) {
-      suppressSelect.current = true;
-      return;
-    }
+    const liveEl = isLiveField(el) ? el : null;
     const mod = event.metaKey || event.ctrlKey;
     const key = event.key;
     const lower = key.toLowerCase();
+    const value = el.value;
     const start = el.selectionStart,
       end = el.selectionEnd;
     const dispatch = ol.dispatch;
@@ -3394,24 +3548,25 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
       event.preventDefault();
       event.stopPropagation();
       suppressSelect.current = true;
+      return true;
     };
 
     if (mod && lower === "z") {
       prevent();
       dispatch({ type: event.shiftKey ? "redo" : "undo" });
-      return;
+      return true;
     }
     if (event.ctrlKey && !event.metaKey && lower === "y") {
       prevent();
       dispatch({ type: "redo" });
-      return;
+      return true;
     }
     if (key === "Escape") {
       prevent();
       ui.setEditing(false);
       ui.focusList();
       dispatch({ type: "select", id: row.id });
-      return;
+      return true;
     }
     const wrap = (open: string, close = open) => {
       prevent();
@@ -3419,10 +3574,17 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
       const next = value.slice(0, start) + open + selected + close + value.slice(end);
       dispatch({ type: field === "note" ? "note" : "text", id: row.id, text: next, caret: end + open.length });
       requestAnimationFrame(() => el.setSelectionRange(start + open.length, end + open.length));
+      return true;
     };
     // Remappable shortcuts: the keyboard profile plus the reader's remaps decide what a key means.
     const action = matchShortcut(ui.keymap, event, "text");
     if (action) {
+      const style = FORMAT_STYLES[action];
+      if (liveEl && style) {
+        prevent();
+        liveEl.liveField.format(style);
+        return true;
+      }
       const marks = FORMAT_MARKS[action];
       if (marks) return wrap(marks);
       if (runItemShortcut(action, { ol, ui, ids: [row.id], rowId: row.id })) return prevent();
@@ -3435,7 +3597,7 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
         dispatch({ type: "note", id: row.id, text: next, caret: start + 1 });
         requestAnimationFrame(() => el.setSelectionRange(start + 1, start + 1));
       }
-      return;
+      return true;
     }
     if (field === "note" && key === "Enter" && !event.shiftKey && !event.altKey && ui.settings.keyboard === "power") {
       // Power profile: Enter in a note finishes it and starts the next item.
@@ -3443,51 +3605,52 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
       const id = createOutlineId();
       const next = dispatch({ type: "insert", id, afterId: row.id, text: "" });
       if (!next.refusal) dispatch({ type: "focus", id, start: 0 });
-      return;
+      return true;
     }
     if (key === "Enter" && event.shiftKey && !mod) {
       prevent();
       if (field === "title") dispatch({ type: "focus", id: row.id, field: "note", start: (row.details.note ?? "").length });
       else dispatch({ type: "focus", id: row.id, start: row.node.text.length });
-      return;
+      return true;
     }
+    const split = () => (liveEl ? liveEl.liveField.split(createOutlineId()) : dispatch({ type: "split", id: row.id, start, end, newId: createOutlineId() }));
     if (board && field === "title") {
       const bare = !mod && !event.shiftKey && !event.altKey;
       if (key === "Tab") return prevent();
       if (key === "Enter" && bare) {
         prevent();
-        if (start === value.length && end === value.length) board.addAfter(row.id);
-        else dispatch({ type: "split", id: row.id, start, end, newId: createOutlineId() });
-        return;
+        if (fieldAt(el, "end")) board.addAfter(row.id);
+        else split();
+        return true;
       }
-      if ((key === "ArrowUp" || key === "ArrowDown") && bare && textareaAtVisualBoundary(el, key === "ArrowUp" ? "up" : "down")) {
+      if ((key === "ArrowUp" || key === "ArrowDown") && bare && fieldAtVisualBoundary(el, key === "ArrowUp" ? "up" : "down")) {
         const target = board.step(row.id, key === "ArrowUp" ? "up" : "down");
-        if (!target) return;
+        if (!target) return false;
         prevent();
         const text = ol.rowOf(target)?.node.text ?? "";
         dispatch({ type: "focus", id: target, start: key === "ArrowUp" ? text.length : 0 });
-        return;
+        return true;
       }
-      if (key === "Backspace" && bare && start === 0 && end === 0) {
+      if (key === "Backspace" && bare && fieldAt(el, "start")) {
         prevent();
         if (!value && !row.hasChildren) board.removeEmpty(row.id, board.step(row.id, "up") ?? board.step(row.id, "down"));
-        return;
+        return true;
       }
-      if (key === "Delete" && bare && start === value.length && end === value.length) return prevent();
+      if (key === "Delete" && bare && fieldAt(el, "end")) return prevent();
     }
     if (field === "note") {
       // Notes are multiline: plain Enter inserts a newline. Arrow keys leave at the edges.
-      if (key === "ArrowUp" && textareaAtVisualBoundary(el, "up")) {
+      if (key === "ArrowUp" && fieldAtVisualBoundary(el, "up")) {
         prevent();
         dispatch({ type: "focus", id: row.id, start: row.node.text.length });
-      } else if (key === "ArrowDown" && textareaAtVisualBoundary(el, "down")) {
+      } else if (key === "ArrowDown" && fieldAtVisualBoundary(el, "down")) {
         prevent();
         moveVertical(row.id, "down", el);
       } else if (key === "Backspace" && start === 0 && end === 0 && !value) {
         prevent();
         dispatch({ type: "focus", id: row.id, start: row.node.text.length });
       }
-      if (key !== "Tab") return;
+      if (key !== "Tab") return false;
     }
     if (key === "Enter") {
       prevent();
@@ -3495,36 +3658,37 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
       // (removing the focused one cost ~20 ms at 4× CPU on 2,740 rows) and the new row's field
       // takes focus once. Touch keeps focus throughout, so the on-screen keyboard never drops.
       if (FINE_POINTER) el.blur();
-      const next = dispatch({ type: "split", id: row.id, start, end, newId: createOutlineId() });
-      // Refused (a locked source behind a mirror): keep typing where you were.
+      const next = split();
+      // Refused (a locked source behind a mirror, a stale text): keep typing where you were.
       if (next.refusal || next.caret?.id === row.id) el.focus({ preventScroll: true });
-      return;
+      return true;
     }
     if (key === "Tab") {
       prevent();
       dispatch({ type: event.shiftKey ? "outdent" : "indent", ids: [row.id] });
-      return;
+      return true;
     }
-    if (key === "Backspace" && start === 0 && end === 0 && !mod) {
+    if (key === "Backspace" && !mod && fieldAt(el, "start")) {
       prevent();
       if (!value && !row.hasChildren && row.details.checkbox) {
         ol.commands.toggleCheckbox([row.id]);
-        return;
+        return true;
       }
-      dispatch({ type: "merge", id: row.id, direction: "backward" });
-      return;
+      if (liveEl) liveEl.liveField.merge("backward");
+      else dispatch({ type: "merge", id: row.id, direction: "backward" });
+      return true;
     }
-    if (key === "Delete" && start === value.length && end === value.length && !mod) {
+    if (key === "Delete" && !mod && fieldAt(el, "end")) {
       prevent();
-      dispatch({ type: "merge", id: row.id, direction: "forward" });
-      return;
+      if (liveEl) liveEl.liveField.merge("forward");
+      else dispatch({ type: "merge", id: row.id, direction: "forward" });
+      return true;
     }
     if ((key === "ArrowUp" || key === "ArrowDown") && event.shiftKey && !mod && !event.altKey && field === "title" && !board) {
       // ⇧↑/⇧↓ at a title's visual edge (or once the text selection reaches it) grows a row
       // selection: the edited row and its neighbour, then ⇧↑/⇧↓ keep going in the tree.
       const up = key === "ArrowUp";
-      const focusEnd = el.selectionDirection === "backward" ? start : end;
-      const atEdge = (start === end && textareaAtVisualBoundary(el, up ? "up" : "down")) || focusEnd === (up ? 0 : value.length);
+      const atEdge = (start === end && fieldAtVisualBoundary(el, up ? "up" : "down")) || fieldAt(el, up ? "start" : "end", false);
       if (atEdge) {
         prevent();
         const index = ol.rows.findIndex((candidate) => candidate.id === row.id);
@@ -3533,26 +3697,27 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
         dispatch({ type: "select", id: row.id });
         if (target) dispatch({ type: "select", id: target.id, extend: true });
         ui.focusList();
-        return;
+        return true;
       }
     }
-    if (key === "ArrowUp" && !mod && !event.shiftKey && !event.altKey && textareaAtVisualBoundary(el, "up")) {
+    if (key === "ArrowUp" && !mod && !event.shiftKey && !event.altKey && fieldAtVisualBoundary(el, "up")) {
       prevent();
       moveVertical(row.id, "up", el);
-      return;
+      return true;
     }
-    if (key === "ArrowDown" && !mod && !event.shiftKey && !event.altKey && textareaAtVisualBoundary(el, "down")) {
+    if (key === "ArrowDown" && !mod && !event.shiftKey && !event.altKey && fieldAtVisualBoundary(el, "down")) {
       prevent();
       moveVertical(row.id, "down", el);
-      return;
+      return true;
     }
-    if (mod && lower === "a" && start === 0 && end === value.length) {
+    if (mod && lower === "a" && fieldAllSelected(el)) {
       prevent();
       ui.setEditing(false);
       dispatch({ type: "select-all" });
       ui.focusList();
-      return;
+      return true;
     }
+    return false;
   };
 
   /** Hand files to the host's `onAttach`; what it stored is appended to the note (one undo step). */
@@ -3570,7 +3735,7 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
     });
   };
   /** `https://…?zoom=<id>` of this page (or `?doc=…` of this workspace): insert `[[title|id]]`. */
-  const pasteItemLink = (text: string, el: HTMLTextAreaElement): boolean => {
+  const pasteItemLink = (text: string, el: CaretField): boolean => {
     const target = itemFromHref(text, window.location.href);
     if (!target) return false;
     const external = ol.external;
@@ -3583,18 +3748,42 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
     const link = `[[${label}|${id}]]`;
     const start = el.selectionStart,
       end = el.selectionEnd;
+    if (isLiveField(el)) return el.liveField.replaceSource(start, end, link, el.value.slice(start, end)) || true;
+    const value = el.value;
     const next = value.slice(0, start) + link + value.slice(end);
     ol.dispatch({ type: "text", id: row.id, text: next, caret: start + link.length });
     return true;
   };
+  /**
+   * The paste routes a field shares: files to the host, a deep link as an item link, an outline
+   * or several lines as rows (one parser for every paste path). Plain text is the field's own.
+   */
+  const routePaste = (data: DataTransfer, el: CaretField): boolean => {
+    // Files (a screenshot, a PDF): the host stores them and the links land in the note.
+    const files = [...(data.files ?? [])];
+    if (files.length && ui.host.onAttach) {
+      attachFiles(files);
+      return true;
+    }
+    const text = data.getData("text/plain");
+    // A deep link to an item of this outline pastes as an item link (`[[title|id]]`).
+    if (field === "title" && pasteItemLink(text, el)) return true;
+    const rich = [...(data.types ?? [])].includes(OUTLINE_MIME) || htmlHasStructure(data.getData("text/html"));
+    if (field === "note" || (!text.includes("\n") && !rich)) return false;
+    const replaceEmpty = !row.node.text && !row.hasChildren;
+    const count = readClipboard(data, ol, row.id) ?? 0;
+    if (count && replaceEmpty) ol.dispatch({ type: "delete", ids: [row.id] });
+    ui.announce(ui.labels.pasted(count));
+    return true;
+  };
 
-  const moveVertical = (id: string, direction: "up" | "down", el: HTMLTextAreaElement) => {
+  const moveVertical = (id: string, direction: "up" | "down", el: CaretField) => {
     // A card's note never walks into the outline's rows (they are not on screen).
     if (board) return;
     const index = ol.rows.findIndex((candidate) => candidate.id === id);
     const target = ol.rows[direction === "up" ? index - 1 : index + 1];
     if (!target) return;
-    const caretRect = textareaCaretRect(el, el.selectionStart);
+    const caretRect = fieldCaretRect(el, el.selectionStart);
     const targetEl = ui.listRef.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(target.id)}"] [data-src]`)?.closest<HTMLElement>("span.block");
     let offset = direction === "up" ? target.node.text.length : 0;
     if (targetEl) {
@@ -3605,21 +3794,111 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
     ol.dispatch({ type: "focus", id: target.id, start: offset });
   };
 
+  const aria = {
+    "aria-label": field === "title" ? "Item text" : "Item note",
+    role: "combobox",
+    "aria-autocomplete": "list" as const,
+    "aria-expanded": ac.open || slash.open ? ("true" as const) : ("false" as const),
+    "aria-controls": slash.aria ? slash.aria.controls : ac.open ? listId : undefined,
+    "aria-activedescendant": slash.aria ? slash.aria.activedescendant : ac.open ? `${listId}-${ac.active}` : undefined,
+  };
+
+  if (LiveField)
+    return (
+      <>
+        <AutocompletePopover anchor={ref.current} state={ac} listId={listId} />
+        {slash.panel}
+        <LiveField
+          rowId={row.id}
+          field={field}
+          host={host}
+          committed={committed}
+          renderedSeq={ol.renderedSeq}
+          // A row zoomed into is the heading now (its row only animates out): the caret is the zoomed title's.
+          caret={row.id === ol.state.hoistedId ? null : ol.state.caret}
+          focusVersion={ol.state.focusVersion}
+          holding={slash.open}
+          elementRef={ref}
+          marks={field === "title" ? row.match?.titleRanges : row.match?.noteRanges}
+          resolveRef={(id) => {
+            const node = findOutlineNode(ol.state.nodes, id)?.node;
+            if (node) return node.text || ui.labels.untitled;
+            const external = ol.external?.resolve(id);
+            return external === undefined || external === null ? null : external || ui.labels.untitled;
+          }}
+          attributes={{
+            ...aria,
+            spellcheck: "true",
+            "data-field": field,
+            dir: "auto",
+            ...(field === "note" ? { "aria-multiline": "true", "data-placeholder": "Note" } : {}),
+          }}
+          className={
+            field === "title"
+              ? cn("block w-full min-h-[var(--ol-leading)] caret-signal", row.completed && "text-muted-foreground line-through decoration-muted-foreground/60")
+              : cn(NOTE_CLASS.root, "w-full pt-px text-[length:var(--ol-note)] leading-[var(--ol-note-leading)] text-muted-foreground caret-signal", row.completed && "opacity-70")
+          }
+          hooks={{
+            menuKey: onMenuKey,
+            key: onFieldKey,
+            typed: (el) => ac.sync(el, true),
+            hold: (el) => slash.onChange(el),
+            caretMoved: (el) => {
+              if (slash.onSelect(el)) return true;
+              ac.sync(el);
+              return false;
+            },
+            notice: (notice) => ui.announce(noticeText(ui, notice)),
+            paste: routePaste,
+            drop: (data) => {
+              const files = [...(data.files ?? [])];
+              if (!files.length || !ui.host.onAttach) return false;
+              attachFiles(files);
+              return true;
+            },
+            openDate: (chip) => {
+              const date = chip.segment?.date;
+              if (!date) return;
+              ui.setDatePicker({
+                rowId: row.id,
+                field,
+                start: chip.from,
+                end: chip.to,
+                src: chip.src,
+                value: date.value,
+                hasTime: date.hasTime,
+                repeat: date.repeat,
+                rangeEnd: date.end,
+                rangeEndHasTime: date.endHasTime,
+                time: date.time,
+                rect: chip.rect,
+              });
+            },
+            undo: (redo) => ol.dispatch({ type: redo ? "redo" : "undo" }),
+            focus: () => ui.setEditing(true),
+          }}
+        />
+      </>
+    );
+
+  // A note never edits as raw source: until the field's code arrives it shows as it reads.
+  if (field === "note")
+    return (
+      <span data-ol-note="" aria-busy="true" className="block pt-px text-[length:var(--ol-note)] leading-[var(--ol-note-leading)] text-muted-foreground">
+        <RichNote source={committed} marks={row.match?.noteRanges} />
+      </span>
+    );
+
   return (
     <>
     <AutocompletePopover anchor={ref.current} state={ac} listId={listId} />
     {slash.panel}
     <textarea
-      ref={ref}
+      ref={textareaRef}
       rows={1}
       value={value}
       data-field={field}
-      aria-label={field === "title" ? "Item text" : "Item note"}
-      role="combobox"
-      aria-autocomplete="list"
-      aria-expanded={ac.open || slash.open}
-      aria-controls={slash.aria ? slash.aria.controls : ac.open ? listId : undefined}
-      aria-activedescendant={slash.aria ? slash.aria.activedescendant : ac.open ? `${listId}-${ac.active}` : undefined}
+      {...aria}
       spellCheck
       onMouseDown={() => (suppressSelect.current = false)}
       onChange={(event) => {
@@ -3629,7 +3908,7 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
         const caret = event.target.selectionStart;
         // The host hears about it now (its own render is a transition); ours follows the paint.
         React.startTransition(() => {
-          ol.dispatch({ type: field === "note" ? "note" : "text", id: row.id, text, caret, time: Date.now() }, { afterPaint: true });
+          ol.dispatch({ type: "text", id: row.id, text, caret, time: Date.now() }, { afterPaint: true });
         });
         setDraft({ text, seq: ol.currentSeq() });
         ac.sync(event.target, true);
@@ -3646,11 +3925,15 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
           id: row.id,
           start: el.selectionStart,
           end: el.selectionEnd,
-          ...(field === "note" ? { field: "note" as const } : {}),
         });
       }}
       onFocus={() => ui.setEditing(true)}
-      onKeyDown={onKeyDown}
+      onKeyDown={(event) => {
+        // IME: the Enter (or Tab) that picks a candidate never splits, indents or submits.
+        if (isComposingKey(event)) return;
+        if (onMenuKey(event)) return;
+        onFieldKey(event);
+      }}
       onDrop={(event) => {
         const files = [...(event.dataTransfer?.files ?? [])];
         if (!files.length || !ui.host.onAttach) return;
@@ -3658,35 +3941,13 @@ export function RowField({ row, field, board }: { readonly row: OutlinerRow; rea
         attachFiles(files);
       }}
       onPaste={(event) => {
-        // Files (a screenshot, a PDF): the host stores them and the links land in the note.
-        const files = [...(event.clipboardData.files ?? [])];
-        if (files.length && ui.host.onAttach) {
-          event.preventDefault();
-          attachFiles(files);
-          return;
-        }
-        const text = event.clipboardData.getData("text/plain");
-        // A deep link to an item of this outline pastes as an item link (`[[title|id]]`).
-        if (field === "title" && pasteItemLink(text, event.currentTarget)) {
-          event.preventDefault();
-          return;
-        }
-        const rich = event.clipboardData.types.includes(OUTLINE_MIME) || htmlHasStructure(event.clipboardData.getData("text/html"));
-        if (field === "note" || (!text.includes("\n") && !rich)) return;
-        // One parser for every paste path (row, list, file import): lossless JSON flavor first,
-        // then Markdown/OPML/indented text.
-        event.preventDefault();
-        const replaceEmpty = !row.node.text && !row.hasChildren;
-        const count = readClipboard(event.clipboardData, ol, row.id) ?? 0;
-        if (count && replaceEmpty) ol.dispatch({ type: "delete", ids: [row.id] });
-        ui.announce(ui.labels.pasted(count));
+        if (routePaste(event.clipboardData, event.currentTarget)) event.preventDefault();
       }}
-      placeholder={field === "note" ? "Note" : ""}
       dir="auto"
       className={cn(
         "block w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none [field-sizing:content] placeholder:text-muted-foreground/50",
-        field === "title" ? "min-h-[var(--ol-leading)] caret-signal" : "pt-px text-[length:var(--ol-note)] leading-[var(--ol-note-leading)] text-muted-foreground caret-signal",
-        field === "title" && row.completed && "text-muted-foreground",
+        "min-h-[var(--ol-leading)] caret-signal",
+        row.completed && "text-muted-foreground",
       )}
     />
     </>

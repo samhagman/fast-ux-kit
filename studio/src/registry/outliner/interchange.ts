@@ -1,5 +1,5 @@
 import { createOutlineId, exportOutlineJSON, importOutlineJSON } from "@fux/core";
-import { formatDateToken, formatRepeatToken, inlineToPlain, literalInline, parseDateToken, parseInline, parseRepeat } from "./inline";
+import { formatDateToken, formatRepeatToken, inlineToPlain, literalInline, parseDateToken, parseInline, parseRepeat, walkNested, type InlineMark, type InlineSegment, type InlineStyle } from "./inline";
 import { mirrorOf } from "./mirrors";
 import { OUTLINE_COLORS, type OutlineExportFormat, type OutlineItem, type OutlineItemData } from "./types";
 
@@ -21,8 +21,12 @@ import { OUTLINE_COLORS, type OutlineExportFormat, type OutlineItem, type Outlin
  * A title that would read back as markup ("[x] literal", "# not a heading", "~~struck~~",
  * "> not a note", "- not a bullet") is written with a leading backslash, which the import removes again, so
  * plain titles always come back as written. Markdown drops blank lines at the very start of
- * a note; mirrors are written once, as links to their source. Markdown copied to the clipboard
- * for other apps leaves the metadata comments out (the outliner's own clipboard flavour is JSON).
+ * a note; mirrors are written once, as links to their source.
+ *
+ * Markdown copied to the clipboard for other apps (`metadata: false`) leaves the metadata
+ * comments out and writes titles as CommonMark (`toMarkdown`), so other apps read the same
+ * styles; the outliner's own clipboard flavour is JSON. The downloaded file keeps the
+ * outliner's own spelling, which its import reads back exactly.
  */
 export function exportOutline(
   nodes: readonly OutlineItem[],
@@ -35,7 +39,7 @@ export function exportOutline(
       // Lossless: mirrors keep `mirrorOf` and their copies (a paste re-links or keeps the content).
       return exportOutlineJSON(nodes);
     case "markdown":
-      return toMarkdown(mirrorsAsLinks(nodes), 0, options.metadata !== false);
+      return outlineMarkdown(mirrorsAsLinks(nodes), 0, options.metadata !== false);
     case "opml":
       return toOpml(mirrorsAsLinks(nodes));
     case "text":
@@ -161,25 +165,32 @@ function readMeta(line: string): { readonly line: string; readonly data: Outline
   return { line: line.slice(0, match.index), data };
 }
 
-/** The checkbox, heading and title of an item's line, as Markdown and text both write it. */
-function itemLine(node: OutlineItem): string {
+/**
+ * The checkbox, heading and title of an item's line, as Markdown and text both write it.
+ * `commonmark`: the title as other apps read Markdown (see `toMarkdown`).
+ */
+function itemLine(node: OutlineItem, commonmark = false): string {
   const box = node.checked !== undefined ? (node.checked ? "[x] " : "[ ] ") : "";
   const heading = node.data?.heading ? "#".repeat(node.data.heading) + " " : "";
+  const struck = completed(node) && node.checked === undefined;
+  if (commonmark) {
+    const text = toMarkdown(node.text);
+    return `${box}${heading}${struck && text ? (text.includes("~~") ? `<del>${text}</del>` : `~~${text}~~`) : text}`;
+  }
   const text = escapeTitle(node.text);
-  const title = completed(node) && node.checked === undefined ? `~~${text}~~` : text;
-  return `${box}${heading}${title}`;
+  return `${box}${heading}${struck ? `~~${text}~~` : text}`;
 }
 
-function toMarkdown(nodes: readonly OutlineItem[], depth = 0, metadata = true): string {
+function outlineMarkdown(nodes: readonly OutlineItem[], depth = 0, metadata = true): string {
   const lines: string[] = [];
   for (const node of nodes) {
     const pad = "  ".repeat(depth);
-    lines.push(`${pad}- ${itemLine(node)}${metadata ? metaComment(node) : ""}`);
+    lines.push(`${pad}- ${itemLine(node, !metadata)}${metadata ? metaComment(node) : ""}`);
     // Rich notes keep their shape: blank lines, inner indentation (code, nested lists) and list
     // markers (escaped, so they stay note lines instead of becoming child items on import).
     const note = (node.data?.note ?? "").replace(/\s+$/, "");
     if (note) for (const line of note.split("\n")) lines.push(line.trim() ? `${pad}  ${escapeNoteLine(line)}` : "");
-    const children = node.children?.length ? toMarkdown(node.children, depth + 1, metadata) : "";
+    const children = node.children?.length ? outlineMarkdown(node.children, depth + 1, metadata) : "";
     if (children) lines.push(children);
   }
   return lines.join("\n");
@@ -189,6 +200,112 @@ function toMarkdown(nodes: readonly OutlineItem[], depth = 0, metadata = true): 
 const NOTE_BULLET = /^\\*[ \t]*(?:[-*+]|\d+[.)])[ \t]+\S/;
 const escapeNoteLine = (line: string) => (NOTE_BULLET.test(line) ? `\\${line}` : line);
 const unescapeNoteLine = (line: string) => (line.startsWith("\\") && NOTE_BULLET.test(line) ? line.slice(1) : line);
+
+/**
+ * One title or note line as CommonMark (with GFM strikethrough), written from its parse so
+ * another app reads the same styles on every character:
+ *
+ *   - each style gets the delimiter that CommonMark's flanking rules accept where it lands
+ *     (`**` or `__`, `*` or `_`, `~~`); where none can open and close there (`**a!**b`), it is
+ *     written as inline HTML (`<strong>a!</strong>b`), which is CommonMark as well;
+ *   - whitespace at a style's edges is written outside its delimiters;
+ *   - literal text is escaped, except `_` between two letters or digits, which never emphasizes;
+ *   - a line start that would read as a list, heading, quote or rule is escaped, and leading
+ *     whitespace (which CommonMark drops, or reads as code from four spaces) is left out;
+ *   - highlight stays `==x==` (`<mark>` with `highlight: "html"`); math stays `$…$` as TeX;
+ *     dates and item links, which have no CommonMark form, are written to show as they are stored.
+ */
+export function toMarkdown(source: string, options: { readonly highlight?: "==" | "html" } = {}): string {
+  const tree = walkNested<MarkdownNode>(parseInline(source), (segment) => ({ text: leafMarkdown(segment, source) }), (mark, children) => ({ mark, children }));
+  return writeMarkdown(tree, options.highlight ?? "==")
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/^[ \t]+/, "")
+        .replace(/^(?:#{1,6}|[-+>]|\d+[.)])(?=\s|$)/, (marker: string) => marker.replace(/[-+>#.)]/, "\\$&"))
+        .replace(/^-(?=(?:\s*-){2,}\s*$)/, "\\-"),
+    )
+    .join("\n");
+}
+
+type MarkdownNode = { readonly text: string } | { readonly mark: InlineMark; readonly children: readonly MarkdownNode[] };
+
+const MD_SPELLINGS: Record<InlineStyle, readonly string[]> = { bold: ["**", "__"], italic: ["*", "_"], strike: ["~~"], highlight: [] };
+const MD_HTML: Record<InlineStyle, string> = { bold: "strong", italic: "em", strike: "del", highlight: "mark" };
+const mdSpace = (char: string | undefined) => char === undefined || /\s/u.test(char);
+const mdPunct = (char: string | undefined) => char !== undefined && /[\p{P}\p{S}]/u.test(char);
+const leftFlanking = (before: string | undefined, after: string | undefined) => !mdSpace(after) && (!mdPunct(after) || mdSpace(before) || mdPunct(before));
+const rightFlanking = (before: string | undefined, after: string | undefined) => !mdSpace(before) && (!mdPunct(before) || mdSpace(after) || mdPunct(after));
+
+/** Whether delimiter `run` can open before `first` (after `before`) and close after `last` (before `after`). */
+function delimits(run: string, before: string | undefined, first: string, last: string, after: string | undefined): boolean {
+  const char = run[0]!;
+  // never against the same character: the runs would merge into another one
+  if (before === char || first === char || last === char || after === char) return false;
+  if (char !== "_") return leftFlanking(before, first) && rightFlanking(last, after);
+  const opens = leftFlanking(before, first) && (!rightFlanking(before, first) || mdPunct(before));
+  const closes = rightFlanking(last, after) && (!leftFlanking(last, after) || mdPunct(after));
+  return opens && closes;
+}
+
+function writeMarkdown(nodes: readonly MarkdownNode[], highlight: "==" | "html"): string {
+  let out = "";
+  nodes.forEach((node, index) => {
+    if ("text" in node) {
+      out += node.text;
+      return;
+    }
+    const inner = writeMarkdown(node.children, highlight);
+    const lead = /^\s*/u.exec(inner)![0];
+    const body = inner.slice(lead.length).replace(/\s+$/u, "");
+    const trail = inner.slice(lead.length + body.length);
+    out += lead;
+    if (body) {
+      // what follows: the next text, or a sibling style, which always starts with punctuation
+      const next = nodes[index + 1];
+      const after = trail ? trail[0] : next ? ("text" in next ? next.text[0] : "<") : undefined;
+      const kind = node.mark.kind;
+      const run =
+        kind === "highlight" ? (highlight === "==" ? "==" : undefined) : MD_SPELLINGS[kind].find((candidate) => delimits(candidate, out.at(-1), body[0]!, body.at(-1)!, after));
+      out += run ? run + body + run : `<${MD_HTML[kind]}>${body}</${MD_HTML[kind]}>`;
+    }
+    out += trail;
+  });
+  return out;
+}
+
+const MD_LITERAL = /[\\`*_[\]<>~!&|=$]/g;
+/** One leaf as CommonMark: text escaped, code fenced, links kept, other tokens as written. */
+function leafMarkdown(segment: InlineSegment, source: string): string {
+  switch (segment.kind) {
+    case "text":
+    case "escape":
+      return segment.display.replace(MD_LITERAL, (char, at: number, all: string) =>
+        char === "_" && /[\p{L}\p{N}]/u.test(all[at - 1] ?? "") && /[\p{L}\p{N}]/u.test(all[at + 1] ?? "") ? char : `\\${char}`,
+      );
+    case "code": {
+      const fence = "`".repeat(Math.max(0, ...(segment.display.match(/`+/g) ?? []).map((run) => run.length)) + 1);
+      const pad = /^[` ]|[` ]$/.test(segment.display) && segment.display.trim() ? " " : "";
+      return fence + pad + segment.display + pad + fence;
+    }
+    case "link":
+      return `[${segment.display.replace(MD_LITERAL, "\\$&")}](${segment.href})`;
+    case "url":
+      // A bare URL is plain text to CommonMark, so markup inside it would format: such a URL is
+      // written as an autolink, or escaped where it cannot be one.
+      if (!MD_LITERAL.test(segment.display.replace(/\b_\b/g, ""))) return segment.display;
+      return /[>\p{Cc}]/u.test(segment.display) ? segment.display.replace(MD_LITERAL, "\\$&") : `<${segment.display}>`;
+    case "tag":
+    case "mention":
+      return segment.display;
+    case "math":
+      // TeX between dollars, as math-aware Markdown readers expect it
+      return source.slice(segment.start, segment.end);
+    default:
+      // dates and item links have no CommonMark form: their tokens, shown as written
+      return source.slice(segment.start, segment.end).replace(MD_LITERAL, "\\$&");
+  }
+}
 
 /** Remove up to `columns` of leading indentation (a tab counts four). */
 function dedent(raw: string, columns: number): string {
@@ -376,53 +493,49 @@ const absoluteDate = (date: { readonly value: Date; readonly hasTime: boolean })
     ...(date.hasTime ? { hour: "numeric", minute: "2-digit" } : {}),
   });
 
+const HTML_STYLE: Record<InlineStyle, string> = { bold: "strong", italic: "em", strike: "s", highlight: "mark" };
 /** One title or note line as HTML: every run escaped, markup mapped to semantic tags. */
-function inlineHtml(source: string, resolveRef?: (id: string) => string | null): string {
-  return parseInline(source)
-    .map((segment) => {
-      const text = esc(segment.display);
-      switch (segment.kind) {
-        case "bold":
-          return `<strong>${text}</strong>`;
-        case "italic":
-          return `<em>${text}</em>`;
-        case "strike":
-          return `<s>${text}</s>`;
-        case "code":
-          return `<code>${text}</code>`;
-        case "highlight":
-          return `<mark>${text}</mark>`;
-        case "math":
-          // TeX stays TeX between dollars (what math-aware editors paste back as a formula).
-          return `$${text}$`;
-        case "link":
-        case "url":
-          return segment.href && SAFE_HREF.test(segment.href) ? `<a href="${esc(segment.href)}">${text}</a>` : text;
-        case "date": {
-          if (!segment.date) return text;
-          // The time as written (a wall time in a daylight-saving gap is not the instant's clock).
-          const token = formatDateToken(segment.date.value, segment.date.hasTime, undefined, { time: segment.date.time }).slice(2, -1);
-          // Absolute text (a pasted "Tomorrow" would be wrong tomorrow); the rule rides along.
-          const repeat = segment.date.repeat ? ` data-repeat="${esc(formatRepeatToken(segment.date.repeat))}"` : "";
-          if (segment.date.end) {
-            // A range: the start is the <time>, its end rides along (and reads after an arrow).
-            const end = { value: segment.date.end, hasTime: !!segment.date.endHasTime };
-            const endToken = formatDateToken(end.value, end.hasTime).slice(2, -1).replace(" ", "T");
-            return `<time datetime="${esc(token.replace(" ", "T"))}" data-end="${esc(endToken)}">${esc(absoluteDate(segment.date))} → ${esc(absoluteDate(end))}</time>`;
-          }
-          return `<time datetime="${esc(token.replace(" ", "T"))}"${repeat}>${esc(absoluteDate(segment.date))}</time>`;
-        }
-        case "ref":
-          // An internal link stays a link (`#<item id>`, which a host can route), labelled with
-          // the target's current title.
-          return segment.refId
-            ? `<a href="#${esc(encodeURIComponent(segment.refId))}">${esc(resolveRef?.(segment.refId) || segment.display)}</a>`
-            : esc(segment.display);
-        default:
-          return text;
+export function inlineHtml(source: string, resolveRef?: (id: string) => string | null): string {
+  return walkNested<string>(
+    parseInline(source),
+    (segment) => leafHtml(segment, resolveRef),
+    (mark, children) => `<${HTML_STYLE[mark.kind]}>${children.join("")}</${HTML_STYLE[mark.kind]}>`,
+  ).join("");
+}
+function leafHtml(segment: InlineSegment, resolveRef?: (id: string) => string | null): string {
+  const text = esc(segment.display);
+  switch (segment.kind) {
+    case "code":
+      return `<code>${text}</code>`;
+    case "math":
+      // TeX stays TeX between dollars (what math-aware editors paste back as a formula).
+      return `$${text}$`;
+    case "link":
+    case "url":
+      return segment.href && SAFE_HREF.test(segment.href) ? `<a href="${esc(segment.href)}">${text}</a>` : text;
+    case "date": {
+      if (!segment.date) return text;
+      // The time as written (a wall time in a daylight-saving gap is not the instant's clock).
+      const token = formatDateToken(segment.date.value, segment.date.hasTime, undefined, { time: segment.date.time }).slice(2, -1);
+      // Absolute text (a pasted "Tomorrow" would be wrong tomorrow); the rule rides along.
+      const repeat = segment.date.repeat ? ` data-repeat="${esc(formatRepeatToken(segment.date.repeat))}"` : "";
+      if (segment.date.end) {
+        // A range: the start is the <time>, its end rides along (and reads after an arrow).
+        const end = { value: segment.date.end, hasTime: !!segment.date.endHasTime };
+        const endToken = formatDateToken(end.value, end.hasTime).slice(2, -1).replace(" ", "T");
+        return `<time datetime="${esc(token.replace(" ", "T"))}" data-end="${esc(endToken)}">${esc(absoluteDate(segment.date))} → ${esc(absoluteDate(end))}</time>`;
       }
-    })
-    .join("");
+      return `<time datetime="${esc(token.replace(" ", "T"))}"${repeat}>${esc(absoluteDate(segment.date))}</time>`;
+    }
+    case "ref":
+      // An internal link stays a link (`#<item id>`, which a host can route), labelled with
+      // the target's current title.
+      return segment.refId
+        ? `<a href="#${esc(encodeURIComponent(segment.refId))}">${esc(resolveRef?.(segment.refId) || segment.display)}</a>`
+        : esc(segment.display);
+    default:
+      return text;
+  }
 }
 
 /**
@@ -480,7 +593,7 @@ function markOf(el: Element): readonly [string, string] | null {
 }
 
 /** Visible text of an element as outline markup lines ("\n" = a line break). Never renders. */
-function inlineMarkup(node: Node, styled = false): string {
+function inlineMarkup(node: Node): string {
   // Text is literal: only the importer's own markers (from tags and styles) create formatting,
   // so "[[Launch goals|goals-1]]" or "__init__" typed in a pasted document stays text.
   if (node.nodeType === 3) return literalInline((node.textContent ?? "").replace(/[\s ]+/g, " "));
@@ -498,7 +611,9 @@ function inlineMarkup(node: Node, styled = false): string {
     if (date && end && end.value >= date.value) return formatDateToken(date.value, date.hasTime, undefined, { end: end.value, endHasTime: end.hasTime });
     if (date) return formatDateToken(date.value, date.hasTime, repeat);
   }
-  const inner = [...el.childNodes].map((child) => inlineMarkup(child, styled || !!markOf(el))).join("");
+  // Styles nest (`<b>a <i>b</i></b>` is bold around italic); a style inside one of its own kind
+  // adds nothing (its delimiters already show in `inner`, so the line keeps the inner one).
+  const inner = [...el.childNodes].map(inlineMarkup).join("");
   if (tag === "A") {
     const href = el.getAttribute("href") ?? "";
     const label = inner.trim();
@@ -507,7 +622,7 @@ function inlineMarkup(node: Node, styled = false): string {
     const safe = href.replace(/\(/g, "%28").replace(/\)/g, "%29").replace(/\s/g, "%20");
     return !label || label === href ? safe : `[${label}](${safe})`;
   }
-  const mark = styled ? null : markOf(el);
+  const mark = markOf(el);
   if (!mark) return BLOCK.has(tag) ? `\n${inner}\n` : inner;
   // Markers hug the text: "**word** " never "**word **", and never span a line break.
   return inner
@@ -644,4 +759,24 @@ export function importOutlineHtml(html: string, createId = createOutlineId, pars
       .filter((item) => item.text || item.children.length || item.data?.note)
       .map(({ children, ...rest }) => ({ ...rest, ...(children.length ? { children: freeze(children) } : {}) }));
   return freeze(roots);
+}
+
+/**
+ * A Markdown FILE written by another app. CommonMark decides what its markup means (`__init__`
+ * is bold there, not the outliner's italic), so a CommonMark reader turns it into HTML and the
+ * HTML importer reads that. `toHtml` is that reader: `loadCommonMark()` loads one on demand.
+ * Paste, the outliner's own Markdown download and text or OPML never come through here.
+ */
+export function importMarkdownFile(markdown: string, toHtml: (markdown: string) => string, createId = createOutlineId, parse?: HtmlParser): OutlineItem[] {
+  return importOutlineHtml(toHtml(markdown), createId, parse);
+}
+
+/**
+ * The CommonMark reader (with GFM strikethrough), loaded only when a Markdown file is imported.
+ * Raw HTML in the file is escaped, never passed through; the HTML importer reads the result
+ * inertly either way.
+ */
+export async function loadCommonMark(): Promise<(markdown: string) => string> {
+  const [{ micromark }, { gfmStrikethrough, gfmStrikethroughHtml }] = await Promise.all([import("micromark"), import("micromark-extension-gfm-strikethrough")]);
+  return (markdown) => micromark(markdown, { extensions: [gfmStrikethrough()], htmlExtensions: [gfmStrikethroughHtml()] });
 }

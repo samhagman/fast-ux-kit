@@ -668,3 +668,168 @@ test("single-line and multiline paste retain the original intent at whole-transi
   }
   assert.deepEqual(seen, ["paste", "paste"]);
 });
+
+test("split with source halves keeps placement, records one step and refuses a changed base", () => {
+  const title = "Ship **beta** now";
+  const halves = { left: "Ship **be**", right: "**ta** now", base: title };
+  const state = createOutlineEditorState([n("a", title), n("z", "Last")]);
+  const raw = run(state, { type: "split", id: "a", start: 9, newId: "b" });
+  assert.deepEqual(
+    raw.nodes.map((node) => node.text),
+    ["Ship **be", "ta** now", "Last"],
+  );
+  const split = run(state, { type: "split", id: "a", start: 9, newId: "b", text: halves });
+  assert.deepEqual(
+    split.nodes.map((node) => [node.id, node.text]),
+    [
+      ["a", "Ship **be**"],
+      ["b", "**ta** now"],
+      ["z", "Last"],
+    ],
+  );
+  assert.deepEqual(split.caret, raw.caret);
+  assert.equal(split.history.past.length, 1);
+  const undone = run(split, { type: "undo" });
+  assert.deepEqual(
+    undone.nodes.map((node) => node.text),
+    [title, "Last"],
+  );
+  assert.deepEqual(
+    run(undone, { type: "redo" }).nodes.map((node) => node.text),
+    ["Ship **be**", "**ta** now", "Last"],
+  );
+  const stale = run(state, {
+    type: "split",
+    id: "a",
+    start: 9,
+    newId: "b",
+    text: { ...halves, base: "Ship **beta**" },
+  });
+  assert.equal(stale.refusal, "invalid-command");
+  assert.strictEqual(stale.nodes, state.nodes);
+  assert.strictEqual(stale.history, state.history);
+  assert.strictEqual(stale.caret, state.caret);
+});
+
+test("split halves never change where the new row goes", () => {
+  const halves = { left: "**L**", right: "**R**", base: "**LR**" };
+  const cases: [readonly OutlineNode[], { hoistedId?: string; expandedIds?: Set<string> }][] = [
+    [[n("p", "**LR**", [n("c", "child")])], {}],
+    [[n("p", "**LR**", [n("c", "child")])], { expandedIds: new Set() }],
+    [[n("p", "**LR**", [n("c", "child")])], { hoistedId: "p" }],
+    [[{ ...n("p", "**LR**"), checked: true }, n("q")], {}],
+  ];
+  const shape = (nodes: readonly OutlineNode[]) =>
+    JSON.stringify(nodes, (key, value: unknown) => (key === "text" ? undefined : value));
+  for (const [nodes, options] of cases) {
+    const state = createOutlineEditorState(nodes, options);
+    const plain = run(state, { type: "split", id: "p", start: 3, newId: "new" });
+    const sourced = run(state, { type: "split", id: "p", start: 3, newId: "new", text: halves });
+    assert.equal(shape(sourced.nodes), shape(plain.nodes), JSON.stringify(options));
+    assert.deepEqual(sourced.caret, plain.caret);
+    assert.equal(findOutlineNode(sourced.nodes, "p")!.node.text, "**L**");
+    assert.equal(findOutlineNode(sourced.nodes, "new")!.node.text, "**R**");
+  }
+  // A collapsed caret at the visible start still inserts an empty row above and keeps the text.
+  const start = createOutlineEditorState([n("p", "**LR**")]);
+  const above = run(start, { type: "split", id: "p", start: 0, newId: "new", text: halves });
+  assert.deepEqual(
+    above.nodes.map((node) => [node.id, node.text]),
+    [
+      ["new", ""],
+      ["p", "**LR**"],
+    ],
+  );
+});
+
+test("merge with joined source is bound to its rows, places the given caret and undoes in one step", () => {
+  const state = createOutlineEditorState([n("a", "x__a"), n("b", "b__"), n("c", "tail")]);
+  const text = {
+    joined: "x\\_\\_ab\\_\\_",
+    caret: 6,
+    left: { id: "a", text: "x__a" },
+    right: { id: "b", text: "b__" },
+  };
+  const merged = run(state, { type: "merge", id: "b", direction: "backward", text });
+  assert.deepEqual(
+    merged.nodes.map((node) => node.text),
+    [text.joined, "tail"],
+  );
+  assert.deepEqual(merged.caret, { id: "a", start: 6, end: 6 });
+  assert.equal(merged.history.past.length, 1);
+  assert.deepEqual(
+    run(merged, { type: "undo" }).nodes.map((node) => node.text),
+    ["x__a", "b__", "tail"],
+  );
+  const forward = run(state, { type: "merge", id: "a", direction: "forward", text });
+  assert.deepEqual(
+    forward.nodes.map((node) => node.text),
+    [text.joined, "tail"],
+  );
+  const refusals = [
+    { ...text, left: { id: "c", text: "x__a" } },
+    { ...text, right: { id: "c", text: "b__" } },
+    { ...text, left: { id: "a", text: "older" } },
+    { ...text, right: { id: "b", text: "older" } },
+  ];
+  for (const bad of refusals) {
+    const next = run(state, { type: "merge", id: "b", direction: "backward", text: bad });
+    assert.equal(next.refusal, "invalid-command", JSON.stringify(bad));
+    assert.strictEqual(next.nodes, state.nodes);
+    assert.strictEqual(next.history, state.history);
+  }
+  const plain = run(state, { type: "merge", id: "b", direction: "backward" });
+  assert.equal(plain.nodes[0]!.text, "x__ab__");
+  assert.deepEqual(plain.caret, { id: "a", start: 4, end: 4 });
+});
+
+test("malformed split halves and merge carets are refused before anything runs", () => {
+  const state = createOutlineEditorState([n("a", "ab"), n("b", "cd")]);
+  const sides = { left: { id: "a", text: "ab" }, right: { id: "b", text: "cd" } };
+  const malformed: unknown[] = [
+    { type: "split", id: "a", start: 1, newId: "n", text: null },
+    { type: "split", id: "a", start: 1, newId: "n", text: { left: "a", right: "b" } },
+    { type: "split", id: "a", start: 1, newId: "n", text: { left: "a", right: 1, base: "ab" } },
+    { type: "split", id: "a", start: 1, newId: "n", text: ["a", "b", "ab"] },
+    { type: "merge", id: "b", direction: "backward", text: { ...sides, joined: "abcd", caret: 5 } },
+    {
+      type: "merge",
+      id: "b",
+      direction: "backward",
+      text: { ...sides, joined: "abcd", caret: -1 },
+    },
+    {
+      type: "merge",
+      id: "b",
+      direction: "backward",
+      text: { ...sides, joined: "abcd", caret: 1.5 },
+    },
+    { type: "merge", id: "b", direction: "backward", text: { ...sides, joined: "abcd" } },
+    { type: "merge", id: "b", direction: "backward", text: { joined: "abcd", caret: 2 } },
+    {
+      type: "merge",
+      id: "b",
+      direction: "backward",
+      text: { ...sides, right: { id: "b" }, joined: "abcd", caret: 2 },
+    },
+  ];
+  for (const action of malformed) {
+    const next = reduceOutlineEditor(state, action as OutlineAction, edit);
+    assert.equal(next.refusal, "invalid-command", JSON.stringify(action));
+    assert.strictEqual(next.nodes, state.nodes);
+    assert.strictEqual(next.history, state.history);
+  }
+  const edges = [0, 4].map(
+    (caret) =>
+      run(state, {
+        type: "merge",
+        id: "b",
+        direction: "backward",
+        text: { ...sides, joined: "abcd", caret },
+      }).caret,
+  );
+  assert.deepEqual(edges, [
+    { id: "a", start: 0, end: 0 },
+    { id: "a", start: 4, end: 4 },
+  ]);
+});

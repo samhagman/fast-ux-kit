@@ -187,6 +187,8 @@ export interface DatePickerRequest {
   /** Source range of the `!(…)` token being edited. */
   readonly start: number;
   readonly end: number;
+  /** The token as it stood when the picker opened: a pick is refused once it no longer stands there. */
+  readonly src?: string;
   readonly value: Date;
   readonly hasTime: boolean;
   readonly repeat?: DateRepeat;

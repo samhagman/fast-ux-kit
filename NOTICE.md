@@ -21,3 +21,12 @@ Additional content rendering packages:
 
 - react-markdown 10.1.0: MIT.
 - remark-gfm 4.0.1: MIT.
+
+Studio editing and Markdown packages (consumed as packages by `studio/`):
+
+- prosemirror-model, prosemirror-state, prosemirror-view, prosemirror-transform,
+  prosemirror-commands and prosemirror-keymap: MIT.
+- micromark 4 and micromark-extension-gfm-strikethrough 2: MIT.
+- Their dependencies (orderedmap, w3c-keyname, the micromark-util and
+  micromark-factory packages, decode-named-character-reference, devlop, debug, ms):
+  MIT.

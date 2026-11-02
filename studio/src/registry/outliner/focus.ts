@@ -1,3 +1,4 @@
+import { textareaAtVisualBoundary, textareaCaretRect } from "@fux/text-geometry";
 import type { FocusReturn } from "./context";
 import type { FieldName } from "./target";
 
@@ -18,13 +19,81 @@ import type { FieldName } from "./target";
  *      is the only one mounted and not inert. Two outliners on a page never both answer.
  */
 
-/** Read a field's selection as anchor (fixed end) and head (moving end): a backward selection keeps its direction. */
-export function fieldReturn(el: HTMLTextAreaElement | HTMLInputElement, id: string, field: FieldName): Extract<FocusReturn, { kind: "text" }> {
+/* ───────────── The editing field, whatever element it is ───────────── */
+
+/**
+ * The selection surface every caller of a row field uses, in SOURCE offsets: a plain textarea
+ * has it natively, and the live title field (a contenteditable) implements the same members.
+ * So the item menu, suggestions, focus return and tests read one shape for both.
+ */
+export interface CaretField {
+  readonly value: string;
+  readonly selectionStart: number;
+  readonly selectionEnd: number;
+  readonly selectionDirection: "forward" | "backward" | "none";
+  setSelectionRange(start: number, end: number, direction?: "forward" | "backward" | "none"): void;
+  focus(options?: FocusOptions): void;
+  blur(): void;
+  readonly isConnected: boolean;
+}
+
+/** What the live field adds: structural edits, formats and layout, all through its session. */
+export interface LiveFieldApi {
+  /** Enter: split the row at the selection (bound to the text it was cut from). */
+  split(newId: string): { readonly refusal: unknown; readonly caret?: { readonly id: string } | null };
+  /** ⌫ at the start / Delete at the end: join with the neighbouring row. Null: nothing to join. */
+  merge(direction: "backward" | "forward"): { readonly refusal: unknown } | null;
+  /** ⌘B and friends: true when it changed something (a format that cannot be written is refused). */
+  format(style: "bold" | "italic" | "code" | "strike" | "highlight"): boolean;
+  /** Replace source `[from, to)` as one step; false when `expect` no longer stands there. */
+  replaceSource(from: number, to: number, insert: string, expect?: string): boolean;
+  /** Paste plain text at the selection (rendered, one step). */
+  paste(text: string): void;
+  /** The caret at a visible edge: collapsed there, or (`collapsed` false) a selection whose head is there. */
+  at(edge: "start" | "end", collapsed?: boolean): boolean;
+  /** The whole line is selected. */
+  readonly allSelected: boolean;
+  atVisualBoundary(direction: "up" | "down"): boolean;
+  caretRect(offset?: number): DOMRect;
+}
+
+export type LiveFieldElement = HTMLElement & CaretField & { readonly liveField: LiveFieldApi };
+
+/** A row field (the live field, or a title's plain textarea while its code loads) of an outliner. */
+export function isEditingField(el: Element | null | undefined): el is HTMLElement & CaretField {
+  if (!el || !(el instanceof HTMLElement) || !el.dataset.field) return false;
+  return el instanceof HTMLTextAreaElement || isLiveField(el);
+}
+export const isLiveField = (el: unknown): el is LiveFieldElement => !!el && typeof el === "object" && "liveField" in el && !!(el as { liveField?: unknown }).liveField;
+
+/** A field's selection as anchor (fixed end) and head (moving end): a backward selection keeps its direction. */
+export function fieldSelection(el: CaretField): { readonly anchor: number; readonly head: number } {
   const start = el.selectionStart ?? 0;
   const end = el.selectionEnd ?? start;
-  const backward = el.selectionDirection === "backward";
-  return { kind: "text", id, field, anchor: backward ? end : start, head: backward ? start : end };
+  return el.selectionDirection === "backward" ? { anchor: end, head: start } : { anchor: start, head: end };
 }
+export function setFieldSelection(el: CaretField, selection: { readonly anchor: number; readonly head: number }) {
+  const { anchor, head } = selection;
+  el.setSelectionRange(Math.min(anchor, head), Math.max(anchor, head), head < anchor ? "backward" : "forward");
+}
+
+/** Read a field's selection for a focus return. */
+export function fieldReturn(el: CaretField, id: string, field: FieldName): Extract<FocusReturn, { kind: "text" }> {
+  return { kind: "text", id, field, ...fieldSelection(el) };
+}
+
+/** The caret is collapsed at the field's visible start or end (or, `collapsed` false, the selection's head is). */
+export function fieldAt(el: CaretField, edge: "start" | "end", collapsed = true): boolean {
+  if (isLiveField(el)) return el.liveField.at(edge, collapsed);
+  const at = edge === "start" ? 0 : el.value.length;
+  if (collapsed) return el.selectionStart === at && el.selectionEnd === at;
+  return fieldSelection(el).head === at;
+}
+export const fieldAllSelected = (el: CaretField) => (isLiveField(el) ? el.liveField.allSelected : el.selectionStart === 0 && el.selectionEnd === el.value.length);
+export const fieldAtVisualBoundary = (el: CaretField, direction: "up" | "down") =>
+  isLiveField(el) ? el.liveField.atVisualBoundary(direction) : textareaAtVisualBoundary(el as HTMLTextAreaElement, direction);
+/** Viewport rectangle of the caret at source `offset` (where a popup anchors). */
+export const fieldCaretRect = (el: CaretField, offset: number) => (isLiveField(el) ? el.liveField.caretRect(offset) : textareaCaretRect(el as HTMLTextAreaElement, offset));
 
 /** The bookmark for an element that is losing focus, or null when it is not a place to come back to. */
 export function bookmarkFor(
@@ -35,7 +104,7 @@ export function bookmarkFor(
     const id = places.cursor();
     return id ? { kind: "row", id } : null;
   }
-  if (el instanceof HTMLTextAreaElement && el.dataset.field) {
+  if (isEditingField(el)) {
     const id = el.closest<HTMLElement>("[data-row]")?.dataset.row;
     if (id) return fieldReturn(el, id, el.dataset.field === "note" ? "note" : "title");
   }

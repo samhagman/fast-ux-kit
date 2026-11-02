@@ -2,15 +2,14 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { findOutlineNode } from "@fux/core";
-import { textareaCaretRect } from "@fux/text-geometry";
 import { cn } from "@/lib/utils";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useOutlinerContext, usePlatformKeys, type FocusReturn, type ItemMenuRequest, type OutlinerUi } from "./context";
-import { fieldReturn } from "./focus";
+import { fieldCaretRect, fieldReturn, type CaretField } from "./focus";
 import { afterFocusReturn, filterValue, findEntry, itemActions, wordFilter, type ItemAction, type ItemEntry, type ItemSubmenu } from "./item-actions";
 import { inlineToPlain, parseInline } from "./inline";
-import { isComposingKey, isItemMenuKey } from "./keymap";
+import { isComposingKey, isItemMenuKey, type ComboEvent } from "./keymap";
 import { resolveTarget } from "./target";
 import type { OutlinerController, OutlinerRow } from "./use-outliner";
 
@@ -277,7 +276,7 @@ export function openItemMenu(
   if (viaKeyboard) keyboardMenuAt = Date.now();
   const root = ui.rootRef.current;
   const rowEl = root?.querySelector<HTMLElement>(`[data-row="${CSS.escape(rowId)}"]`);
-  const el = rowEl?.querySelector<HTMLElement>("[data-ol-title], textarea") ?? rowEl ?? ui.listRef.current;
+  const el = rowEl?.querySelector<HTMLElement>("[data-ol-title], [data-ol-editor], textarea") ?? rowEl ?? ui.listRef.current;
   const box = el?.getBoundingClientRect();
   ui.setItemMenu({
     rowId,
@@ -353,7 +352,9 @@ function ItemMenuPopover({ request, row }: { readonly request: ItemMenuRequest; 
         ran.current = null;
         if (action?.opensSurface) return;
         // Back where the menu came from: the tree (the cursor stays), or the field with its selection.
-        ui.returnFocus(null, request.returnTo);
+        // An action whose result becomes the target (Duplicate) hands the tree its result instead.
+        const result = action?.select === "result" && request.returnTo?.kind === "row" ? [...ol.latestSelection()][0] : undefined;
+        ui.returnFocus(null, result ? { kind: "row", id: result } : request.returnTo);
       }}
     >
       <Command
@@ -401,6 +402,14 @@ export function findSlashToken(value: string, caret: number): { readonly start: 
   return { start, query: match[2]! };
 }
 
+/** A key on the field, as the menu reads it (React's on a textarea, the live field's own). */
+type SlashKeyEvent = ComboEvent & {
+  readonly currentTarget: CaretField;
+  readonly nativeEvent?: { readonly isComposing?: boolean; readonly keyCode?: number };
+  preventDefault(): void;
+  stopPropagation(): void;
+};
+
 interface Transient {
   /** The field's text with the `/query` in it (shown, never stored). */
   readonly text: string;
@@ -423,7 +432,7 @@ export function useSlashMenu({
   readonly ui: OutlinerUi;
   readonly row: OutlinerRow;
   readonly field: "title" | "note";
-  readonly ref: React.RefObject<HTMLTextAreaElement | null>;
+  readonly ref: React.RefObject<CaretField | null>;
 }) {
   const { isMac } = usePlatformKeys();
   const [transient, setTransient] = React.useState<Transient | null>(null);
@@ -444,7 +453,7 @@ export function useSlashMenu({
     if (focus)
       requestAnimationFrame(() => {
         const el = ref.current;
-        if (el && document.activeElement === el) el.setSelectionRange(was.start, was.start);
+        if (el && document.activeElement === (el as unknown)) el.setSelectionRange(was.start, was.start);
       });
   };
   const entries = transient ? itemActions({ ol, ui, ids: [row.id], row, isMac }) : [];
@@ -458,7 +467,7 @@ export function useSlashMenu({
   });
 
   /** A field edit: true when it only typed (or erased) the transient query, so the caller must not store it. */
-  const onChange = (el: HTMLTextAreaElement): boolean => {
+  const onChange = (el: CaretField): boolean => {
     const text = el.value;
     const caret = el.selectionStart;
     // Notes are prose: "/" is only a menu in a title (as before).
@@ -481,14 +490,14 @@ export function useSlashMenu({
     return false;
   };
   /** A caret move: true while the menu owns it. Moving away from the query removes it. */
-  const onSelect = (el: HTMLTextAreaElement): boolean => {
+  const onSelect = (el: CaretField): boolean => {
     const was = live.current;
     if (!was) return false;
     if (el.selectionStart !== was.caret || el.selectionEnd !== was.caret) dismiss();
     return true;
   };
   /** True when the key belonged to the menu. */
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+  const onKeyDown = (event: SlashKeyEvent): boolean => {
     const el = event.currentTarget;
     if (!live.current) {
       if (!isItemMenuKey(event)) return false;
@@ -523,7 +532,7 @@ export function useSlashMenu({
   const start = transient?.start;
   React.useLayoutEffect(() => {
     if (start === undefined || !ref.current) return setRect(null);
-    setRect(textareaCaretRect(ref.current, start));
+    setRect(fieldCaretRect(ref.current, start));
   }, [start, ref]);
 
   const below = rect ? rect.bottom + 300 < window.innerHeight : true;

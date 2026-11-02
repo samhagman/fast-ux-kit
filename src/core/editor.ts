@@ -102,8 +102,24 @@ export type OutlineAction<T = unknown> =
       readonly start: number;
       readonly end?: number;
       readonly newId: string;
+      /**
+       * Optional halves from a formatting-aware field, already written as source (a split inside
+       * `**bold**` yields `**bo**` and `**ld**`). `start` and `end` still pick the branch, so a
+       * collapsed caret at 0 inserts an empty row above and ignores the halves. `base` is the row
+       * text the halves were cut from; if the row has changed since, the split is refused whole.
+       */
+      readonly text?: OutlineSplitText;
     }
-  | { readonly type: "merge"; readonly id: string; readonly direction: "backward" | "forward" }
+  | {
+      readonly type: "merge";
+      readonly id: string;
+      readonly direction: "backward" | "forward";
+      /**
+       * Optional joined source from a formatting-aware field, with the caret inside it. It is bound
+       * to the two rows and the texts the field joined; any other pair or text refuses the merge.
+       */
+      readonly text?: OutlineMergeText;
+    }
   | {
       readonly type: "insert";
       readonly id: string;
@@ -172,6 +188,47 @@ export type OutlineAction<T = unknown> =
       readonly toggle?: boolean;
     }
   | { readonly type: "select-all" | "clear-selection" };
+
+/** Both halves of a split, as source, and the row text they were cut from. */
+export interface OutlineSplitText {
+  readonly left: string;
+  readonly right: string;
+  readonly base: string;
+}
+
+/** A merge's joined source, its caret (0 to `joined.length`) and the two rows it joins. */
+export interface OutlineMergeText {
+  readonly joined: string;
+  readonly caret: number;
+  readonly left: { readonly id: string; readonly text: string };
+  readonly right: { readonly id: string; readonly text: string };
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const hasStrings = <K extends string>(
+  value: unknown,
+  keys: readonly K[],
+): value is Record<K, string> & Record<string, unknown> =>
+  isPlainObject(value) && keys.every((key) => typeof value[key] === "string");
+
+function validSplitText(text: unknown): boolean {
+  return text === undefined || hasStrings(text, ["left", "right", "base"]);
+}
+
+function validMergeText(text: unknown): boolean {
+  if (text === undefined) return true;
+  if (!hasStrings(text, ["joined"])) return false;
+  const caret: unknown = text.caret;
+  return (
+    typeof caret === "number" &&
+    Number.isInteger(caret) &&
+    caret >= 0 &&
+    caret <= text.joined.length &&
+    hasStrings(text.left, ["id", "text"]) &&
+    hasStrings(text.right, ["id", "text"])
+  );
+}
 
 export function createOutlineEditorState<T>(
   nodes: readonly OutlineNode<T>[],
@@ -422,9 +479,19 @@ function validAction<T>(action: OutlineAction<T>): boolean {
         (value.time === undefined || number("time") || value.time === Number.NEGATIVE_INFINITY)
       );
     case "split":
-      return string("id") && string("newId") && number("start") && optionalNumber("end");
+      return (
+        string("id") &&
+        string("newId") &&
+        number("start") &&
+        optionalNumber("end") &&
+        validSplitText(value.text)
+      );
     case "merge":
-      return string("id") && ["backward", "forward"].includes(action.direction);
+      return (
+        string("id") &&
+        ["backward", "forward"].includes(action.direction) &&
+        validMergeText(value.text)
+      );
     case "insert":
       return (
         string("id") &&
@@ -974,6 +1041,8 @@ export function reduceOutlineEditor<T>(
   if (action.type === "split") {
     const source = findOutlineNode(state.nodes, action.id);
     if (!source) return fail("not-found");
+    // Halves cut from an older text would overwrite the newer one: refuse the whole split.
+    if (action.text && action.text.base !== source.node.text) return fail("invalid-command");
     // Return on an empty final child exits one nesting level instead of accumulating blanks.
     const siblings = source.parentId
       ? findOutlineNode(state.nodes, source.parentId)!.node.children!
@@ -990,8 +1059,8 @@ export function reduceOutlineEditor<T>(
         : finish(outdentOutlineNode(state.nodes, action.id, policy));
     const start = clamp(action.start, source.node.text.length),
       end = Math.max(start, clamp(action.end ?? start, source.node.text.length));
-    const prefix = source.node.text.slice(0, start),
-      suffix = source.node.text.slice(end);
+    const prefix = action.text?.left ?? source.node.text.slice(0, start),
+      suffix = action.text?.right ?? source.node.text.slice(end);
     if (start === 0 && end === 0 && source.node.text.length > 0) {
       const inserted = applyOutlineCommand(
         state.nodes,
@@ -1036,6 +1105,16 @@ export function reduceOutlineEditor<T>(
     const left = action.direction === "backward" ? previous?.node : rows[index]?.node;
     const right = action.direction === "backward" ? rows[index]?.node : next?.node;
     if (!left || !right || right.id === state.hoistedId) return state;
+    const joined = action.text;
+    // A join computed against other rows or older texts is refused, never applied.
+    if (
+      joined &&
+      (joined.left.id !== left.id ||
+        joined.right.id !== right.id ||
+        joined.left.text !== left.text ||
+        joined.right.text !== right.text)
+    )
+      return fail("invalid-command");
     if (right.data !== undefined && !options.mergeData) return fail("invalid-command");
     // Move surviving children before deleting their old parent; never discard hidden content.
     let candidate = state.nodes;
@@ -1062,7 +1141,7 @@ export function reduceOutlineEditor<T>(
           type: "update",
           id: left.id,
           changes: {
-            text: left.text + right.text,
+            text: joined ? joined.joined : left.text + right.text,
             ...(options.mergeData ? { data: options.mergeData(left, right) } : {}),
           },
         },
@@ -1074,7 +1153,9 @@ export function reduceOutlineEditor<T>(
     if (right.children?.length) expanded.add(left.id);
     return finish(
       result.ok ? result : { ...result, nodes: state.nodes },
-      { id: left.id, start: left.text.length, end: left.text.length },
+      joined
+        ? { id: left.id, start: joined.caret, end: joined.caret }
+        : { id: left.id, start: left.text.length, end: left.text.length },
       null,
       expanded,
     );

@@ -141,7 +141,8 @@ test("collapse / expand all: the view menu folds every branch, then opens them a
 test("formatting keys: ⌘B ⌘I ⌘E ⇧⌘X ⇧⌘H wrap the selected words (one step), which stay selected", async () => {
   const cases = [
     ["b", {}, "make **this** bold"],
-    ["i", {}, "make __this__ bold"],
+    // italic is written with its canonical `*` (the live field, titles and notes alike)
+    ["i", {}, "make *this* bold"],
     ["e", {}, "make `this` bold"],
     ["x", { shiftKey: true }, "make ~~this~~ bold"],
     ["h", { shiftKey: true }, "make ==this== bold"],

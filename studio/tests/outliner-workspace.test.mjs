@@ -8,6 +8,7 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { setFieldValue } from "./harness/outliner-dom.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 let vite, core, ws, hook;
@@ -152,12 +153,8 @@ test("workspace UI: new document, rename in place, reorder from the keyboard; ed
   // Typing in the open document reaches the host as the new document list.
   const handle = ui.handle.current.active();
   await ui.act(() => handle.focusItem(latest()[2].nodes[0].id, { edit: true }));
-  const field = ui.pane(gamma).querySelector("textarea");
-  await ui.act(() => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-    setter.call(field, "First line");
-    field.dispatchEvent(new window.Event("input", { bubbles: true }));
-  });
+  const field = ui.pane(gamma).querySelector("[data-field=title]");
+  await ui.act(() => setFieldValue(field, "First line"));
   await ui.frames();
   assert.equal(latest().find((d) => d.id === gamma).nodes[0].text, "First line");
   await ui.unmount();
@@ -230,6 +227,8 @@ async function domEnv() {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   React = await import("react");
   act = React.act;
+  // The live title field's chunk first, so a title is never briefly the plain field.
+  await (await load("/src/registry/outliner/live-field/load.ts")).loadLiveField();
   ({ createRoot } = await import("react-dom/client"));
 }
 

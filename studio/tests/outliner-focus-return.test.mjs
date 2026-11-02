@@ -8,7 +8,7 @@
 //
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { code, domEnv, load, media, mountOutliner, stopVite, waitFor } from "./harness/outliner-dom.mjs";
+import { code, domEnv, isField, load, media, mountOutliner, stopVite, waitFor } from "./harness/outliner-dom.mjs";
 
 let React, act, createRoot;
 before(async () => {
@@ -213,7 +213,7 @@ for (const mode of ["row", "text"]) {
     assert.ok(board, "the board is shown");
     if (mode === "row") same(document.activeElement, board, `the board has the keyboard (was ${where()})`);
     // Typing in its title: the caret stays in that title, now the zoomed one.
-    else assert.equal(document.activeElement?.dataset.field, "title", `the zoomed title keeps the caret (was ${where()})`);
+    else assert.equal(document.activeElement?.getAttribute("aria-label"), "Zoomed item title", `the zoomed title keeps the caret (was ${where()})`);
     await ui.unmount();
   });
 }
@@ -457,7 +457,7 @@ for (const surface of ["⌘O finder", "quick capture"])
         await ws.act(() => keydown(tree, "Enter"));
         await ws.frames();
         const field = document.activeElement;
-        assert.equal(field.tagName, "TEXTAREA", "editing");
+        assert.ok(isField(field), "editing");
         await ws.act(() => {
           field.setSelectionRange(1, 4, "backward");
           field.dispatchEvent(new window.Event("select", { bubbles: true }));
@@ -478,7 +478,7 @@ for (const surface of ["⌘O finder", "quick capture"])
         assert.equal(ws.tree("a").getAttribute("aria-activedescendant"), cursor, "the same cursor row");
       } else {
         const field = document.activeElement;
-        assert.equal(field.tagName, "TEXTAREA", `${surface}: a field (was ${where()})`);
+        assert.ok(isField(field), `${surface}: a field (was ${where()})`);
         assert.ok(ws.pane("a").contains(field), "in the same document");
         assert.deepEqual([field.selectionStart, field.selectionEnd, field.selectionDirection], [1, 4, "backward"], "the same selection, backward");
       }

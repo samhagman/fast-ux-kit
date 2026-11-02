@@ -6,7 +6,7 @@ import { motionTokens } from "@/lib/motion";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { InlineText, type InlineRange, type InlineSegment } from "./inline";
 import { MathTex } from "./math";
-import { isRichNote, parseNoteBlocks, type NoteBlock, type NoteList, type SourceRange } from "./rich-note";
+import { NOTE_CLASS, isRichNote, parseNoteBlocks, type NoteBlock, type NoteList, type SourceRange } from "./rich-note";
 
 /**
  * Trusted embeds: the HOST decides what a fenced block like
@@ -84,7 +84,7 @@ export const RichNote = React.memo(function RichNote({ source, marks, headingLev
   const blocks = React.useMemo(() => parseNoteBlocks(source), [source]);
   if (!isRichNote(source)) return <InlineText source={source} marks={marks} className={className} {...handlers} />;
   return (
-    <span data-rich-note="" className={cn("flex flex-col", prose ? "gap-3" : "gap-1.5", className)}>
+    <span data-rich-note="" className={cn(prose ? "flex flex-col gap-3" : NOTE_CLASS.root, className)}>
       {blocks.map((block) => (
         <Block key={block.start} block={block} source={source} marks={marks} headingLevel={headingLevel} prose={prose} handlers={handlers} />
       ))}
@@ -116,15 +116,14 @@ function Block({ block, source, marks, headingLevel, prose, handlers }: BlockPro
   switch (block.kind) {
     case "paragraph":
       return (
-        <span className="block">
+        <span className={NOTE_CLASS.paragraph}>
           <Text source={source} range={block.text} marks={marks} handlers={handlers} />
         </span>
       );
     case "heading": {
-      const size = prose
-        ? ["text-[1.25em]", "text-[1.15em]", "text-[1.05em]", "text-[1em]", "text-[1em]", "text-[1em]"][block.level - 1]
-        : ["text-[1.08em]", "text-[1.02em]", "text-[1em]", "text-[1em]", "text-[1em]", "text-[1em]"][block.level - 1];
-      const className = cn("block font-semibold tracking-[-0.01em] text-foreground", prose ? "mt-2" : "mt-0.5", size);
+      const className = prose
+        ? cn("block font-semibold tracking-[-0.01em] text-foreground mt-2", ["text-[1.25em]", "text-[1.15em]", "text-[1.05em]", "text-[1em]", "text-[1em]", "text-[1em]"][block.level - 1])
+        : NOTE_CLASS.heading(block.level);
       const content = <Text source={source} range={block.text} marks={marks} handlers={handlers} />;
       if (headingLevel === undefined) return <span className={className}>{content}</span>;
       const Tag = `h${Math.min(6, headingLevel + block.level - 1)}` as "h3";
@@ -132,9 +131,9 @@ function Block({ block, source, marks, headingLevel, prose, handlers }: BlockPro
     }
     case "quote":
       return (
-        <span className="block border-s-2 border-foreground/15 ps-3 text-muted-foreground italic">
+        <span className={NOTE_CLASS.quote}>
           {block.lines.map((line) => (
-            <span key={line.start} className="block">
+            <span key={line.start} className={NOTE_CLASS.quoteLine}>
               <Text source={source} range={line} marks={marks} handlers={handlers} />
             </span>
           ))}
@@ -143,7 +142,7 @@ function Block({ block, source, marks, headingLevel, prose, handlers }: BlockPro
     case "list":
       return <ListView list={block.list} source={source} marks={marks} handlers={handlers} />;
     case "rule":
-      return <span role="separator" className="my-1 block h-px bg-hairline" />;
+      return <span role="separator" className={NOTE_CLASS.rule} />;
     case "code":
       return <CodeOrEmbed lang={block.lang} code={block.code} source={source} marks={marks} start={block.start} />;
     case "math":
@@ -161,26 +160,16 @@ function ListView({ list, source, marks, handlers }: { list: NoteList; source: s
   return (
     <Tag
       start={list.ordered && list.first !== 1 ? list.first : undefined}
-      className={cn(
-        "flex flex-col gap-0.5 ps-[1.15em] marker:text-muted-foreground/70",
-        list.ordered ? "list-decimal marker:font-mono marker:text-[0.85em]" : "list-disc",
-        tasks && "list-none ps-0",
-      )}
+      className={NOTE_CLASS.list(list.ordered, tasks)}
     >
       {list.items.map((item) => (
-        <li key={item.start} className={cn(item.checked !== undefined && "flex items-start gap-2")}>
+        <li key={item.start} className={NOTE_CLASS.item(item.checked !== undefined) || undefined}>
           {item.checked !== undefined && (
-            <span
-              aria-hidden
-              className={cn(
-                "mt-[0.28em] grid size-[0.95em] shrink-0 place-items-center rounded-[3px] border",
-                item.checked ? "border-signal/70 bg-signal/80 text-signal-foreground" : "border-foreground/25",
-              )}
-            >
+            <span aria-hidden className={NOTE_CLASS.box(item.checked)}>
               {item.checked && <Check className="size-[0.7em]" strokeWidth={3} />}
             </span>
           )}
-          <span className={cn("min-w-0", item.checked && "text-muted-foreground line-through decoration-muted-foreground/50")}>
+          <span className={NOTE_CLASS.itemBody(item.checked)}>
             {item.checked !== undefined && <span className="sr-only">{item.checked ? "Done: " : "To do: "}</span>}
             <Text source={source} range={item.text} marks={marks} handlers={handlers} />
             {item.children && <ListView list={item.children} source={source} marks={marks} handlers={handlers} />}
@@ -191,7 +180,7 @@ function ListView({ list, source, marks, handlers }: { list: NoteList; source: s
   );
 }
 
-function TableView({ block, source, marks, handlers }: { block: Extract<NoteBlock, { kind: "table" }>; source: string; marks?: readonly InlineRange[]; handlers: InlineHandlers }) {
+export function TableView({ block, source, marks, handlers }: { block: Extract<NoteBlock, { kind: "table" }>; source: string; marks?: readonly InlineRange[]; handlers: InlineHandlers }) {
   const align = (index: number) => {
     const value = block.align[index];
     return value === "center" ? "text-center" : value === "end" ? "text-end" : "text-start";
@@ -250,7 +239,7 @@ function MarkedCode({ source, range, marks }: { source: string; range: SourceRan
   return <>{out}</>;
 }
 
-function CodeOrEmbed({ lang, code, source, marks, start }: { lang: string; code: SourceRange; source: string; marks?: readonly InlineRange[]; start: number }) {
+export function CodeOrEmbed({ lang, code, source, marks, start }: { lang: string; code: SourceRange; source: string; marks?: readonly InlineRange[]; start: number }) {
   const { renderers, print } = useRichContent();
   const body = source.slice(code.start, code.end);
   if (lang === "math" || lang === "latex" || lang === "tex") return <MathTex tex={body} display src={start} className="text-foreground" />;
@@ -347,7 +336,7 @@ function CodeBlock({ lang, body, code, source, marks, missing }: { lang: string;
   );
 }
 
-function ImageBlock({ block }: { block: Extract<NoteBlock, { kind: "image" }> }) {
+export function ImageBlock({ block }: { block: Extract<NoteBlock, { kind: "image" }> }) {
   const { print } = useRichContent();
   const [open, setOpen] = React.useState(false);
   const [failed, setFailed] = React.useState(false);

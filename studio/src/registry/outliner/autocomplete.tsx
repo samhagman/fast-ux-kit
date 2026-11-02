@@ -8,17 +8,17 @@ import {
   Hash,
   Files,
 } from "lucide-react";
-import { textareaCaretRect } from "@fux/text-geometry";
 import { cn } from "@/lib/utils";
 import { motionTokens } from "@/lib/motion";
 import { formatDate, formatDateToken, inlineToPlain } from "./inline";
+import { fieldCaretRect, isLiveField, type CaretField } from "./focus";
 import type { OutlinerController } from "./use-outliner";
 import type { OutlineItem } from "./types";
 
 /**
  * Caret-anchored suggestions inside a row field. Triggers:
  *   #tag   @person   [[item link   !date
- * The menu never owns focus: the textarea keeps the caret and forwards navigation keys.
+ * The menu never owns focus: the field keeps the caret and forwards navigation keys.
  * "/" is not one of them: it opens the item menu (item-menu.tsx), the one list of commands.
  */
 export type TriggerKind = "tag" | "mention" | "link" | "date";
@@ -101,7 +101,7 @@ export function useAutocomplete(
 
   /** Typing may open the menu; caret moves (clicks, arrows) may only keep or close it. */
   const sync = React.useCallback(
-    (el: HTMLTextAreaElement, typed = false) => {
+    (el: CaretField, typed = false) => {
       if (el.selectionStart !== el.selectionEnd) return setToken(null);
       const next = findTriggerToken(el.value, el.selectionStart);
       if (next && next.start === dismissedAt) return setToken(null);
@@ -187,20 +187,24 @@ export function useAutocomplete(
 
   const open = !!token && items.length > 0;
 
-  const accept = (el: HTMLTextAreaElement, item: Suggestion | undefined) => {
+  const accept = (el: CaretField, item: Suggestion | undefined) => {
     if (!token || !item) return;
     const value = el.value;
     const insert = item.insert ?? "";
-    const next = value.slice(0, token.start) + insert + value.slice(token.end);
     const caret = token.start + insert.length;
-    ol.dispatch({ type: field === "note" ? "note" : "text", id: row.id, text: next, caret });
-    requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+    // The live field replaces exactly the token it typed (one step, refused if it moved on).
+    if (isLiveField(el)) el.liveField.replaceSource(token.start, token.end, insert, value.slice(token.start, token.end));
+    else {
+      const next = value.slice(0, token.start) + insert + value.slice(token.end);
+      ol.dispatch({ type: field === "note" ? "note" : "text", id: row.id, text: next, caret });
+      requestAnimationFrame(() => el.setSelectionRange(caret, caret));
+    }
     if (item.apply) item.apply();
     setToken(insert === "!" ? { kind: "date", start: token.start, end: caret, query: "" } : null);
   };
 
   /** Returns true when the key was consumed by the menu. */
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (event: { readonly key: string; readonly ctrlKey: boolean; readonly currentTarget: CaretField; preventDefault(): void; stopPropagation(): void }) => {
     if (!open) return false;
     if (event.key === "ArrowDown" || (event.key === "n" && event.ctrlKey)) {
       event.preventDefault();
@@ -242,16 +246,16 @@ export function AutocompletePopover({
   state,
   listId,
 }: {
-  readonly anchor: HTMLTextAreaElement | null;
+  readonly anchor: CaretField | null;
   readonly state: ReturnType<typeof useAutocomplete>;
-  /** Shared with the textarea's aria-controls / aria-activedescendant. */
+  /** Shared with the field's aria-controls / aria-activedescendant. */
   readonly listId: string;
 }) {
   const { open, token, items, active, setActive, accept } = state;
   const [rect, setRect] = React.useState<DOMRect | null>(null);
   React.useLayoutEffect(() => {
     if (!open || !anchor || !token) return;
-    setRect(textareaCaretRect(anchor, token.start));
+    setRect(fieldCaretRect(anchor, token.start));
   }, [open, anchor, token]);
   if (typeof document === "undefined") return null;
   const below = rect ? rect.bottom + 280 < window.innerHeight : true;

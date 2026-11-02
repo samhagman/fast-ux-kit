@@ -8,7 +8,9 @@ import { MathTex } from "./math";
  * (markdown-lite); formatting is a pure projection of it, so editing,
  * search, export and undo all operate on one canonical string.
  *
- *   **bold**  __italic__  ~~strike~~  `code`  ==highlight==
+ *   **bold**  *italic*  ~~strike~~  `code`  ==highlight==  (also __italic__)
+ *   Styles nest, one of each kind at a time: **bold *and italic***, ~~**a** b~~, ***both***.
+ *   Code, links, dates, tags, mentions and math inside a style keep working: **see `x` #now**.
  *   [label](https://…)  https://bare.url  #tag  @person  !(2026-11-03 14:00)  [[Item title]]
  *   !(2026-11-03 every week)   a recurring date (completing its task moves it to the next occurrence)
  *   !(2026-11-03 → 2026-11-07)  a date range (also with times: `!(2026-11-03 09:00 → 11:00)`,
@@ -20,11 +22,7 @@ import { MathTex } from "./math";
  */
 export type InlineKind =
   | "text"
-  | "bold"
-  | "italic"
-  | "strike"
   | "code"
-  | "highlight"
   | "link"
   | "url"
   | "tag"
@@ -34,7 +32,25 @@ export type InlineKind =
   /** `$tex$` (or `$$tex$$`): TeX source in `display`, rendered with KaTeX. */
   | "math"
   /** `\x`: a markup character typed (or pasted) as plain text. The backslash is hidden. */
-  | "escape";
+  | "escape"
+  /** A style's delimiter (`**`, `*`, `__`, `~~`, `==`): source only, never displayed. */
+  | "delimiter";
+
+/** A style that wraps other segments. Styles nest, but never inside one of their own kind. */
+export type InlineStyle = "bold" | "italic" | "strike" | "highlight";
+
+/** One style container: its kind and source range. Segments inside it list it in `marks`. */
+export interface InlineMark {
+  readonly kind: InlineStyle;
+  /** Unique within one parse: segments that list the same id sit in the same container. */
+  readonly id: number;
+  /** Source range of the whole container, delimiters included. */
+  readonly start: number;
+  readonly end: number;
+  /** Source range between the delimiters. */
+  readonly contentStart: number;
+  readonly contentEnd: number;
+}
 
 export interface InlineSegment {
   readonly kind: InlineKind;
@@ -49,6 +65,8 @@ export interface InlineSegment {
   /** Internal link target id, from `[[label|id]]`. */
   readonly refId?: string;
   readonly date?: InlineDate;
+  /** The style containers around this segment, outermost first; absent outside any style. */
+  readonly marks?: readonly InlineMark[];
 }
 
 /** How a recurring date repeats: every `interval` `unit`s, or every weekday (Mon–Fri). */
@@ -80,26 +98,59 @@ export interface InlineDate {
 /** Characters that start inline markup; `\` before one makes it literal. */
 export const MARKUP_CHARS = "\\`*_~=[]!#@()$";
 
-const PATTERN = new RegExp(
+/** Leaf tokens: each is one segment, matched where it starts. */
+const LEAF = {
+  escape: "(\\\\[\\\\`*_~=\\[\\]!#@()$])",
+  code: "(`[^`\\n]+`)",
+  ref: "(\\[\\[[^\\]\\n]+\\]\\])",
+  // md link: the target may hold balanced parentheses (Wikipedia's Foo_(bar)), as in GFM
+  link: "(\\[[^\\]\\n]+\\]\\((?:https?:\\/\\/|mailto:)(?:[^()\\s]|\\([^()\\s]*\\))+\\))",
+  // a date, a range, or a recurring date
+  date: "(!\\(\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?(?: ?(?:→|->) ?(?:\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?|\\d{2}:\\d{2}))?(?: every [a-z0-9 ]{1,24})?\\))",
+  // bare url: may end in ")" here; an unbalanced closing paren is trimmed off when it is read
+  url: "(https?:\\/\\/[^\\s<]*[^\\s<.,;:!?\\]'\"])",
+  tag: "((?<=^|[\\s(])#[\\p{L}\\p{N}_-]+)",
+  mention: "((?<=^|[\\s(])@[\\p{L}\\p{N}_.-]*[\\p{L}\\p{N}_-])",
+  math: "((?<![\\p{L}\\p{N}$\\\\])(?:\\$\\$[^$\\n]+?\\$\\$|\\$(?![\\s$])[^$\\n]*?[^\\s$\\\\]\\$)(?![\\p{N}$]))",
+} as const;
+
+/**
+ * The scanner's alternation. At each position the earliest alternative wins; a style shows up
+ * here as its opening delimiter only, and the scanner decides from there whether it closes.
+ */
+const SCAN = new RegExp(
   [
-    "(\\\\[\\\\`*_~=\\[\\]!#@()$])", // 0 escape (checked first: it wins at its position)
-    "(`[^`\\n]+`)", // 1 code
-    "(\\*\\*[^*\\n]+\\*\\*)", // 2 bold
-    "(__[^_\\n]+__)", // 3 italic
-    "(~~[^~\\n]+~~)", // 4 strike
-    "(==[^=\\n]+==)", // 5 highlight
-    "(\\[\\[[^\\]\\n]+\\]\\])", // 6 internal ref
-    // md link: the target may hold balanced parentheses (Wikipedia's Foo_(bar)), as in GFM
-    "(\\[[^\\]\\n]+\\]\\((?:https?:\\/\\/|mailto:)(?:[^()\\s]|\\([^()\\s]*\\))+\\))", // 7 md link
-    "(!\\(\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?(?: ?(?:→|->) ?(?:\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?|\\d{2}:\\d{2}))?(?: every [a-z0-9 ]{1,24})?\\))", // 8 date (or range)
-    // bare url: may end in ")" here; an unbalanced closing paren is trimmed off in parseInline
-    "(https?:\\/\\/[^\\s<]*[^\\s<.,;:!?\\]'\"])", // 9 bare url
-    "((?<=^|[\\s(])#[\\p{L}\\p{N}_-]+)", // 10 tag
-    "((?<=^|[\\s(])@[\\p{L}\\p{N}_.-]*[\\p{L}\\p{N}_-])", // 11 mention
-    "((?<![\\p{L}\\p{N}$\\\\])(?:\\$\\$[^$\\n]+?\\$\\$|\\$(?![\\s$])[^$\\n]*?[^\\s$\\\\]\\$)(?![\\p{N}$]))", // 12 math
+    LEAF.escape, // 1 (checked first: it wins at its position)
+    LEAF.code, // 2
+    "(\\*\\*)", // 3 bold, or bold + italic (`***`)
+    "(__)", // 4 italic
+    "(~~)", // 5 strike
+    "(==)", // 6 highlight
+    LEAF.ref, // 7
+    LEAF.link, // 8
+    LEAF.date, // 9
+    LEAF.url, // 10
+    LEAF.tag, // 11
+    LEAF.mention, // 12
+    LEAF.math, // 13
+    "(\\*)", // 14 italic (last: a single star is the weakest opener)
   ].join("|"),
   "gu",
 );
+const GROUP = { escape: 1, code: 2, stars: 3, under: 4, strike: 5, highlight: 6, ref: 7, link: 8, date: 9, url: 10, tag: 11, mention: 12, math: 13, star: 14 } as const;
+/** Words that stay live in pasted text (`literalInline`): bare URLs, #tags and @mentions. */
+const LIVE_WORDS = new RegExp([LEAF.url, LEAF.tag, LEAF.mention].join("|"), "gu");
+/** The same words, matched only at the start of a string. */
+const WORD_AT = {
+  url: new RegExp(LEAF.url, "uy"),
+  tag: new RegExp(LEAF.tag, "uy"),
+  mention: new RegExp(LEAF.mention, "uy"),
+} as const;
+const wordAt = (kind: keyof typeof WORD_AT, text: string) => {
+  const pattern = WORD_AT[kind];
+  pattern.lastIndex = 0;
+  return pattern.exec(text)?.[0] ?? null;
+};
 
 const REPEAT_UNITS: Record<string, DateRepeat["unit"]> = {
   day: "day", days: "day", daily: "day",
@@ -209,81 +260,275 @@ export function repeatFor(date: Date, repeat: DateRepeat, anchor: number): DateR
   return (repeat.unit === "month" || repeat.unit === "year") && date.getDate() < anchor ? { ...rule, day: anchor } : rule;
 }
 
+/**
+ * Parse inline source into a flat list of segments in source order. Styles do not become
+ * segments of their own: every segment inside one lists it in `marks` (outermost first), and its
+ * delimiters are `delimiter` segments. Walk the list as a tree with `walkNested`.
+ *
+ * One left-to-right scan. At each position the earliest alternative of `SCAN` wins, so a style
+ * that starts first contains what follows. A style's content is scanned the same way within its
+ * bounds, with its own kind excluded; every scan only moves forward, so the parse is linear.
+ */
 export function parseInline(source: string): readonly InlineSegment[] {
-  const segments: InlineSegment[] = [];
-  let cursor = 0;
-  const text = (start: number, end: number) => {
-    if (end > start)
-      segments.push({
-        kind: "text",
-        start,
-        end,
-        contentStart: start,
-        contentEnd: end,
-        display: source.slice(start, end),
-      });
+  const scan: Scan = { source, out: [], ids: 0 };
+  scanRange(scan, 0, source.length, 0, []);
+  return scan.out;
+}
+
+interface Scan {
+  readonly source: string;
+  readonly out: InlineSegment[];
+  ids: number;
+}
+
+/** Delimiter lengths and where the closing one starts, for a style that matched. */
+interface Closed {
+  readonly open: number;
+  readonly closeStart: number;
+  readonly close: number;
+}
+
+const STYLE_BIT: Record<InlineStyle, number> = { bold: 1, italic: 2, strike: 4, highlight: 8 };
+const isWord = (char: string | undefined) => char !== undefined && /[\p{L}\p{N}]/u.test(char);
+const isSpace = (char: string | undefined) => char !== undefined && /\s/u.test(char);
+
+function scanRange(scan: Scan, lo: number, hi: number, excluded: number, marks: readonly InlineMark[]) {
+  const { source, out } = scan;
+  let cursor = lo;
+  let pos = lo;
+  const pushText = (from: number, to: number) => {
+    if (to > from) out.push(withMarks({ kind: "text", start: from, end: to, contentStart: from, contentEnd: to, display: source.slice(from, to) }, marks));
   };
-  PATTERN.lastIndex = 0;
-  for (let match = PATTERN.exec(source); match; match = PATTERN.exec(source)) {
-    const start = match.index;
-    const token = match[0];
-    const end = start + token.length;
-    text(cursor, start);
-    cursor = end;
-    const wrap = (kind: InlineKind, open: number, close = open): InlineSegment => ({
-      kind,
-      start,
-      end,
-      contentStart: start + open,
-      contentEnd: end - close,
-      display: token.slice(open, token.length - close),
-    });
-    if (match[1]) segments.push({ kind: "escape", start, end, contentStart: start + 1, contentEnd: end, display: token.slice(1) });
-    else if (match[2]) segments.push(wrap("code", 1));
-    else if (match[3]) segments.push(wrap("bold", 2));
-    else if (match[4]) segments.push(wrap("italic", 2));
-    else if (match[5]) segments.push(wrap("strike", 2));
-    else if (match[6]) segments.push(wrap("highlight", 2));
-    else if (match[7]) {
-      // [[label|id]] links by id (rename-safe); [[label]] falls back to title search.
-      const inner = token.slice(2, -2);
-      const bar = inner.lastIndexOf("|");
-      if (bar > 0)
-        segments.push({ kind: "ref", start, end, contentStart: start + 2, contentEnd: start + 2 + bar, display: inner.slice(0, bar), refId: inner.slice(bar + 1) });
-      else segments.push(wrap("ref", 2));
-    }
-    else if (match[8]) {
-      const close = token.indexOf("](");
-      segments.push({
-        kind: "link",
-        start,
-        end,
-        contentStart: start + 1,
-        contentEnd: start + close,
-        display: token.slice(1, close),
-        href: token.slice(close + 2, -1),
-      });
-    } else if (match[9]) {
-      const date = parseDateToken(token);
-      if (date) segments.push({ ...wrap("date", 2, 1), date });
-      else text(start, end);
-    } else if (match[10]) {
-      // GFM's rule: a trailing ")" belongs to the URL only while its parentheses balance.
-      let url = token;
-      while (url.endsWith(")") && (url.match(/\(/g)?.length ?? 0) < (url.match(/\)/g)?.length ?? 0)) url = url.slice(0, -1);
-      while (/[.,;:!?]$/.test(url)) url = url.slice(0, -1);
-      if (url.length < token.length) {
-        cursor = start + url.length;
-        PATTERN.lastIndex = cursor;
-      }
-      segments.push({ kind: "url", start, end: start + url.length, contentStart: start, contentEnd: start + url.length, display: url, href: url });
-    }
-    else if (match[11]) segments.push(wrap("tag", 0));
-    else if (match[12]) segments.push(wrap("mention", 0));
-    else if (match[13]) segments.push(wrap("math", token.startsWith("$$") ? 2 : 1));
+  const pushLeaf = (segment: InlineSegment) => {
+    pushText(cursor, segment.start);
+    out.push(withMarks(segment, marks));
+    cursor = pos = segment.end;
+  };
+  const pushStyle = (kind: InlineStyle, start: number, closed: Closed) => {
+    pushText(cursor, start);
+    const mark: InlineMark = { kind, id: scan.ids++, start, contentStart: start + closed.open, contentEnd: closed.closeStart, end: closed.closeStart + closed.close };
+    const inside = [...marks, mark];
+    out.push({ kind: "delimiter", start, end: mark.contentStart, contentStart: mark.contentStart, contentEnd: mark.contentStart, display: "", marks: inside });
+    scanRange(scan, mark.contentStart, mark.contentEnd, excluded | STYLE_BIT[kind], inside);
+    out.push({ kind: "delimiter", start: mark.contentEnd, end: mark.end, contentStart: mark.end, contentEnd: mark.end, display: "", marks: inside });
+    cursor = pos = mark.end;
+  };
+  // A #tag or @mention may open a style's content (`**#launch**`), where nothing precedes it.
+  if (marks.length && (source[lo] === "#" || source[lo] === "@")) {
+    const word = wordAt(source[lo] === "#" ? "tag" : "mention", source.slice(lo, hi));
+    if (word) pushLeaf({ kind: source[lo] === "#" ? "tag" : "mention", start: lo, end: lo + word.length, contentStart: lo, contentEnd: lo + word.length, display: word });
   }
-  text(cursor, source.length);
-  return segments;
+  while (pos < hi) {
+    SCAN.lastIndex = pos;
+    const match = SCAN.exec(source);
+    if (!match || match.index >= hi) break;
+    const start = match.index;
+    if (match[GROUP.stars] || match[GROUP.star]) {
+      const bold = match[GROUP.stars] && !(excluded & STYLE_BIT.bold) ? closeBold(source, start, lo, hi, excluded) : null;
+      const italic = bold || excluded & STYLE_BIT.italic ? null : closeItalic(source, start, lo, hi, excluded);
+      if (bold) pushStyle("bold", start, bold);
+      else if (italic) pushStyle("italic", start, italic);
+      else pos = start + 1;
+      continue;
+    }
+    const double = match[GROUP.under] ? "italic" : match[GROUP.strike] ? "strike" : match[GROUP.highlight] ? "highlight" : null;
+    if (double) {
+      const closed = excluded & STYLE_BIT[double] ? null : closeDouble(source, start, hi);
+      if (closed) pushStyle(double, start, closed);
+      else pos = start + 1;
+      continue;
+    }
+    let token = match[0];
+    if (start + token.length > hi) {
+      // The style around it ends first. A bare URL, #tag or @mention ends there too; a token
+      // with its own closer (code, link, date, ref, math) cannot cross a style's edge.
+      const kind = match[GROUP.url] ? "url" : match[GROUP.tag] ? "tag" : match[GROUP.mention] ? "mention" : null;
+      const clipped = kind ? wordAt(kind, source.slice(start, hi)) : null;
+      if (!clipped) {
+        pos = start + 1;
+        continue;
+      }
+      token = clipped;
+    }
+    pushLeaf(leafOf(match, token, start));
+  }
+  pushText(cursor, hi);
+}
+
+const withMarks = (segment: InlineSegment, marks: readonly InlineMark[]): InlineSegment => (marks.length ? { ...segment, marks } : segment);
+
+/** The segment for a leaf token that starts at `start` (`match` tells which alternative it is). */
+function leafOf(match: RegExpExecArray, token: string, start: number): InlineSegment {
+  const end = start + token.length;
+  const wrap = (kind: InlineKind, open: number, close = open): InlineSegment => ({
+    kind,
+    start,
+    end,
+    contentStart: start + open,
+    contentEnd: end - close,
+    display: token.slice(open, token.length - close),
+  });
+  if (match[GROUP.escape]) return { kind: "escape", start, end, contentStart: start + 1, contentEnd: end, display: token.slice(1) };
+  if (match[GROUP.code]) return wrap("code", 1);
+  if (match[GROUP.ref]) {
+    // [[label|id]] links by id (rename-safe); [[label]] falls back to title search.
+    const inner = token.slice(2, -2);
+    const bar = inner.lastIndexOf("|");
+    return bar > 0
+      ? { kind: "ref", start, end, contentStart: start + 2, contentEnd: start + 2 + bar, display: inner.slice(0, bar), refId: inner.slice(bar + 1) }
+      : wrap("ref", 2);
+  }
+  if (match[GROUP.link]) {
+    const close = token.indexOf("](");
+    return { kind: "link", start, end, contentStart: start + 1, contentEnd: start + close, display: token.slice(1, close), href: token.slice(close + 2, -1) };
+  }
+  if (match[GROUP.date]) {
+    const date = parseDateToken(token);
+    return date ? { ...wrap("date", 2, 1), date } : wrap("text", 0);
+  }
+  if (match[GROUP.url]) {
+    // GFM's rule: a trailing ")" belongs to the URL only while its parentheses balance. What is
+    // trimmed off is scanned again as ordinary source.
+    let url = token;
+    while (url.endsWith(")") && (url.match(/\(/g)?.length ?? 0) < (url.match(/\)/g)?.length ?? 0)) url = url.slice(0, -1);
+    while (/[.,;:!?]$/.test(url)) url = url.slice(0, -1);
+    return { kind: "url", start, end: start + url.length, contentStart: start, contentEnd: start + url.length, display: url, href: url };
+  }
+  if (match[GROUP.tag]) return wrap("tag", 0);
+  if (match[GROUP.mention]) return wrap("mention", 0);
+  return wrap("math", token.startsWith("$$") ? 2 : 1);
+}
+
+/* A single `*` follows the flanking rule: it opens before a non-space, never right after a word
+   character, `\` or another star, and closes the mirror way. `lo`/`hi` bound what it can see. */
+function starOpens(s: string, at: number, lo: number, hi: number) {
+  const next = at + 1 < hi ? s[at + 1] : undefined;
+  if (next === undefined || isSpace(next) || next === "*") return false;
+  const prev = at > lo ? s[at - 1] : undefined;
+  return !(isWord(prev) || prev === "\\" || prev === "*");
+}
+function starCloses(s: string, at: number, lo: number, hi: number) {
+  const prev = at > lo ? s[at - 1] : undefined;
+  if (prev === undefined || isSpace(prev) || prev === "*" || prev === "\\") return false;
+  const next = at + 1 < hi ? s[at + 1] : undefined;
+  return !(isWord(next) || next === "*");
+}
+/** How many stars run from `at` (within `hi`), and whether the run starts at `at`. */
+function starRun(s: string, at: number, lo: number, hi: number) {
+  let end = at;
+  while (end < hi && s[end] === "*") end++;
+  return { length: end - at, first: at === lo || s[at - 1] !== "*" };
+}
+
+/**
+ * `**…**` opening at `at`. The content holds no `*` of its own and no line break, and the first
+ * run of two or more stars closes it, except that it may hold one single-star italic, and a run
+ * of exactly three stars opens or closes bold and italic together (`***both***`).
+ */
+function closeBold(s: string, at: number, lo: number, hi: number, excluded: number): Closed | null {
+  let k = at + 2;
+  if (k >= hi) return null;
+  let italic = -1; // where an italic inside opened, while it is open
+  if (s[k] === "*") {
+    const run = starRun(s, at, lo, hi);
+    if (excluded & STYLE_BIT.italic || !run.first || run.length !== 3 || k + 1 >= hi || isSpace(s[k + 1])) return null;
+    italic = k++;
+  }
+  for (; k < hi; k++) {
+    const char = s[k];
+    if (char === "\n") return null;
+    if (char !== "*") continue;
+    const run = starRun(s, k, lo, hi).length;
+    if (italic < 0) {
+      if (run >= 2) return k > at + 2 ? { open: 2, closeStart: k, close: 2 } : null;
+      if (excluded & STYLE_BIT.italic || !starOpens(s, k, lo, hi)) return null;
+      italic = k;
+    } else if (run === 1 && k > italic + 1 && starCloses(s, k, lo, hi)) italic = -1;
+    else if (run === 3 && k > italic + 1 && !isSpace(s[k - 1])) return { open: 2, closeStart: k + 1, close: 2 };
+    else return null;
+  }
+  return null;
+}
+
+/** `*…*` opening at `at`: flanking stars; the content may hold one `**` bold. */
+function closeItalic(s: string, at: number, lo: number, hi: number, excluded: number): Closed | null {
+  let k: number;
+  let bold = -1; // where a bold inside opened, while it is open
+  if (s[at + 1] === "*") {
+    // a run of exactly three opens italic around a bold that starts with it (`***b** c*`)
+    const run = starRun(s, at, lo, hi);
+    const prev = at > lo ? s[at - 1] : undefined;
+    if (excluded & STYLE_BIT.bold || !run.first || run.length !== 3 || isWord(prev) || prev === "\\") return null;
+    bold = at + 1;
+    k = at + 3;
+    if (k >= hi || isSpace(s[k])) return null;
+  } else {
+    if (!starOpens(s, at, lo, hi)) return null;
+    k = at + 1;
+  }
+  while (k < hi) {
+    const char = s[k];
+    if (char === "\n") return null;
+    if (char !== "*") {
+      k++;
+      continue;
+    }
+    const run = starRun(s, k, lo, hi).length;
+    if (bold < 0) {
+      if (run === 1) return k > at + 1 && starCloses(s, k, lo, hi) ? { open: 1, closeStart: k, close: 1 } : null;
+      if (run !== 2 || excluded & STYLE_BIT.bold) return null;
+      bold = k;
+      k += 2;
+    } else if (run === 2 && k > bold + 2) {
+      bold = -1;
+      k += 2;
+    } else if (run === 3 && k > bold + 2 && !isSpace(s[k - 1])) {
+      const next = k + 3 < hi ? s[k + 3] : undefined;
+      return isWord(next) || next === "*" ? null : { open: 1, closeStart: k + 2, close: 1 };
+    } else return null;
+  }
+  return null;
+}
+
+/** `__…__`, `~~…~~` and `==…==`: no delimiter character and no line break inside. */
+function closeDouble(s: string, at: number, hi: number): Closed | null {
+  const char = s[at]!;
+  let k = at + 2;
+  if (k >= hi || s[k] === char) return null;
+  while (k < hi && s[k] !== char) {
+    if (s[k] === "\n") return null;
+    k++;
+  }
+  return k + 1 < hi && s[k + 1] === char ? { open: 2, closeStart: k, close: 2 } : null;
+}
+
+/**
+ * Walk segments as a tree: consecutive segments in the same container (by id) become one
+ * `wrap(mark, children)`; everything else is a `leaf`. Delimiters are skipped. The static
+ * render, HTML copy and Markdown export all read styles through this one walker.
+ */
+export function walkNested<T>(
+  segments: readonly InlineSegment[],
+  leaf: (segment: InlineSegment) => T | null,
+  wrap: (mark: InlineMark, children: T[]) => T,
+  depth = 0,
+): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < segments.length; ) {
+    const segment = segments[i]!;
+    const mark = segment.marks?.[depth];
+    if (!mark) {
+      const node = segment.kind === "delimiter" ? null : leaf(segment);
+      if (node !== null) out.push(node);
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    while (j < segments.length && segments[j]!.marks?.[depth]?.id === mark.id) j++;
+    out.push(wrap(mark, walkNested(segments.slice(i, j), leaf, wrap, depth + 1)));
+    i = j;
+  }
+  return out;
 }
 
 /**
@@ -434,20 +679,63 @@ export const dateTokenOf = (date: InlineDate) =>
 /**
  * Text as literal outline source: every character that would start markup gets a backslash, so
  * pasted text from another app never turns into formatting or links by accident. Bare URLs,
- * #tags and @mentions stay live (they are words, not markers).
+ * #tags and @mentions stay live (they are words, not markers). Text that would not form markup
+ * is left as written, so only the character that opens each construct gets its backslash.
  */
 export function literalInline(text: string): string {
-  let out = "";
-  let rest = text;
-  for (let guard = 0; guard < 10_000; guard++) {
-    const marker = parseInline(rest).find((segment) => !LIVE_KINDS.has(segment.kind));
-    if (!marker) return out + rest;
-    out += rest.slice(0, marker.start) + "\\" + rest[marker.start];
-    rest = rest.slice(marker.start + 1);
+  // A backslash that would escape the next character is itself escaped first.
+  let out = text.replace(/\\(?=[\\`*_~=[\]!#@()$])/g, "\\\\");
+  // Escaping an opener can expose another construct (`___x__`, a URL inside a link): a few passes.
+  for (let pass = 0; pass < 4; pass++) {
+    const segments = parseInline(out);
+    if (readsAs(segments, text)) return out;
+    out = escapeOpeners(out, segments);
   }
-  return out + rest;
+  return readsAs(parseInline(out), text) ? out : escapeAll(text);
 }
-const LIVE_KINDS = new Set<InlineKind>(["text", "url", "tag", "mention"]);
+
+const LIVE_KINDS = new Set<InlineKind>(["text", "url", "tag", "mention", "escape"]);
+/** Plain words only (no style, no token but live words and escapes), showing exactly `text`. */
+const readsAs = (segments: readonly InlineSegment[], text: string) =>
+  segments.every((segment) => !segment.marks && LIVE_KINDS.has(segment.kind)) && segments.map((segment) => segment.display).join("") === text;
+
+/** A backslash before the first character of every style and non-live token. */
+function escapeOpeners(source: string, segments: readonly InlineSegment[]): string {
+  const at = new Set<number>();
+  for (const segment of segments) {
+    for (const mark of segment.marks ?? []) at.add(mark.start);
+    if (!LIVE_KINDS.has(segment.kind) && segment.kind !== "delimiter") at.add(segment.start);
+  }
+  let out = "";
+  let from = 0;
+  for (const offset of [...at].sort((a, b) => a - b)) {
+    out += source.slice(from, offset) + "\\";
+    from = offset;
+  }
+  return out + source.slice(from);
+}
+
+/**
+ * Every markup character escaped, outside live words. Always plain: a bare URL reads up to the
+ * next space whatever surrounds it, so everything touching one is kept as written.
+ */
+function escapeAll(text: string): string {
+  let out = "";
+  let at = 0;
+  LIVE_WORDS.lastIndex = 0;
+  for (let match = LIVE_WORDS.exec(text); match; match = LIVE_WORDS.exec(text)) {
+    let end = match.index + match[0].length;
+    if (match[1]) {
+      while (end < text.length && !/[\s<]/u.test(text[end]!)) end++;
+      LIVE_WORDS.lastIndex = end;
+    }
+    out += escapeMarkup(text.slice(at, match.index)) + text.slice(match.index, end);
+    at = end;
+  }
+  return out + escapeMarkup(text.slice(at));
+}
+/** Parentheses alone never start markup (`!(` is escaped at its `!`), so they stay bare. */
+const escapeMarkup = (text: string) => text.replace(/[\\`*_~=[\]!#@$]/g, "\\$&");
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
@@ -494,7 +782,7 @@ export const InlineText = React.memo(function InlineText({
   return (
     // dir="auto": a Latin title inside an RTL outline (or the reverse) keeps its own order.
     <span dir="auto" className={cn("whitespace-pre-wrap break-words", className)} {...props}>
-      {segments.map((segment) => (
+      {renderNested(segments, (segment) => (
         <Segment
           key={segment.start}
           segment={segment}
@@ -509,16 +797,44 @@ export const InlineText = React.memo(function InlineText({
   );
 });
 
-const shiftSegments = (segments: readonly InlineSegment[], by: number): readonly InlineSegment[] =>
-  by === 0
-    ? segments
-    : segments.map((segment) => ({
-        ...segment,
-        start: segment.start + by,
-        end: segment.end + by,
-        contentStart: segment.contentStart + by,
-        contentEnd: segment.contentEnd + by,
-      }));
+/** Segments moved by `by` source offsets; a container shared by several segments moves once. */
+function shiftSegments(segments: readonly InlineSegment[], by: number): readonly InlineSegment[] {
+  if (by === 0) return segments;
+  const moved = new Map<number, InlineMark>();
+  const move = (mark: InlineMark) => {
+    let next = moved.get(mark.id);
+    if (!next) {
+      next = { ...mark, start: mark.start + by, end: mark.end + by, contentStart: mark.contentStart + by, contentEnd: mark.contentEnd + by };
+      moved.set(mark.id, next);
+    }
+    return next;
+  };
+  return segments.map((segment) => ({
+    ...segment,
+    start: segment.start + by,
+    end: segment.end + by,
+    contentStart: segment.contentStart + by,
+    contentEnd: segment.contentEnd + by,
+    ...(segment.marks ? { marks: segment.marks.map(move) } : {}),
+  }));
+}
+
+/** Class names of the inline styles, shared by the static render and the editing surface. */
+export const INLINE_CLASS = {
+  bold: "font-semibold",
+  italic: "italic",
+  strike: "text-muted-foreground decoration-muted-foreground/70",
+  highlight: "rounded-[3px] bg-signal-muted px-0.5 text-foreground",
+  code: "rounded-[4px] border border-hairline bg-muted px-1 py-px font-mono text-[0.86em] text-foreground/90 box-decoration-clone",
+} as const;
+
+const STYLE_ELEMENT: Record<InlineStyle, "strong" | "em" | "s" | "span"> = { bold: "strong", italic: "em", strike: "s", highlight: "span" };
+
+/** One element per style container, around the leaves inside it. */
+const renderNested = (segments: readonly InlineSegment[], leaf: (segment: InlineSegment) => React.ReactNode) =>
+  walkNested<React.ReactNode>(segments, leaf, (mark, children) =>
+    React.createElement(STYLE_ELEMENT[mark.kind], { key: `s${mark.id}`, className: INLINE_CLASS[mark.kind] }, ...children),
+  );
 
 function Runs({
   segment,
@@ -598,17 +914,13 @@ function Segment({
     case "text":
     case "escape":
       return runs;
-    case "bold":
-      return <strong className="font-semibold">{runs}</strong>;
-    case "italic":
-      return <em className="italic">{runs}</em>;
-    case "strike":
-      return <s className="text-muted-foreground decoration-muted-foreground/70">{runs}</s>;
+    case "delimiter":
+      return null;
     case "code":
       return (
         <code
           className={cn(
-            "rounded-[4px] border border-hairline bg-muted px-1 py-px font-mono text-[0.86em] text-foreground/90 box-decoration-clone",
+            INLINE_CLASS.code,
             // A short token (an identifier, a flag, `halcyon-3`) never breaks at its hyphen or
             // slash; a long snippet still wraps so it can never push the line off a phone.
             isShortCode(segment.display) && "whitespace-nowrap",
@@ -616,12 +928,6 @@ function Segment({
         >
           {runs}
         </code>
-      );
-    case "highlight":
-      return (
-        <span className="rounded-[3px] bg-signal-muted px-0.5 text-foreground">
-          {runs}
-        </span>
       );
     case "link":
     case "url":

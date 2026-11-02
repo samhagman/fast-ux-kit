@@ -1,0 +1,47 @@
+/* The live field: the static row's text, editable. Only what utilities cannot say. */
+[data-ol-editor] {
+  position: relative;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font-variant-ligatures: none;
+  outline: none;
+}
+
+/* Selection drawn by the editor itself (a selected chip) hides the native one. */
+[data-ol-editor].ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+[data-ol-editor].ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
+/* A selected chip: the arrow key's first press lands on it, the next moves past. */
+[data-ol-editor] .ProseMirror-selectednode {
+  border-radius: 4px;
+  outline: 2px solid color-mix(in srgb, var(--signal) 55%, transparent);
+  outline-offset: 1px;
+}
+
+/* Chips are atoms: their own text is not a caret stop, and a click selects the whole chip. */
+[data-ol-editor] [data-chip] {
+  user-select: none;
+}
+[data-ol-editor] [data-chip] :is(button, a) {
+  cursor: default;
+}
+
+/* The editor's own placeholders for a caret between marks keep no box of their own. */
+[data-ol-editor] img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+}
+
+/* An empty note says what it is for (the editable element has no placeholder of its own). */
+[data-ol-editor][data-empty]::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset-inline-start: 0;
+  pointer-events: none;
+  color: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
+}

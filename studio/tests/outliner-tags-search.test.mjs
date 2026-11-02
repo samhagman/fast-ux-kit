@@ -19,14 +19,9 @@ const doc = () => [
 ];
 const text = (ui, id) => ui.value().find((n) => n.id === id).text;
 
-/** Type into the open field the way an input event delivers it (the caret ends up at the end). */
+/** Make the open field read `value` by typing what differs (the caret ends up at the end). */
 async function type(ui, value) {
-  const field = ui.field();
-  await ui.act(() => {
-    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set.call(field, value);
-    field.setSelectionRange(value.length, value.length);
-    field.dispatchEvent(new window.Event("input", { bubbles: true }));
-  });
+  await ui.setValue(value);
   await ui.frames();
 }
 const listbox = () => document.querySelector("[role=listbox]");

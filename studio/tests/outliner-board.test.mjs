@@ -165,13 +165,13 @@ test("board UI: Enter edits the card; Enter at the end adds the next card; Escap
   const ui = await mountOutliner({ defaultValue: doc(), hoistedId: "b" });
   await ui.act(() => ui.board().focus());
   await ui.key("Enter");
-  const field = ui.container.querySelector('[data-row="c1"] textarea');
+  const field = ui.container.querySelector('[data-row="c1"] [data-field=title]');
   assert.ok(field, "the card's title is a field now");
   await ui.act(() => field.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
   const cards = ui.cards("todo");
   assert.equal(cards.length, 4);
   assert.equal(cards[1] !== "c2" && cards[2], "c2", "a new card right after the one being edited");
-  const next = ui.container.querySelector(`[data-row="${cards[1]}"] textarea`);
+  const next = ui.container.querySelector(`[data-row="${cards[1]}"] [data-field=title]`);
   assert.ok(next, "and it is being edited");
   await ui.act(() => next.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })));
   assert.equal(core.findOutlineNode(ui.value(), cards[1]).parentId, "todo", "Tab never nests a card inside another");
@@ -249,6 +249,8 @@ async function domEnv() {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   React = await import("react");
   act = React.act;
+  // The live title field's chunk first, so a title is never briefly the plain field.
+  await (await load("/src/registry/outliner/live-field/load.ts")).loadLiveField();
   ({ createRoot } = await import("react-dom/client"));
 }
 

@@ -340,7 +340,7 @@ export function OutlinerBoard({ board, parts }: { readonly board: OutlineItem; r
           select(card.id, event);
         }}
         onDoubleClick={(event) => {
-          if (editingField || (event.target as Element).closest("textarea,button")) return;
+          if (editingField || (event.target as Element).closest("textarea,button,[data-ol-editor]")) return;
           open(card.id);
         }}
         onContextMenu={coarse ? (event) => event.preventDefault() : undefined}
@@ -681,7 +681,7 @@ function useBoardDrag({
     (event: React.PointerEvent, kind: "card" | "column", id: string, title: string) => {
       const { ol } = latest.current;
       if (event.button !== 0 || ol.readOnly || ol.isItemLocked(id)) return;
-      if ((event.target as Element).closest("button,a,textarea,input,[role=checkbox]")) return;
+      if ((event.target as Element).closest("button,a,textarea,input,[role=checkbox],[data-ol-editor]")) return;
       const touch = event.pointerType !== "mouse";
       const pointerId = event.pointerId;
       const startX = event.clientX,

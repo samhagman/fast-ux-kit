@@ -338,6 +338,8 @@ async function domEnv() {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   React = await import("react");
   act = React.act;
+  // The live title field's chunk first, so a title is never briefly the plain field.
+  await (await vite.ssrLoadModule("/src/registry/outliner/live-field/load.ts")).loadLiveField();
   ({ createRoot } = await import("react-dom/client"));
 }
 async function mount(props) {

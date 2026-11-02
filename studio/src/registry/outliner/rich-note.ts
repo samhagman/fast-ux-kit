@@ -72,16 +72,16 @@ interface Line {
   readonly text: string;
 }
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)[^`]*$/;
-const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$/;
-const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
-const QUOTE = /^ {0,3}> ?/;
-const LIST = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(\[[ xX]\][ \t]+)?/;
+export const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)[^`]*$/;
+export const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$/;
+export const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+export const QUOTE = /^ {0,3}> ?/;
+export const LIST = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(\[[ xX]\][ \t]+)?/;
 // Images by http(s) URL or a site path ("/media/x.png"); never javascript:, data: or other
 // schemes, and never a protocol-relative "//host/x.png" (another site, like seams.ts refuses).
-const IMAGE = /^ {0,3}!\[([^\]\n]*)\]\(((?:https?:\/\/|\/(?!\/))[^\s()]+)(?:[ \t]+=(\d{1,5})x(\d{1,5}))?(?:[ \t]+"([^"\n]*)")?\)[ \t]*$/;
-const MATH_ONE = /^ {0,3}\$\$(.+)\$\$[ \t]*$/;
-const MATH_FENCE = /^ {0,3}\$\$[ \t]*$/;
+export const IMAGE = /^ {0,3}!\[([^\]\n]*)\]\(((?:https?:\/\/|\/(?!\/))[^\s()]+)(?:[ \t]+=(\d{1,5})x(\d{1,5}))?(?:[ \t]+"([^"\n]*)")?\)[ \t]*$/;
+export const MATH_ONE = /^ {0,3}\$\$(.+)\$\$[ \t]*$/;
+export const MATH_FENCE = /^ {0,3}\$\$[ \t]*$/;
 const TABLE_DELIMITER = /^ {0,3}\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
 
 /** Cheap pre-check: a note with none of these is one paragraph (the common case). */
@@ -153,9 +153,13 @@ function startsBlock(lines: readonly Line[], i: number): boolean {
   );
 }
 
-export function parseNoteBlocks(source: string): readonly NoteBlock[] {
+/**
+ * A note's blocks. A note without block syntax is one paragraph holding the whole source; `full`
+ * reads it line by line all the same (trimmed edges, blank lines between paragraphs).
+ */
+export function parseNoteBlocks(source: string, { full = false }: { readonly full?: boolean } = {}): readonly NoteBlock[] {
   if (!source) return [];
-  if (!isRichNote(source)) return [{ kind: "paragraph", start: 0, text: { start: 0, end: source.length } }];
+  if (!full && !isRichNote(source)) return [{ kind: "paragraph", start: 0, text: { start: 0, end: source.length } }];
   const lines = splitLines(source);
   const blocks: NoteBlock[] = [];
   let i = 0;
@@ -356,3 +360,62 @@ export function noteSummary(source: string): string {
       return "";
   }
 }
+
+export const lineStartAt = (source: string, at: number) => (at <= 0 ? 0 : source.lastIndexOf("\n", at - 1) + 1);
+export const lineEndAt = (source: string, at: number) => {
+  const next = source.indexOf("\n", at);
+  return next < 0 ? source.length : next;
+};
+
+/** The last item of a list, its own nested lists included (the list's last line). */
+export function lastListItem(list: NoteList): NoteListItem {
+  const item = list.items.at(-1)!;
+  return item.children ? lastListItem(item.children) : item;
+}
+
+/** Where a block's source ends: the end of its last line (a closing fence included). */
+export function noteBlockEnd(source: string, block: NoteBlock): number {
+  switch (block.kind) {
+    case "paragraph":
+    case "heading":
+      return lineEndAt(source, block.text.end);
+    case "quote":
+      return block.lines.at(-1)!.end;
+    case "list":
+      return lineEndAt(source, lastListItem(block.list).text.end);
+    case "code":
+    case "math": {
+      const range = block.kind === "code" ? block.code : block.tex;
+      if (block.kind === "math" && MATH_ONE.test(source.slice(block.start, lineEndAt(source, block.start)))) return lineEndAt(source, block.start);
+      if (range.end >= source.length) return source.length;
+      return lineEndAt(source, source[range.end] === "\n" ? range.end + 1 : range.end);
+    }
+    case "table": {
+      const lastRow = block.rows.at(-1);
+      return lastRow?.length ? lineEndAt(source, lastRow[0]!.start) : lineEndAt(source, lineEndAt(source, block.start) + 1);
+    }
+    case "image":
+    case "rule":
+      return lineEndAt(source, block.start);
+  }
+}
+
+/**
+ * The classes of a note's blocks, shared by the static render and the editing surface, so a note
+ * looks the same being read and being edited (Tailwind classes, no conflicting pairs).
+ */
+export const NOTE_CLASS = {
+  root: "flex flex-col gap-1.5",
+  paragraph: "block",
+  heading: (level: number) =>
+    `block font-semibold tracking-[-0.01em] text-foreground mt-0.5 ${["text-[1.08em]", "text-[1.02em]", "text-[1em]", "text-[1em]", "text-[1em]", "text-[1em]"][level - 1] ?? "text-[1em]"}`,
+  quote: "block border-s-2 border-foreground/15 ps-3 text-muted-foreground italic",
+  quoteLine: "block",
+  rule: "my-1 block h-px bg-hairline",
+  list: (ordered: boolean, tasks: boolean) =>
+    `flex flex-col gap-0.5 marker:text-muted-foreground/70 ${tasks ? "list-none ps-0" : `ps-[1.15em] ${ordered ? "list-decimal marker:font-mono marker:text-[0.85em]" : "list-disc"}`}`,
+  item: (task: boolean) => (task ? "flex items-start gap-2" : ""),
+  box: (checked: boolean) =>
+    `mt-[0.28em] grid size-[0.95em] shrink-0 place-items-center rounded-[3px] border ${checked ? "border-signal/70 bg-signal/80 text-signal-foreground" : "border-foreground/25"}`,
+  itemBody: (checked: boolean | undefined) => (checked ? "min-w-0 text-muted-foreground line-through decoration-muted-foreground/50" : "min-w-0"),
+} as const;

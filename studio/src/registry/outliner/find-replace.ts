@@ -29,7 +29,8 @@ export interface FindMatch {
   readonly end: number;
 }
 
-const WORDS: ReadonlySet<InlineKind> = new Set<InlineKind>(["text", "bold", "italic", "strike", "code", "highlight", "link", "tag", "mention"]);
+/** Kinds whose visible text is prose to search; styled text (bold, italic …) is `text` inside its style. */
+const WORDS: ReadonlySet<InlineKind> = new Set<InlineKind>(["text", "code", "link", "tag", "mention"]);
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

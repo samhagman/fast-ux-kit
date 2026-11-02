@@ -496,8 +496,7 @@ test("item menu: a target deleted while the menu is open refuses with a toast an
 /* ───────────── "/" while typing ───────────── */
 
 async function typeField(ui, value) {
-  const field = ui.field();
-  await ui.act(() => typeInto(field, value));
+  await ui.setValue(value);
   await ui.frames();
 }
 const attached = () => document.querySelector("[data-item-menu=attached]");

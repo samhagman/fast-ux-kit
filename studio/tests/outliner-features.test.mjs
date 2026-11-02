@@ -199,15 +199,16 @@ test("completing a recurring task advances its date instead and stays open (one 
 /* ───────────── Inline escapes and paste ───────────── */
 
 test("a backslash makes markup literal; pasted HTML text never turns into links or formatting", () => {
+  const bold = (segments) => segments.some((s) => s.marks?.some((mark) => mark.kind === "bold"));
   const segments = inline.parseInline("\\[[Launch goals|goals-1]] and \\**not bold**");
-  assert.ok(!segments.some((s) => s.kind === "ref" || s.kind === "bold"));
+  assert.ok(!segments.some((s) => s.kind === "ref") && !bold(segments));
   assert.equal(inline.inlineToPlain("\\[[Launch goals|goals-1]]"), "[[Launch goals|goals-1]]");
   assert.equal(inline.literalInline("[[Launch goals|goals-1]] __init__ #tag https://x.dev/a_b"), "\\[[Launch goals|goals-1]] \\__init__ #tag https://x.dev/a_b");
   assert.equal(inline.inlineToPlain(inline.literalInline("a \\* b **c**")), "a \\* b **c**", "literal text round-trips exactly");
   const [node] = interchange.importOutlineHtml("<ul><li>See [[Launch goals|goals-1]] and <b>bold</b></li></ul>", () => "x", parse);
-  const kinds = inline.parseInline(node.text).map((s) => s.kind);
-  assert.ok(!kinds.includes("ref"), "typed link markup stays text");
-  assert.ok(kinds.includes("bold"), "the importer's own markers still format");
+  const parsed = inline.parseInline(node.text);
+  assert.ok(!parsed.some((s) => s.kind === "ref"), "typed link markup stays text");
+  assert.ok(bold(parsed), "the importer's own markers still format");
 });
 
 test("HTML-pasted links keep parentheses (Wikipedia-style URLs)", () => {
@@ -277,6 +278,8 @@ async function domEnv() {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   React = await import("react");
   act = React.act;
+  // The live title field's chunk first, so a title is never briefly the plain field.
+  await (await vite.ssrLoadModule("/src/registry/outliner/live-field/load.ts")).loadLiveField();
   ({ createRoot } = await import("react-dom/client"));
 }
 async function mount(props) {
