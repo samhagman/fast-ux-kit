@@ -109,25 +109,29 @@ test("typing rewrites: ##tag and _x_ while typing, never after a currency dollar
 
 /* ───────────── Title line-start rules ───────────── */
 
-test("title rules: '### ' is heading 3 with the marker gone, one step; ⌫ right after takes both back", async () => {
+test("title rules: '### ' and '#2 ' stay text and set no heading; /2 and Enter makes the row H2, one step", async () => {
+  for (const typed of ["### Go", "#2 Go", "# Go"]) {
+    const ui = await mountOutliner({ defaultValue: doc() });
+    await ui.edit("c");
+    await ui.type(typed);
+    assert.equal(titleOf(ui, "c"), typed, `${typed}: typed as text`);
+    assert.equal(find(ui.value(), "c").data?.heading, undefined, `${typed}: no heading`);
+    await ui.unmount();
+  }
   const ui = await mountOutliner({ defaultValue: doc() });
   await ui.edit("c");
-  await ui.type("###");
   const before = past(ui);
-  await ui.type(" ");
-  assert.equal(titleOf(ui, "c"), "", "the marker is not stored");
-  assert.equal(find(ui.value(), "c").data?.heading, 3);
-  assert.equal(past(ui), before + 1, "marker and heading together: one step");
-  await ui.key("Backspace");
-  assert.equal(titleOf(ui, "c"), "###");
-  assert.equal(find(ui.value(), "c").data?.heading, undefined, "⌫ reverts the rule");
+  await ui.type("/2");
+  await ui.key("Enter");
+  await ui.frames();
+  assert.equal(find(ui.value(), "c").data?.heading, 2);
+  assert.equal(titleOf(ui, "c"), "", "the /query is not stored");
+  assert.equal(past(ui), before + 1, "one step");
   await ui.unmount();
 });
 
-test("title rules: #2, [] and [x] set attributes; #### caps at H3; - is swallowed; #launch is a tag; 1. numbers the parent", async () => {
+test("title rules: [] and [x] set attributes; - is swallowed; #launch is a tag; 1. numbers the parent", async () => {
   const cases = [
-    ["#2 ", { heading: 2 }],
-    ["#### ", { heading: 3 }],
     ["[] ", { checked: false }],
     ["[x] ", { checked: true }],
     ["- ", {}],
@@ -138,7 +142,6 @@ test("title rules: #2, [] and [x] set attributes; #### caps at H3; - is swallowe
     await ui.type(typed + "Go");
     const node = find(ui.value(), "c");
     assert.equal(node.text, "Go", `${typed}: the marker is not stored`);
-    if (want.heading) assert.equal(node.data?.heading, want.heading, typed);
     if ("checked" in want) assert.equal(node.checked, want.checked, typed);
     await ui.unmount();
   }

@@ -1309,12 +1309,24 @@ export function reduceOutlineEditor<T>(
         : next;
     }
     if (action.type === "outdent") {
-      if (
-        state.hoistedId &&
-        ids.some((id) => findOutlineNode(state.nodes, id)?.parentId === state.hoistedId)
-      )
-        return state;
-      ids.reverse();
+      // A selected item already at the outermost level (the top, or the zoomed-in item's
+      // children) stays; the selected items under it go out a level instead.
+      const selected = new Set(requested);
+      const stuck = (id: string) => {
+        const parentId = findOutlineNode(state.nodes, id)!.parentId;
+        return parentId === null || parentId === state.hoistedId;
+      };
+      const movable: string[] = [];
+      const lift = (node: OutlineNode<T>) => {
+        for (const child of node.children ?? [])
+          if (selected.has(child.id)) movable.push(child.id);
+          else lift(child);
+      };
+      for (const id of ids)
+        if (stuck(id)) lift(findOutlineNode(state.nodes, id)!.node);
+        else movable.push(id);
+      if (!movable.length) return state;
+      ids.splice(0, ids.length, ...movable.reverse());
     }
     // Indent is all or nothing: a range whose first item has nothing above it at its
     // level would otherwise leave that item where it is and tuck the rest under it. The whole

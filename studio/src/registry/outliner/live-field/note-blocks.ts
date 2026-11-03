@@ -17,6 +17,8 @@
  *                  loses its last character, giving back what was typed); paragraph: joins the
  *                  block above; code or math with nothing in it: back to its opener line
  *   ⌘↵             a task: toggled; code, math or a table: the caret goes below the block
+ *   Tab, ⇧Tab      list items (each with its own items): under the item above, or a level out
+ *   /1 /2 /3       the line becomes a heading (its list or quote marker goes)
  */
 import {
   FENCE,
@@ -35,6 +37,8 @@ import {
 export interface SourceEdit {
   readonly text: string;
   readonly caret: number;
+  /** The selection's other end, when the edit keeps a selection. */
+  readonly anchor?: number;
 }
 
 const TABLE_ROW = /^[ \t]{0,3}\|.*\|[ \t]*$/;
@@ -302,9 +306,15 @@ export function taskAt(source: string, at: number): number | null {
 
 /**
  * Typing rewrites at a note's line start, right after the space: `[]␣` and `[ ]␣` become a task
- * item, `[x]␣` a done one; `-␣[]␣` gets its box spelled `[ ]`.
+ * item, `[x]␣` a done one; `-␣[]␣` gets its box spelled `[ ]`; `#␣` stays literal.
  */
 export function noteRewrite(before: string): { from: number; to: number; insert: string } | null {
+  // `#␣` at a line start stays text (stored `\#`): headings come from `/1` to `/3`, `#` is a tag's.
+  const hashes = /(^|\n)( {0,3})#{1,6}[ \t]$/.exec(before);
+  if (hashes) {
+    const at = hashes.index + hashes[1]!.length + hashes[2]!.length;
+    return { from: at, to: at, insert: "\\" };
+  }
   const m = /(^|\n)([ \t]*)((?:[-*+][ \t]+)?)\[( ?|[xX])\][ \t]$/.exec(before);
   if (!m || (m[3] && m[4] !== "")) return null;
   const from = m.index + m[1]!.length + m[2]!.length;
@@ -315,4 +325,94 @@ export function noteRewrite(before: string): { from: number; to: number; insert:
 export function inProse(source: string, at: number): boolean {
   const { block } = blockAt(source, at);
   return !block || block.kind === "paragraph" || block.kind === "heading" || block.kind === "list" || block.kind === "quote";
+}
+
+type Placed = { readonly item: NoteListItem; readonly parent: NoteListItem | null; readonly previous: NoteListItem | null };
+
+/** Every item of a list, depth first, with its parent and the sibling above it. */
+function placed(list: NoteList, parent: NoteListItem | null = null, out: Placed[] = []): Placed[] {
+  list.items.forEach((item, i) => {
+    out.push({ item, parent, previous: list.items[i - 1] ?? null });
+    if (item.children) placed(item.children, item, out);
+  });
+  return out;
+}
+
+/** The end of an item's last line, its own items included. */
+function itemEnd(source: string, item: NoteListItem): number {
+  const last = item.children?.items.at(-1);
+  return last ? itemEnd(source, last) : lineEndAt(source, item.text.end);
+}
+
+/**
+ * Tab in a list, the selection `from`–`to`: each item it touches moves under the item above it
+ * (⇧Tab, `out`: to its parent's level), carrying its own items. An item with nothing to go under
+ * (the first) or nothing to leave (the top level) stays; null when the caret is not in a list.
+ */
+export function noteTab(source: string, from: number, to: number, out: boolean): SourceEdit | null {
+  const { block } = blockAt(source, from);
+  if (block?.kind !== "list") return null;
+  const all = placed(block.list);
+  const first = itemAt(source, block.list, from)?.item;
+  if (!first) return null;
+  const last = itemAt(source, block.list, to)?.item ?? first;
+  const span = all.filter(({ item }) => item.start >= first.start && item.start <= last.start);
+  // Only the outermost touched items move; their own items come along.
+  const chosen = span.filter(({ parent }) => !span.some(({ item }) => item === parent));
+  const indentOf = (item: NoteListItem) => markerOf(source, item).indent.length;
+  const deltas = new Map<NoteListItem, number>();
+  for (const { item, parent, previous } of chosen) {
+    let delta = 0;
+    if (out) delta = parent ? indentOf(parent) - indentOf(item) : 0;
+    else if (previous && deltas.has(previous)) delta = deltas.get(previous)!; // siblings move together
+    else if (previous) {
+      const m = markerOf(source, previous);
+      delta = m.indent.length + m.marker.length + m.gap.length - indentOf(item);
+    }
+    deltas.set(item, delta);
+  }
+  // Line starts and how far each moves, bottom up so earlier offsets stay valid.
+  const moves: { at: number; delta: number }[] = [];
+  for (const [item, delta] of deltas) {
+    if (!delta) continue;
+    for (let at = item.start, end = itemEnd(source, item); at <= end; at = lineEndAt(source, at) + 1) {
+      moves.push({ at, delta });
+      if (lineEndAt(source, at) >= source.length) break;
+    }
+  }
+  const map = (offset: number) => {
+    let next = offset;
+    for (const { at, delta } of moves) {
+      if (offset < at) continue;
+      if (delta > 0) next += delta;
+      else next -= Math.min(-delta, offset - at);
+    }
+    return next;
+  };
+  let text = source;
+  for (const { at, delta } of [...moves].sort((a, b) => b.at - a.at)) {
+    text = delta > 0 ? text.slice(0, at) + " ".repeat(delta) + text.slice(at) : text.slice(0, at) + text.slice(at - delta);
+  }
+  return to > from ? { text, caret: map(to), anchor: map(from) } : { text, caret: map(from) };
+}
+
+const LINE_MARKER = /^(?: {0,3}#{1,6}[ \t]+|[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?| {0,3}>[ \t]?)/;
+
+/** The heading level of the note line holding `at`, when it is one. */
+export function lineHeadingLevel(source: string, at: number): number | undefined {
+  const { block } = blockAt(source, at);
+  return block?.kind === "heading" ? block.level : undefined;
+}
+
+/**
+ * The note line holding `at` as a heading of `level` (undefined: plain text again). A list or
+ * quote marker on it goes: the line is the heading. Null outside prose (code, math, a table).
+ */
+export function lineHeading(source: string, at: number, level: 1 | 2 | 3 | undefined): SourceEdit | null {
+  if (!inProse(source, at)) return null;
+  const ls = lineStartAt(source, at);
+  const marker = LINE_MARKER.exec(source.slice(ls, lineEndAt(source, ls)))?.[0] ?? "";
+  const insert = level ? `${"#".repeat(level)} ` : "";
+  const caret = Math.max(ls + insert.length, at - marker.length + insert.length);
+  return splice(source, ls, ls + marker.length, insert, caret);
 }

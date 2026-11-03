@@ -654,23 +654,19 @@ export function joinSources(config: FieldConfig, left: { readonly id: string; re
 /* ─────────────────────────── title line-start rules ─────────────────────────── */
 
 export type TitleRule =
-  | { readonly kind: "heading"; readonly level: 1 | 2 | 3 }
   | { readonly kind: "checkbox"; readonly checked: boolean }
   | { readonly kind: "bullet" }
   | { readonly kind: "numbered" };
 
 /**
  * The rule a space completes at the very start of a title, when the marker is all that precedes
- * the caret. `#`, `##`, `###` and `#1` to `#3` are headings (`####` and more cap at H3); a
- * line-start `#word` is a tag and never reaches here.
+ * the caret. `#` never makes a heading (it is a tag's; headings come from `/1` to `/3`).
  */
 export function titleRuleFor(textBeforeCaret: string): TitleRule | null {
-  const match = /^(?:(#{1,6})|#([1-3])|(\[ ?\])|(\[[xX]\])|([-*+])|(1\.))$/.exec(textBeforeCaret);
+  const match = /^(?:(\[ ?\])|(\[[xX]\])|([-*+])|(1\.))$/.exec(textBeforeCaret);
   if (!match) return null;
-  if (match[1]) return { kind: "heading", level: Math.min(3, match[1].length) as 1 | 2 | 3 };
-  if (match[2]) return { kind: "heading", level: Number(match[2]) as 1 | 2 | 3 };
-  if (match[3]) return { kind: "checkbox", checked: false };
-  if (match[4]) return { kind: "checkbox", checked: true };
-  if (match[5]) return { kind: "bullet" };
+  if (match[1]) return { kind: "checkbox", checked: false };
+  if (match[2]) return { kind: "checkbox", checked: true };
+  if (match[3]) return { kind: "bullet" };
   return { kind: "numbered" };
 }

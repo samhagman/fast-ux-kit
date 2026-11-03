@@ -556,7 +556,7 @@ test("text /: the query is shown but never stored or in history; Esc removes exa
   await ui.unmount();
 });
 
-test("text /: no menu in code, in math, after a backslash, inside a word or a URL; a note's / is just text", async () => {
+test("text /: no menu in code, in math, after a backslash, inside a word or a URL; in a note only on a prose line", async () => {
   const ui = await mount();
   await ui.edit("q");
   for (const value of ["Other `x /", "Other $x /", "Other \\/", "Other a/", "Other https:/", "Other https://", "Other `a /b` and"]) {
@@ -572,7 +572,11 @@ test("text /: no menu in code, in math, after a backslash, inside a word or a UR
   await ui.act(() => ui.ol().dispatch({ type: "focus", id: "q", field: "note", start: 0 }));
   await ui.frames();
   await typeField(ui, "/");
-  assert.equal(attached(), null, "notes are prose");
+  assert.ok(attached(), "a note's prose line has the menu");
+  await ui.key("Escape");
+  await waitFor(() => !attached());
+  await typeField(ui, "```\n/");
+  assert.equal(attached(), null, "not inside a code block");
   await ui.unmount();
 });
 

@@ -128,6 +128,8 @@ export interface ItemActionsContext {
   readonly row: OutlinerRow;
   /** Hints only. */
   readonly isMac: boolean;
+  /** Opened from a note's line: the heading entries mean that line, not the row. */
+  readonly noteLine?: { readonly level?: number; set(level: 1 | 2 | 3 | undefined): void };
 }
 
 const sep = (id: string): ItemEntry => ({ kind: "separator", id });
@@ -164,7 +166,7 @@ type Draft = Omit<ItemAction, "kind" | "id"> | Omit<ItemSubmenu, "kind" | "id">;
 const isPage = (draft: Draft): draft is Omit<ItemSubmenu, "kind" | "id"> => "items" in draft;
 
 export function itemActions(ctx: ItemActionsContext): readonly ItemEntry[] {
-  const { ol, ui, ids, row, isMac } = ctx;
+  const { ol, ui, ids, row, isMac, noteLine } = ctx;
   const L = ui.labels;
   // Menu hints follow the active keyboard profile and remaps.
   const keys = (id: ShortcutId) => primaryShortcut(ui.keymap, id, isMac);
@@ -311,20 +313,31 @@ export function itemActions(ctx: ItemActionsContext): readonly ItemEntry[] {
       disabled: !editable,
       items: [
         ...([1, 2, 3] as const).map((level) =>
-          make({
-            commandId: `format.h${level}`,
-            label: L.heading(level),
-            icon: headingIcon(level),
-            chord: `heading${level}`,
-            shortcut: keys(`heading${level}`),
-            keywords: ["title"],
-            current: row.details.heading === level,
-            // The level the whole target already has turns back to text.
-            inverse: "self-when-uniform",
-            run: () => ol.commands.toggleHeading(ids, level),
-          }),
+          noteLine
+            ? make({
+                commandId: `format.h${level}`,
+                label: L.heading(level),
+                icon: headingIcon(level),
+                keywords: ["title", "line"],
+                current: noteLine.level === level,
+                run: () => noteLine.set(noteLine.level === level ? undefined : level),
+              })
+            : make({
+                commandId: `format.h${level}`,
+                label: L.heading(level),
+                icon: headingIcon(level),
+                chord: `heading${level}`,
+                shortcut: keys(`heading${level}`),
+                keywords: ["title"],
+                current: row.details.heading === level,
+                // The level the whole target already has turns back to text.
+                inverse: "self-when-uniform",
+                run: () => ol.commands.toggleHeading(ids, level),
+              }),
         ),
-        make({ commandId: "format.text", label: L.normalText, icon: <Text />, chord: "heading0", shortcut: keys("heading0"), keywords: ["plain", "paragraph"], run: () => ol.commands.setHeading(ids, undefined) }),
+        noteLine
+          ? make({ commandId: "format.text", label: L.normalText, icon: <Text />, keywords: ["plain", "paragraph"], run: () => noteLine.set(undefined) })
+          : make({ commandId: "format.text", label: L.normalText, icon: <Text />, chord: "heading0", shortcut: keys("heading0"), keywords: ["plain", "paragraph"], run: () => ol.commands.setHeading(ids, undefined) }),
         sep("f1"),
         make({
           commandId: "format.numbered",

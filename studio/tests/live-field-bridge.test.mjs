@@ -298,13 +298,9 @@ test("local edits replay onto a newer remote value; overlapping ones are reporte
   assert.equal(live.mapOffset(live.diffSplices("abc", "Xabc"), 1), 2);
 });
 
-test("title line-start rules: headings cap at H3; a line-start #word is not a rule", () => {
-  assert.deepEqual(live.titleRuleFor("###"), { kind: "heading", level: 3 });
-  assert.deepEqual(live.titleRuleFor("####"), { kind: "heading", level: 3 });
-  assert.deepEqual(live.titleRuleFor("#2"), { kind: "heading", level: 2 });
+test("title line-start rules: # is never a heading (headings come from /1–/3); boxes, bullets, numbers", () => {
+  for (const marker of ["#", "##", "###", "####", "#2", "#launch", ">"]) assert.equal(live.titleRuleFor(marker), null, marker);
   assert.deepEqual(live.titleRuleFor("[x]"), { kind: "checkbox", checked: true });
   assert.deepEqual(live.titleRuleFor("[]"), { kind: "checkbox", checked: false });
   assert.deepEqual(live.titleRuleFor("1."), { kind: "numbered" });
-  assert.equal(live.titleRuleFor("#launch"), null);
-  assert.equal(live.titleRuleFor(">"), null);
 });

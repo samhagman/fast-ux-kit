@@ -7,6 +7,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandS
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useOutlinerContext, usePlatformKeys, type FocusReturn, type ItemMenuRequest, type OutlinerUi } from "./context";
 import { fieldCaretRect, fieldReturn, type CaretField } from "./focus";
+import { inProse, lineHeading, lineHeadingLevel } from "./live-field/note-blocks";
 import { afterFocusReturn, filterValue, findEntry, itemActions, wordFilter, type ItemAction, type ItemEntry, type ItemSubmenu } from "./item-actions";
 import { inlineToPlain, parseInline } from "./inline";
 import { isComposingKey, isItemMenuKey, type ComboEvent } from "./keymap";
@@ -456,7 +457,18 @@ export function useSlashMenu({
         if (el && document.activeElement === (el as unknown)) el.setSelectionRange(was.start, was.start);
       });
   };
-  const entries = transient ? itemActions({ ol, ui, ids: [row.id], row, isMac }) : [];
+  // In a note, headings mean the line "/" was typed on (note-blocks.ts), not the row.
+  const noteLine =
+    transient && field === "note"
+      ? {
+          level: lineHeadingLevel(stored(), transient.start),
+          set: (level: 1 | 2 | 3 | undefined) => {
+            const edit = lineHeading(stored(), transient.start, level);
+            if (edit) ol.dispatch({ type: "note", id: row.id, text: edit.text, caret: edit.caret });
+          },
+        }
+      : undefined;
+  const entries = transient ? itemActions({ ol, ui, ids: [row.id], row, isMac, ...(noteLine ? { noteLine } : {}) }) : [];
   const model = useMenuModel(entries, query, {
     onRun: (action) => {
       dismiss();
@@ -470,13 +482,13 @@ export function useSlashMenu({
   const onChange = (el: CaretField): boolean => {
     const text = el.value;
     const caret = el.selectionStart;
-    // Notes are prose: "/" is only a menu in a title (as before).
-    if (field !== "title" || caret !== el.selectionEnd) {
+    if (caret !== el.selectionEnd) {
       if (live.current) setTransient(null);
       return false;
     }
     const token = findSlashToken(text, caret);
-    if (token && text.slice(0, token.start) + text.slice(caret) === stored()) {
+    // In a note, only on a prose line (not in code, math or a table).
+    if (token && (field === "title" || inProse(text, token.start)) && text.slice(0, token.start) + text.slice(caret) === stored()) {
       const next = { text, start: token.start, caret };
       live.current = next;
       setTransient(next);

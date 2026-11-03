@@ -1,6 +1,7 @@
 // Shared jsdom harness for outliner component tests: a Vite SSR loader for the registry
 // modules, a DOM with controllable media queries, and a mounted <Outliner> driven with real
 // DOM events. Not a test file itself (the runner only picks up tests/*.test.mjs).
+import "./clock.mjs";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 

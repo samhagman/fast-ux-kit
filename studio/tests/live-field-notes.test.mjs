@@ -290,10 +290,14 @@ const openNote = async (ui, id) => {
   assert.equal(ui.field()?.dataset.olEditor, "note", "⇧↵ opens the note in the live field");
 };
 
-test("typing a note: heading, a list with continuation and exit, a task toggled by ⌘↵ and by a click, then Esc", async () => {
+test("typing a note: heading by /2, a list with continuation and exit, a task toggled by ⌘↵ and by a click, then Esc", async () => {
   const ui = await mountOutliner({ defaultValue: [{ id: "a", text: "Plan" }, { id: "b", text: "Next" }] });
   await openNote(ui, "a");
-  await ui.type("## Results");
+  await ui.type("/2");
+  await ui.key("Enter");
+  await ui.frames();
+  await ui.type("Results");
+  assert.equal(noteOf(ui, "a"), "## Results", "/2 makes the line a heading");
   await ui.key("Enter");
   await ui.type("- alpha");
   await ui.key("Enter");
@@ -323,13 +327,13 @@ test("typing a note: heading, a list with continuation and exit, a task toggled 
   await ui.unmount();
 });
 
-test("⌘↵ outside a task completes the item, as before; Tab in a note list item indents the row (kept)", async () => {
+test("⌘↵ outside a task completes the item, as before; Tab on a list's first item leaves both the note and the row", async () => {
   const ui = await mountOutliner({ defaultValue: [{ id: "a", text: "First" }, { id: "b", text: "Second", data: { note: "- item" } }] });
   await openNote(ui, "b");
   await ui.key("Enter", { metaKey: true });
   assert.equal(find(ui.value(), "b").checked ?? find(ui.value(), "b").data?.completed, true, "the item's own ⌘↵");
   await ui.key("Tab");
-  assert.equal(find(ui.value(), "a").children?.[0]?.id, "b", "Tab indents the row, list item or not");
+  assert.equal(find(ui.value(), "a").children, undefined, "a list item's Tab is the list's: the row stays");
   assert.equal(noteOf(ui, "b"), "- item");
   await ui.unmount();
 });
@@ -581,4 +585,52 @@ test("note session walks: block keys, typing, foreign changes and undo keep the 
   }
   console.log(`note session walks: ${JSON.stringify(counts)}; failures ${failures.length}`);
   assert.deepEqual(failures.slice(0, 5), []);
+});
+
+/* ───────────── Tab nests list items; /1–/3 make a line a heading; #␣ stays text ───────────── */
+
+test("Tab nests a list item under the one above, with its own items; ⇧Tab takes it a level out", () => {
+  const tab = (s, from, to = from, out = false) => blocks.noteTab(s, from, to, out);
+  assert.deepEqual(tab("- a\n- b", 6), { text: "- a\n  - b", caret: 8 }, "under the item above");
+  assert.deepEqual(tab("- a\n- b", 2), { text: "- a\n- b", caret: 2 }, "the first item has nothing to go under: it stays, Tab is still the list's");
+  assert.deepEqual(tab("- a\n- b\n  - c", 6).text, "- a\n  - b\n    - c", "its own items come along");
+  assert.deepEqual(tab("1. a\n2. b", 8).text, "1. a\n   2. b", "under an ordered item's text");
+  assert.deepEqual(tab("- a\n  - b", 9, 9, true), { text: "- a\n- b", caret: 7 }, "⇧Tab: a level out");
+  assert.deepEqual(tab("- a\n- b", 6, 6, true).text, "- a\n- b", "⇧Tab at the top level: it stays");
+  assert.deepEqual(tab("- a\n- b\n- c", 5, 11), { text: "- a\n  - b\n  - c", caret: 15, anchor: 7 }, "a selection: its items move together and stay selected");
+  assert.equal(tab("para", 2), null, "not in a list: the row's Tab");
+  assert.equal(tab("```\n- a\n```", 6), null, "not in code");
+});
+
+test("/1–/3 in a note: the line becomes a heading (its list or quote marker goes); Normal text takes it back", () => {
+  assert.deepEqual(blocks.lineHeading("abc", 1, 2), { text: "## abc", caret: 4 });
+  assert.deepEqual(blocks.lineHeading("x\n- item\ny", 5, 1), { text: "x\n# item\ny", caret: 5 });
+  assert.deepEqual(blocks.lineHeading("## H", 4, 3).text, "### H", "another level");
+  assert.deepEqual(blocks.lineHeading("## H", 4, undefined).text, "H", "plain again");
+  assert.equal(blocks.lineHeading("> q", 3, 1).text, "# q");
+  assert.equal(blocks.lineHeading("```\ncode\n```", 6, 1), null, "not in code");
+  assert.equal(blocks.lineHeadingLevel("a\n## H", 4), 2);
+  assert.equal(blocks.lineHeadingLevel("a", 0), undefined);
+});
+
+test("#␣ at a note line's start stays text (stored \\#); #tag is still a tag", async () => {
+  const ui = await mountOutliner({ defaultValue: [{ id: "a", text: "Plan" }] });
+  await openNote(ui, "a");
+  await ui.type("# not a heading");
+  assert.equal(noteOf(ui, "a"), "\\# not a heading");
+  assert.equal(ui.field().querySelector("h1,h2,h3,h4,h5,h6,[data-heading]"), null, "shown as a paragraph");
+  assert.equal(ui.field().textContent, "# not a heading", "the backslash is not shown");
+  await ui.unmount();
+});
+
+test("Tab in a note's list nests the item in the field (not the row); Tab in a paragraph still indents the row", async () => {
+  const ui = await mountOutliner({ defaultValue: [{ id: "a", text: "One" }, { id: "b", text: "Two", data: { note: "- x\n- y" } }] });
+  await openNote(ui, "b");
+  await ui.act(() => ui.field().setSelectionRange(7, 7));
+  await ui.key("Tab");
+  assert.equal(noteOf(ui, "b"), "- x\n  - y");
+  assert.equal(ui.value().length, 2, "the row did not move");
+  await ui.key("Tab", { shiftKey: true });
+  assert.equal(noteOf(ui, "b"), "- x\n- y");
+  await ui.unmount();
 });

@@ -49,7 +49,7 @@ import {
   type SourceSelection,
   type TitleRule,
 } from "./live-field";
-import { inProse, noteBackspace, noteDownOut, noteEnter, noteModEnter, noteRewrite, taskAt, toggleTask, type SourceEdit } from "./note-blocks";
+import { inProse, noteBackspace, noteDownOut, noteEnter, noteModEnter, noteRewrite, noteTab, taskAt, toggleTask, type SourceEdit } from "./note-blocks";
 import { posToSource, reading, serialize, sourceToDoc, sourceToPos } from "./source-doc";
 
 /** The core's own-step time: an edit with it never coalesces with typing. */
@@ -590,10 +590,10 @@ export class FieldSession {
     const edit = compute(this.source, from, to);
     if (!edit) return false;
     if (edit.text === this.source) {
-      if (edit.caret !== from || to !== from) this.setCaret(edit.caret);
+      if (edit.anchor === undefined && (edit.caret !== from || to !== from)) this.setCaret(edit.caret);
       return true;
     }
-    const tr = adoptTr(this.state, this.config, edit.text, { anchor: edit.caret, head: edit.caret });
+    const tr = adoptTr(this.state, this.config, edit.text, { anchor: edit.anchor ?? edit.caret, head: edit.caret });
     if (tr) this.apply(tr.setMeta(META_REMOTE, false).setMeta(META_NORMALIZE, true).scrollIntoView(), how);
     return true;
   }
@@ -619,6 +619,11 @@ export class FieldSession {
   downOut(): boolean {
     if (!this.state.selection.empty) return false;
     return this.blockEdit((source, from) => noteDownOut(source, from), { time: Date.now() });
+  }
+
+  /** Tab in a note's list: the items nest under the one above (`out`: a level out). False: not in a list. */
+  tab(out: boolean): boolean {
+    return this.blockEdit((source, from, to) => noteTab(source, from, to, out), { boundary: true });
   }
 
   /** The task whose line starts at source offset `itemStart` checked or unchecked: one step. */
@@ -693,8 +698,6 @@ export class FieldSession {
     switch (rule.kind) {
       case "bullet":
         return [{ type: "update", id: this.id, changes: { text: rest } }];
-      case "heading":
-        return [{ type: "update", id: this.id, changes: { text: rest, data: clean({ ...data, heading: rule.level }) } }];
       case "checkbox":
         return [{ type: "update", id: this.id, changes: { text: rest, checked: rule.checked, data: clean({ ...data, completed: undefined }) } }];
       case "numbered":

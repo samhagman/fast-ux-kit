@@ -5,7 +5,7 @@ Only the editing surface changes.
 
 ## Universal behaviour
 
-1. Typed characters stay visible until a rule completes, then the markup vanishes (`###` shows until Space; `**bol` until the closing `**`).
+1. Typed characters stay visible until a rule completes, then the markup vanishes (`[]` shows until Space; `**bol` until the closing `**`).
 2. Backspace right after a conversion takes it back, in a way that depends on the kind:
    - a title line-start rule (heading, checkbox) is undone with one history step, but only while nothing else has happened since;
    - an inline conversion (bold, a link, a chip) turns back into the literal characters typed, stored escaped so it does not convert again.
@@ -21,16 +21,20 @@ Only the editing surface changes.
 
 | Type | After | Stored |
 |---|---|---|
-| `#␣` `##␣` `###␣` | Row becomes H1/H2/H3, marker removed | `heading: 1–3` |
-| `#1␣` `#2␣` `#3␣` | Same as above | same |
-| `####␣`+ | H3 (titles max H3) | `heading: 3` |
 | `[]␣` or `[ ]␣` | Checkbox | `checkbox: true` |
 | `[x]␣` | Checked checkbox | `checkbox`, `completed` |
 | `-␣` `*␣` `+␣` | Swallowed (already a bullet) | nothing |
 | `1.␣` | Parent numbers its children | parent `numbered: true` |
-| `>␣`, `---` | Stay literal (titles have no quote/rule) | text |
+| `>␣`, `---`, `#␣` | Stay literal (titles have no quote/rule; `#` is a tag's) | text |
 
-Only `#{1,3}␣` and `#[1-3]␣` (and `####␣`, capped at H3) are heading rules. A line-start `#word` is a tag.
+## Headings: `/1` `/2` `/3`
+
+`#` never makes a heading, in a title or a note: it belongs to tags. Headings come from the item
+menu: `/1`, `/2` or `/3` then Enter (the menu's top match is Heading 1–3; nothing runs before
+Enter). In a title it makes the row H1–H3 (`heading: 1–3`; the same level again turns it back,
+as ⌥⌘1–3 do). In a note it makes the line the menu was opened on a heading (`## Results`), its
+list or quote marker going with it; Normal text takes it back. Stored `## Results` in a note
+still reads as a heading.
 
 ## Inline rules (titles and notes)
 
@@ -43,14 +47,14 @@ Only `#{1,3}␣` and `#[1-3]␣` (and `####␣`, capped at H3) are heading rules
 | `==word==` | highlight | `==word==` |
 | `[label](https://…)` | link showing label | same |
 | bare `https://…` then space | URL chip | the URL |
-| `##tag` then space/punct, or `#tag` not at line start | tag chip `#tag` (autocomplete list while typing); `word##tag` becomes `word #tag` | `#tag` |
+| `#tag`, or `##tag` then space/punct | tag chip `#tag` (autocomplete list while typing); `word##tag` becomes `word #tag` | `#tag` |
 | `@na…` | mention autocomplete → chip | `@Name` |
 | `!` | date picker → date chip | `!(2026-11-03)` |
 | `!(… every week)` | recurring date chip | same |
 | `!(a → b)` (or `->`) | date range chip | same |
 | `[[Pla…` | item search → ref chip | `[[Title\|id]]` |
 | `$tex$` | rendered math chip (currency rule from `inline.tsx` applies) | same |
-| `/` at start or after whitespace | item menu, filter as you type, Enter runs, `/query` removed | nothing |
+| `/` at start or after whitespace | item menu, filter as you type, Enter runs, `/query` removed (in a note: on prose lines, not in code, math or a table) | nothing |
 | `\*` | literal `*` | `\*` |
 
 ### Stacked styles
@@ -63,13 +67,14 @@ A single `*` follows the flanking rule: `2*3*4` and `a * b` stay text. A style n
 
 A note is source text; its blocks are the reading `rich-note.ts` gives it, so most rules need no
 code of their own: what is typed is the source, and the line renders as the block it now is.
-Block keys (Enter, ⌫ at a block's start, ⌘↵, ↓ out of a block) are source edits
-(`live-field/note-blocks.ts`).
+Block keys (Enter, ⌫ at a block's start, ⌘↵, ↓ out of a block, Tab in a list) are source edits
+(`live-field/note-blocks.ts`). Tab outside a list still indents the row.
 
 | Type | After | Stored |
 |---|---|---|
-| `#␣`…`######␣` | heading H1–H6 | `## Results` |
-| `-␣` `*␣` `+␣` | bullet; Enter adds the next item; Enter on an empty item steps out one level, then leaves the list; Tab indents the row (as before) | `- item` |
+| `/1` `/2` `/3` then ⏎ | the line becomes a heading H1–H3 | `## Results` |
+| `#␣` | stays text | `\# ` |
+| `-␣` `*␣` `+␣` | bullet; Enter adds the next item; Enter on an empty item steps out one level, then leaves the list; Tab nests the item (and its own items) under the one above, ⇧Tab takes it a level out; on the first or a top-level item that has nowhere to go it does nothing | `- item` |
 | `1.␣` (any number) | ordered list starting there; Enter adds the next number | `3. item` |
 | `[]␣`, `[ ]␣`, `[x]␣` or `-␣[]␣` | task item; a click on its box or ⌘↵ toggles it; Enter adds an open task | `- [ ] item` |
 | `>␣` | quote; Enter continues it; Enter on an empty quoted line leaves | `> text` |
@@ -97,11 +102,11 @@ The power profile's Enter in a note still finishes it and starts the next item.
 ## Examples as seen while typing
 
 ```
- type:  # # # ␣ L a u n c h   p l a n
- • ###▏            hashes visible
- ▏                 space: hashes vanish, row is H3
+ type:  / 3 ⏎ L a u n c h   p l a n
+ • /3▏  ┌ Format › Heading 3 ┐   menu filters, nothing runs yet
+ ▏                 ⏎: "/3" vanishes, row is H3
  Launch plan▏      heading size, no markup
- ⌫ right after the space → • ###▏
+ • #launch▏        "#" is always a tag
 
  Ship **be▏  →  Ship **beta*▏  →  Ship beta▏      (beta bold, markers gone)
  Ship **bold *bo▏  →  Ship **bold *both***▏  →  Ship bold both▏   (both bold, "both" also italic)

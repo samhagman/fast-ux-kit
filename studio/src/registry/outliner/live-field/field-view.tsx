@@ -774,6 +774,11 @@ function mountField(
             return true;
           }
           if (event.key === "ArrowDown" && bare && blockKey(() => session.downOut())) return true;
+          // Tab in a list nests the item (⇧Tab: out a level); elsewhere it is the row's indent.
+          if (event.key === "Tab" && !event.metaKey && !event.ctrlKey && !event.altKey && blockKey(() => session.tab(event.shiftKey))) {
+            event.preventDefault();
+            return true;
+          }
         }
         return hooks.key(key);
       },

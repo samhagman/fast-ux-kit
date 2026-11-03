@@ -62,3 +62,38 @@ test("explicit ids: any root that cannot indent keeps every root in place", () =
     { p: [{ a: ["b"] }, "c", "q"] },
   ]);
 });
+
+// Outdent moves what can move. An item already at the outermost level stays, and the
+// selected items under it go out a level instead.
+
+test("a range from a top-level item into its children: the children go out a level, the top stays", () => {
+  const state = ranged("p", "c");
+  const after = run(state, { type: "outdent" });
+  assert.deepEqual(shape(after.nodes), ["p", "a", "b", "c", "q"]);
+  assert.equal(after.history.past.length, state.history.past.length + 1, "one undo step");
+  assert.deepEqual([...after.selection].sort(), ["a", "b", "c", "p"], "the range stays the target");
+  assert.deepEqual(shape(run(after, { type: "undo" }).nodes), shape(tree()));
+});
+
+test("outdent: only the selected children of a stuck item move; unselected ones stay under it", () => {
+  const state = createOutlineEditorState(tree());
+  const after = run(state, { type: "outdent", ids: ["p", "b"] });
+  assert.deepEqual(
+    shape(after.nodes),
+    [{ p: ["a"] }, { b: ["c"] }, "q"],
+    "b goes out, adopting its younger sibling as always",
+  );
+});
+
+test("outdent: a range of top-level items alone is a no-op", () => {
+  const state = ranged("p", "q");
+  const after = run(createOutlineEditorState(state.nodes), { type: "outdent", ids: ["p", "q"] });
+  assert.equal(after.nodes, state.nodes);
+});
+
+test("outdent: zoomed in, the zoomed item's children stay and their selected children go out", () => {
+  let state = createOutlineEditorState([n("z", [n("p", [n("a"), n("b")])])]);
+  state = run(state, { type: "hoist", id: "z" });
+  const after = run(state, { type: "outdent", ids: ["p", "a", "b"] });
+  assert.deepEqual(shape(after.nodes), [{ z: ["p", "a", "b"] }]);
+});
