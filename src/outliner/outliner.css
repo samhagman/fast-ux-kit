@@ -1,0 +1,28 @@
+/* Outliner-local rules that utilities can't express. */
+@media (pointer: coarse) {
+  /* Every control in the toolbar is a 44 px target on touch, including the ones a host puts
+     there (headerStart): the icons stay their size, the buttons around them grow. */
+  [data-outliner-toolbar] :is(button, [role="button"]) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  /* Touch menus never advertise keyboard shortcuts. */
+  [data-slot="context-menu-shortcut"],
+  [data-slot="dropdown-menu-shortcut"],
+  [data-slot="command-shortcut"] {
+    display: none;
+  }
+}
+
+/* The phone action sheet keeps its target row readable above it: no backdrop blur, a light scrim. */
+body:has([data-outliner-sheet]) [data-slot="drawer-overlay"] {
+  backdrop-filter: none;
+  background-color: rgb(0 0 0 / 0.08);
+}
+
+/* Room below the content while the action sheet is open, so its target can rise above it. */
+/* (The content block only: the sticky ancestor strip host is a sibling and must stay zero-height.) */
+[data-outliner-scroll][data-sheet-open] > [data-outliner-content] {
+  padding-bottom: 70vh;
+}

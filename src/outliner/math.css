@@ -1,0 +1,11 @@
+/* KaTeX inside outline text: a touch smaller than KaTeX's default 1.21em, display formulas
+   without KaTeX's 1em margins (blocks already space themselves). */
+[data-math] .katex {
+  font-size: 1.08em;
+}
+[data-math="block"] .katex-display {
+  margin: 0;
+}
+[data-math="block"] .katex-display > .katex {
+  font-size: 1.12em;
+}

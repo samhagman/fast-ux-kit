@@ -1,0 +1,69 @@
+/* ───────── Simulation emphasis (shared by Machine View and Machine Tree) ─────────
+ *
+ * One rule set for "how does a state look while a simulation runs". Put `data-sim` on the
+ * element that represents a state (a canvas node, a tree row):
+ *
+ *   data-sim="active"     the state is a live leaf (the frontier)
+ *   data-sim="ancestor"   the state is active because a descendant is (a container)
+ *   data-sim="inactive"   the state is not part of the current configuration
+ *   (no attribute)        not simulating: design colours
+ *
+ * It dims with COLOUR, never with opacity: an opacity dim multiplies into the text and
+ * failed contrast (3.2:1 body text, 2.5:1 "entry" in an earlier version). Each value redefines every
+ * token below, so a nested `data-sim` element never inherits its parent's emphasis.
+ *
+ *   --sim-name     state names: foreground, except the live leaf, whose name is the one signal-blue
+ *                  name on screen ("what is happening now"); ancestors carry signal only on border/icon
+ *   --sim-text     body copy (descriptions, actions)          ≥ 4.5:1 on --sim-surface
+ *   --sim-tag      kind tags, mono metadata, chip text          ≥ 4.5:1 on --sim-surface
+ *   --sim-icon     decorative glyphs and dots (non-text)
+ *   --sim-border   the state's outline
+ *   --sim-surface  the state's fill
+ *   --sim-edge     stroke for lines that belong to the state (opacity is fine for strokes)
+ *
+ * Measured ratios (composited, inactive text on the inactive surface):
+ *   light  --sim-muted oklch(0.53 0.012 265) on surface ≈ 5.1:1 (canvas ≈ 5.0:1)
+ *   dark   --sim-muted oklch(0.64 0.010 265) on surface ≈ 5.7:1 (canvas ≈ 5.9:1)
+ *
+ * Mixes with neutrals use srgb or oklab: oklch interpolates hue toward the neutral's
+ * meaningless hue and tints the result pink.
+ *
+ * Consumers read the tokens with a design fallback, e.g.
+ *   color: var(--sim-text, var(--muted-foreground));
+ */
+:root {
+  --sim-muted: oklch(0.53 0.012 265);
+}
+.dark {
+  --sim-muted: oklch(0.64 0.01 265);
+}
+
+[data-sim="inactive"] {
+  --sim-name: var(--foreground);
+  --sim-text: var(--sim-muted);
+  --sim-tag: var(--sim-muted);
+  --sim-icon: color-mix(in srgb, var(--foreground) 28%, transparent);
+  --sim-border: color-mix(in srgb, var(--border) 80%, transparent);
+  --sim-surface: color-mix(in srgb, var(--card) 55%, var(--canvas));
+  --sim-edge: color-mix(in oklab, var(--foreground) 22%, transparent);
+}
+
+[data-sim="ancestor"] {
+  --sim-name: var(--foreground);
+  --sim-text: var(--muted-foreground);
+  --sim-tag: var(--muted-foreground);
+  --sim-icon: var(--signal);
+  --sim-border: color-mix(in oklab, var(--signal) 55%, transparent);
+  --sim-surface: color-mix(in oklab, var(--signal) 3.5%, transparent);
+  --sim-edge: color-mix(in oklab, var(--signal) 55%, transparent);
+}
+
+[data-sim="active"] {
+  --sim-name: var(--signal);
+  --sim-text: var(--muted-foreground);
+  --sim-tag: var(--muted-foreground);
+  --sim-icon: var(--signal);
+  --sim-border: var(--signal);
+  --sim-surface: color-mix(in oklab, var(--signal) 7%, var(--card));
+  --sim-edge: var(--signal);
+}

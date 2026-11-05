@@ -1,0 +1,417 @@
+@import "./components.css";
+@import "./react/editor.css";
+@import "./react/machine-view.css";
+@import "./react/machine-tree-view.css";
+@import "./react/outline-search.css";
+/* Optional skin: a continuous document with separate glyph and touch geometry. */
+.fast-ux-outliner {
+  --outline-indent: var(--fux-outline-indent, 1rem);
+  --outline-target: max(44px, var(--fux-target, 44px));
+  --outline-gutter: 1.25rem;
+  --outline-gap: var(--fux-space-xs, 0.25rem);
+  font: inherit;
+  font-size: var(--fux-font-size, 0.9375rem);
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.fast-ux-outliner[data-disclosure-position="start"] {
+  --outline-gutter: var(--outline-target);
+}
+.fast-ux-outliner__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.fast-ux-outliner__list[hidden] {
+  display: none !important;
+}
+.fast-ux-outliner__item > .fast-ux-outliner__list {
+  position: relative;
+  margin-inline-start: var(--outline-indent);
+}
+.fast-ux-outliner__item > .fast-ux-outliner__list::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--outline-gutter) / 2 - var(--outline-indent));
+  border-inline-start: 1px solid var(--fux-border-subtle, transparent);
+  pointer-events: none;
+}
+.fast-ux-outliner__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--outline-gap);
+  min-block-size: var(--outline-target);
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+}
+.fast-ux-outliner__item > .fast-ux-outliner__row:focus-within {
+  background: var(--fux-surface-subtle, transparent);
+}
+.fast-ux-outliner[data-read-only="true"] .fast-ux-outliner__item:focus-visible {
+  outline: none;
+}
+.fast-ux-outliner[data-read-only="true"]
+  .fast-ux-outliner__item:focus-visible
+  > .fast-ux-outliner__row {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+  background: var(--fux-surface-subtle, transparent);
+}
+@media (hover: hover) {
+  .fast-ux-outliner__item > .fast-ux-outliner__row:hover {
+    background: color-mix(in srgb, var(--fux-surface-subtle) 65%, transparent);
+  }
+}
+.fast-ux-outliner__gutter {
+  flex: 0 0 var(--outline-gutter);
+  inline-size: var(--outline-gutter);
+  display: grid;
+  place-items: start center;
+}
+.fast-ux-outliner__marker {
+  display: inline-grid;
+  place-items: center;
+  min-block-size: var(--outline-target);
+  color: var(--fux-muted, currentColor);
+}
+.fast-ux-outliner__toggle,
+.fast-ux-outliner__hoist {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-inline-size: var(--outline-target);
+  min-block-size: var(--outline-target);
+  appearance: none;
+  border: 0;
+  padding: 0.25rem;
+  background: transparent;
+  color: var(--fux-muted, currentColor);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+}
+.fast-ux-outliner__toggle:hover,
+.fast-ux-outliner__hoist:hover {
+  color: var(--fux-text, currentColor);
+  background: var(--fux-surface-hover, transparent);
+}
+.fast-ux-outliner__toggle:focus-visible,
+.fast-ux-outliner__toggle[data-focus-visible],
+.fast-ux-outliner__hoist:focus-visible,
+.fast-ux-outliner__hoist[data-focus-visible] {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+}
+.fast-ux-outliner__chevron {
+  display: inline-flex;
+  transition: transform var(--fux-motion-duration, 140ms) ease;
+}
+.fast-ux-outliner__toggle[aria-expanded="true"] > .fast-ux-outliner__chevron {
+  transform: rotate(90deg);
+}
+:dir(rtl) .fast-ux-outliner__toggle[aria-expanded="false"] > .fast-ux-outliner__chevron {
+  transform: rotate(180deg);
+}
+.fast-ux-outliner__content {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: var(--fux-outline-padding, 0.625rem);
+  line-height: var(--fux-line-height, 1.5);
+}
+.fast-ux-outliner__item[data-has-children="true"]
+  > .fast-ux-outliner__row
+  > .fast-ux-outliner__content
+  > .fast-ux-outliner__label {
+  font-weight: 550;
+}
+.fast-ux-outliner__task-mark {
+  display: inline-flex;
+  vertical-align: -0.15em;
+  color: var(--fux-muted, currentColor);
+}
+.fast-ux-outliner__task-mark[data-checked="true"] {
+  color: var(--fux-accent, currentColor);
+}
+.fast-ux-outliner__content > .fast-ux-outliner__task-mark {
+  margin-inline-end: 0.5rem;
+}
+.fast-ux-outliner__count {
+  display: inline-block;
+  min-inline-size: 1.25em;
+  margin-inline-start: 0.5rem;
+  padding-inline: 0.3em;
+  border: 1px solid var(--fux-border-subtle, transparent);
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+  color: var(--fux-muted, currentColor);
+  font-size: 0.75em;
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  text-align: center;
+  vertical-align: 0.05em;
+}
+.fast-ux-outliner__toggle > .fast-ux-outliner__count {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.fast-ux-outliner__body {
+  margin-block-start: 0.375rem;
+}
+.fast-ux-outliner__summary {
+  margin-block-start: 0.375rem;
+  padding-inline-start: 0.625rem;
+  border-inline-start: 2px solid var(--fux-border-subtle, currentColor);
+  color: var(--fux-muted, currentColor);
+  font-size: 0.875em;
+}
+.fast-ux-outliner__content > :first-child,
+.fast-ux-outliner__body > :first-child,
+.fast-ux-outliner__summary > :first-child {
+  margin-block-start: 0;
+}
+.fast-ux-outliner__content > :last-child,
+.fast-ux-outliner__body > :last-child,
+.fast-ux-outliner__summary > :last-child {
+  margin-block-end: 0;
+}
+.fast-ux-outliner__content img,
+.fast-ux-outliner__content video {
+  max-inline-size: 100%;
+  block-size: auto;
+}
+.fast-ux-outliner__content pre {
+  overflow-x: auto;
+  max-inline-size: 100%;
+}
+.fast-ux-outliner__breadcrumbs button {
+  min-inline-size: var(--outline-target);
+  min-block-size: var(--outline-target);
+  border: 0;
+  background: transparent;
+  color: var(--fux-muted, currentColor);
+  font: inherit;
+  padding: var(--fux-space-xs, 0.25rem);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.fast-ux-outliner__breadcrumbs button:focus-visible,
+.fast-ux-outliner__breadcrumbs button[data-focus-visible] {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+}
+.fast-ux-outliner__breadcrumbs ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fux-space-xs, 0.25rem);
+  padding: 0;
+  margin: 0 0 var(--fux-space-sm, 0.5rem);
+  font-size: 0.875em;
+}
+.fast-ux-outliner__breadcrumbs li:not(:first-child)::before {
+  content: "/";
+  padding-inline-end: var(--fux-space-xs, 0.25rem);
+  color: var(--fux-muted, currentColor);
+}
+.fast-ux-outliner__breadcrumbs [aria-current] {
+  color: var(--fux-text, currentColor);
+  font-weight: 550;
+}
+.fast-ux-rich {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  line-height: var(--fux-line-height, 1.5);
+}
+.fast-ux-rich__block {
+  margin-block: var(--fux-space-sm, 0.5rem);
+}
+.fast-ux-rich > :first-child,
+.fast-ux-rich__block > :first-child {
+  margin-block-start: 0;
+}
+.fast-ux-rich > :last-child,
+.fast-ux-rich__block > :last-child {
+  margin-block-end: 0;
+}
+.fast-ux-rich__fallback {
+  display: block;
+  color: var(--fux-muted, currentColor);
+  font-size: 0.9em;
+}
+.fast-ux-rich__scroll {
+  max-inline-size: 100%;
+  overflow: auto;
+}
+.fast-ux-rich table {
+  border-collapse: collapse;
+}
+.fast-ux-rich th,
+.fast-ux-rich td {
+  border: 1px solid var(--fux-border-subtle, currentColor);
+  padding: var(--fux-space-sm, 0.5rem);
+  text-align: start;
+}
+.fast-ux-rich figure {
+  margin: 0;
+}
+.fast-ux-rich img,
+.fast-ux-rich video,
+.fast-ux-rich audio {
+  max-inline-size: 100%;
+}
+.fast-ux-rich img,
+.fast-ux-rich video {
+  block-size: auto;
+}
+.fast-ux-rich pre {
+  padding: var(--fux-space-sm, 0.5rem);
+}
+.fast-ux-rich__external-label {
+  font-size: 0.8em;
+}
+.fast-ux-rich aside {
+  border-inline-start: 2px solid var(--fux-border-subtle, currentColor);
+  padding-inline-start: var(--fux-space-md, 0.75rem);
+}
+.fast-ux-rich a {
+  color: var(--fux-accent, LinkText);
+}
+.fast-ux-rich__scroll:focus-visible {
+  outline: 2px solid var(--fux-focus, Highlight);
+  outline-offset: 2px;
+}
+.fast-ux-rich :is(h1, h2, h3, h4) {
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin-block: 1em 0.4em;
+}
+.fast-ux-rich p {
+  margin-block: 0.5em;
+}
+.fast-ux-rich :is(pre, blockquote) {
+  background: var(--fux-surface-subtle, transparent);
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+}
+@media (max-width: 480px) {
+  .fast-ux-outliner {
+    --outline-indent: 0.75rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fast-ux-outliner * {
+    scroll-behavior: auto;
+  }
+  .fast-ux-outliner__chevron {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .fast-ux-outliner__item > .fast-ux-outliner__list::before {
+    border-color: CanvasText;
+  }
+}
+
+.fux-highlight-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fux-highlight,
+button.fux-control.fux-highlight {
+  color: inherit;
+  background: var(--fux-highlight);
+  border: 0;
+  border-radius: 0.15em;
+  font: inherit;
+}
+button.fux-highlight {
+  padding: 0;
+  cursor: pointer;
+  min-block-size: max(44px, var(--fux-target));
+  min-inline-size: max(44px, var(--fux-target));
+  touch-action: manipulation;
+}
+.fux-highlight[data-selected],
+button.fux-control.fux-highlight[data-selected] {
+  background: var(--fux-selected);
+  outline: 1px solid var(--fux-accent);
+}
+button.fux-control.fux-highlight:focus-visible,
+button.fux-control.fux-highlight[data-focus-visible] {
+  outline: 2px solid var(--fux-focus);
+  outline-offset: 2px;
+}
+.fux-highlight__extra-actions {
+  display: inline;
+}
+.fux-highlight--extra {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-block-size: 1px !important;
+  min-inline-size: 1px !important;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.fux-highlight--extra:focus-visible,
+.fux-highlight--extra[data-focus-visible] {
+  position: static;
+  width: auto;
+  height: auto;
+  min-block-size: max(44px, var(--fux-target)) !important;
+  min-inline-size: max(44px, var(--fux-target)) !important;
+  clip-path: none;
+  padding-inline: var(--fux-space-sm);
+}
+.fux-highlight--extra:focus-visible::after,
+.fux-highlight--extra[data-focus-visible]::after {
+  content: attr(aria-label);
+}
+
+/* Browse-first row surface: native title button, independent leading navigation. */
+.fast-ux-outliner[data-interaction-mode="row"] {
+  --outline-gutter: var(--outline-target);
+}
+.fast-ux-outliner__content[data-row-interaction] {
+  padding-block: 0;
+}
+.fast-ux-outliner__row-action {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: var(--outline-target);
+  border: 0;
+  padding: var(--fux-outline-padding, 0.625rem) 0.25rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  touch-action: manipulation;
+  border-radius: var(--fux-radius-sm, 0.1875rem);
+}
+.fast-ux-outliner__row-action:focus-visible {
+  outline: 2px solid var(--fux-focus, currentColor);
+  outline-offset: -2px;
+}
+.fast-ux-outliner__row-action[aria-expanded] {
+  font-weight: 550;
+}
+.fast-ux-outliner__content[data-row-interaction] > .fast-ux-outliner__label {
+  display: inline-block;
+  padding-block: var(--fux-outline-padding, 0.625rem);
+}
+.fast-ux-outliner__content[data-row-interaction] > .fast-ux-outliner__body,
+.fast-ux-outliner__content[data-row-interaction] > .fast-ux-outliner__summary {
+  margin-block-start: 0;
+  padding-block-end: 0.375rem;
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tgz
+.env*
+!.env.example
+
+.demo/
+.docs-site/
+
+# Local agent state and private research
+.claude/
+.claude-tmp/

@@ -1,0 +1,170 @@
+/* ───────── Machine Tree ─────────
+ * Neutral mixes use oklab/srgb only: oklch interpolation between the blue signal and a
+ * near-zero-chroma neutral sweeps through magenta (the round-1 "pink" fill).
+ */
+
+/* Focus is drawn on the visual face of an item, not on the whole treeitem: a compound's
+ * treeitem wraps its children and routes, so ringing it would ring the entire subtree. */
+[data-mt-item] {
+  outline: none;
+}
+[data-mt-item]:focus-visible > [data-mt-face] {
+  outline: 2px solid color-mix(in oklab, var(--ring) 85%, transparent);
+  outline-offset: 2px;
+}
+/* Selected + focused: the focus ring *replaces* the selection halo (one line, not three). */
+[data-mt-item][aria-selected="true"]:focus-visible > [data-mt-face] {
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+/* Terminal state: Sketch-style double rule, drawn *inside* the border so the outer edge stays
+ * aligned with siblings and the block reads no heavier than its neighbours. */
+.mt-final::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid color-mix(in oklab, var(--foreground) 16%, transparent);
+  border-radius: 7px;
+  pointer-events: none;
+}
+.mt-final[data-active="true"]::after {
+  border-color: color-mix(in oklab, var(--signal) 45%, transparent);
+}
+
+/* Peek: hovering/focusing a target link previews where it goes. Its own language — a neutral
+ * dashed outline plus a pointer — so it never reads as "active" (signal blue is the run's). */
+.mt-peek {
+  outline: 1.5px dashed color-mix(in oklab, var(--foreground) 45%, transparent);
+  outline-offset: 3px;
+}
+.mt-peek::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -9px;
+  top: 18px;
+  translate: 0 -50%;
+  border-block: 3.5px solid transparent;
+  border-inline-start: 4px solid color-mix(in oklab, var(--foreground) 55%, transparent);
+  pointer-events: none;
+}
+.mt-peek[data-region]::before {
+  top: 14px;
+}
+
+/* The live leaf ("one blue thing = now"): its name is the signal name (machine-sim.css), its border
+ * solid signal with a 3px glow, and this 2px rail on the inline-start edge, drawn over the 1px border
+ * (so 1px of it lies inside) and never changing the card's size. Ancestors keep signal only on their
+ * border and icon. */
+.mt-rail {
+  position: absolute;
+  inset-block: 7px;
+  inset-inline-start: -1px;
+  width: 2px;
+  border-start-end-radius: 2px;
+  border-end-end-radius: 2px;
+  background: var(--signal);
+  pointer-events: none;
+}
+
+/* Dry run: hovering/focusing an enabled event ghosts what it would do, and never out-shouts the
+ * present. "Would enter" is a dashed signal outline with no fill plus a solid glyph tag, quieter
+ * than the live leaf. "Would leave" keeps the live leaf exactly as it is (solid ring, glow, rail)
+ * and adds only an outlined exit tag: no second outline, so two neighbouring previews never fuse
+ * into one dashed line across the 10px gap between sibling cards. Declared after .mt-peek so the
+ * ghost wins on a shared target, and the peek's pointer is dropped there (the outline says it). */
+.mt-ghost-enter {
+  outline: 1.5px dashed color-mix(in oklab, var(--signal) 70%, transparent);
+  outline-offset: 3px;
+}
+.mt-ghost-enter.mt-peek::before {
+  content: none;
+}
+.mt-ghost-tag {
+  background: var(--signal);
+  color: var(--signal-foreground);
+}
+.mt-ghost-tag[data-exit] {
+  background: var(--card);
+  color: var(--signal);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--signal) 55%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Outlines fade in; the cards themselves never fade (the live leaf must not flicker). */
+  .mt-ghost-enter {
+    animation: mt-ghost-outline 0.14s var(--ease-standard) both;
+  }
+  .mt-ghost-tag {
+    animation: mt-ghost-in 0.14s var(--ease-standard) both;
+  }
+}
+@keyframes mt-ghost-outline {
+  from {
+    outline-color: transparent;
+  }
+}
+@keyframes mt-ghost-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Coarse pointers get a 44px hit area (AGENTS.md) without enlarging the visual control: each axis
+ * grows to 44px when the control is smaller, and is left alone when it is already larger. */
+@media (pointer: coarse) {
+  .mt-hit {
+    position: relative;
+  }
+  .mt-hit::before {
+    content: "";
+    position: absolute;
+    inset-block: min(0px, calc((100% - 44px) / 2));
+    inset-inline: min(0px, calc((100% - 44px) / 2));
+  }
+}
+
+@keyframes mt-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  30% {
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--signal) 32%, transparent);
+  }
+}
+.mt-flash {
+  animation: mt-flash 1s var(--ease-standard) 1;
+}
+
+/* One ping per entry, only on the leaf that was just entered. */
+@keyframes mt-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+.mt-ping {
+  animation: mt-ping 0.9s var(--ease-standard) 1 forwards;
+}
+
+.mt-mark {
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--warning) 32%, transparent);
+  color: inherit;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--warning) 32%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-flash {
+    animation: none;
+    outline: 2px solid var(--signal);
+  }
+  .mt-ping {
+    animation: none;
+    opacity: 0;
+  }
+}

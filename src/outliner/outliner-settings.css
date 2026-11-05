@@ -1,0 +1,57 @@
+/*
+ * Row rhythm and type scale from the reader's settings (settings.ts sets the inputs inline on
+ * the outliner root; these are the defaults and what is derived from them).
+ *   --ol-line      height of a row's first line: bullet, disclosure, checkbox, ⋯ align to it
+ *   --ol-row-pad   vertical padding of the row's content (touch pads the first line to 44px)
+ */
+[data-slot="outliner"] {
+  --ol-text: 14px;
+  --ol-leading: 22px;
+  --ol-note: 13px;
+  --ol-note-leading: 20px;
+  --ol-pad: 3px;
+  --ol-touch-pad: 0px;
+  --ol-row-pad: calc(var(--ol-pad) + var(--ol-touch-pad));
+  --ol-line: calc(var(--ol-leading) + 2 * var(--ol-row-pad));
+}
+@media (pointer: coarse) {
+  /* Touch: the first line is at least 44 px, whatever the density and text size, so the
+     disclosure, checkbox and ⋯ that align to it are 44 px targets. */
+  [data-slot="outliner"] {
+    --ol-touch-pad: max(4px, calc((44px - var(--ol-leading)) / 2 - var(--ol-pad)));
+  }
+}
+
+/* Find and replace: every visible match, and the current one (CSS Custom Highlight API). */
+::highlight(ol-find) {
+  background-color: color-mix(in srgb, var(--warning) 32%, transparent);
+}
+::highlight(ol-find-current) {
+  background-color: var(--signal);
+  color: var(--signal-foreground);
+}
+
+/* A shortcut being recorded breathes, quietly (no motion when reduced). */
+@keyframes ol-record {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--signal) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--signal) 12%, transparent);
+  }
+}
+[data-recording] {
+  animation: ol-record 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-recording] {
+    animation: none;
+  }
+}
+
+/* Copy-drag: the pointer says copy for the whole drag. */
+html[data-outline-copy-drag],
+html[data-outline-copy-drag] * {
+  cursor: copy !important;
+}

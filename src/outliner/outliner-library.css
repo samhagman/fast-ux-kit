@@ -1,0 +1,29 @@
+/* The phone's floating capture button steps aside while a toolbar owns the bottom edge
+   (the editing bar above the keyboard, the selection bar) or a row's action sheet is up. */
+[data-slot="outliner-workspace"]:has([role="toolbar"]) [data-capture-fab],
+[data-slot="outliner-workspace"]:has([data-sheet-open]) [data-capture-fab] {
+  opacity: 0;
+  pointer-events: none;
+  scale: 0.96;
+}
+
+/* A toast rises from the bottom edge on a phone: the capture button steps up above it. */
+[data-capture-fab] {
+  transition:
+    translate 200ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+body:has([data-sonner-toast]) [data-capture-fab] {
+  translate: 0 -76px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-capture-fab] {
+    transition: none;
+  }
+}
+
+/* The capture button owns the bottom end corner on a phone: a board (which has no list
+   padding of its own) keeps its last cards and its "Add card" row scrollable clear of it. */
+[data-slot="outliner-workspace"]:has([data-capture-fab]) [data-outliner-content="board"] {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}

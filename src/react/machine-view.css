@@ -1,0 +1,991 @@
+.fux-machine {
+  --machine-grid: color-mix(in srgb, var(--fux-border-subtle, #e1e5ea) 70%, transparent);
+  color: var(--fux-text, #202124);
+  background: var(--fux-surface, #fff);
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: var(--fux-radius-lg, 6px);
+  font: inherit;
+  font-size: var(--fux-font-size, 15px);
+  line-height: 1.5;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: clip;
+  isolation: isolate;
+}
+.fux-machine *,
+.fux-machine *::before,
+.fux-machine *::after {
+  box-sizing: border-box;
+}
+.fux-machine button,
+.fux-machine input,
+.fux-machine select,
+.fux-machine textarea {
+  font: inherit;
+}
+.fux-machine button {
+  color: inherit;
+}
+.fux-machine button:focus-visible,
+.fux-machine input:focus-visible,
+.fux-machine select:focus-visible,
+.fux-machine textarea:focus-visible,
+.fux-machine [tabindex]:focus-visible,
+.fux-machine summary:focus-visible {
+  outline: 2px solid var(--fux-focus, #245db0);
+  outline-offset: 2px;
+}
+.fux-machine__toolbar,
+.fux-machine__subbar,
+.fux-machine__footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-block-end: 1px solid var(--fux-border-subtle, #e1e5ea);
+}
+.fux-machine__identity {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-inline-end: auto;
+  min-inline-size: 120px;
+}
+.fux-machine__identity strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 650;
+}
+.fux-machine__identity small {
+  display: block;
+  color: var(--fux-muted, #52565c);
+  font-size: 11px;
+}
+.fux-machine__mark {
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 6px;
+  font-size: 26px;
+}
+.fux-machine__modes,
+.fux-machine__history,
+.fux-machine__layout,
+.fux-machine__event-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+.fux-machine__modes {
+  padding: 3px;
+  background: var(--fux-surface-subtle, #f5f6f8);
+  border-radius: 6px;
+}
+.fux-machine__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px !important;
+  font-weight: 550;
+  line-height: 1.35;
+  text-align: start;
+}
+.fux-machine__button:hover:not(:disabled),
+.fux-machine__button[data-hovered] {
+  background: var(--fux-surface-hover, #eceff3);
+}
+.fux-machine__button[aria-pressed="true"] {
+  background: var(--fux-surface, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+  border-color: var(--fux-border-subtle, #e1e5ea);
+  color: var(--fux-accent, #213d6b);
+}
+.fux-machine__button:disabled,
+.fux-machine button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.fux-machine__subbar {
+  padding-block: 3px;
+  gap: 2px 10px;
+  background: var(--fux-surface, #fff);
+}
+.fux-machine__breadcrumbs {
+  display: flex;
+  min-inline-size: 0;
+  overflow: auto;
+  max-inline-size: 100%;
+  margin-inline-end: auto;
+}
+.fux-machine__breadcrumbs > span {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  color: var(--fux-muted, #52565c);
+}
+.fux-machine__inline-select select {
+  min-block-size: 44px;
+  max-inline-size: 160px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+}
+.fux-machine__workspace {
+  display: grid;
+  min-inline-size: 0;
+}
+.fux-machine__workspace[data-inspector] {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 290px);
+}
+.fux-machine__main {
+  min-inline-size: 0;
+}
+.fux-machine__palette {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 9px;
+  border-block-end: 1px solid var(--fux-border-subtle, #e1e5ea);
+}
+.fux-machine__palette .fux-machine__button {
+  padding-inline: 8px;
+  font-size: 11px !important;
+}
+.fux-machine__glyph {
+  inline-size: 20px;
+  block-size: 20px;
+  flex: 0 0 20px;
+}
+.fux-machine__canvas-wrap {
+  position: relative;
+  min-inline-size: 0;
+}
+.fux-machine__viewport {
+  block-size: 580px;
+  min-block-size: 320px;
+  max-block-size: 72vh;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  background-color: var(--fux-surface-subtle, #f5f6f8);
+  background-image: radial-gradient(var(--machine-grid) 0.8px, transparent 0.8px);
+  background-size: 16px 16px;
+}
+.fux-machine__stage {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: 0 0;
+  direction: ltr;
+}
+.fux-machine__edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.fux-machine__edge {
+  stroke: var(--fux-muted, #52565c);
+  stroke-width: 1.5;
+  fill: none;
+  opacity: 0.65;
+}
+.fux-machine__edge[data-selected] {
+  stroke: var(--fux-focus, #245db0);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+.fux-machine__edge[data-active] {
+  stroke: var(--fux-success, #176b3b);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+.fux-machine__node {
+  position: absolute;
+  border: 1px solid var(--fux-border, #737980);
+  border-radius: 7px;
+  background: var(--fux-surface, #fff);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.04);
+  text-align: start;
+}
+.fux-machine__node[data-kind="compound"],
+.fux-machine__node[data-kind="parallel"] {
+  background: color-mix(in srgb, var(--fux-surface, #fff) 50%, transparent);
+  border-color: var(--fux-border, #737980);
+}
+.fux-machine__node[data-kind="parallel"] {
+  border-style: dashed;
+  border-width: 1.5px;
+}
+.fux-machine__node[data-kind="note"] {
+  background: var(--fux-tint, #f0f3f7);
+  border-style: dashed;
+  box-shadow: none;
+}
+.fux-machine__node[data-kind="initial"],
+.fux-machine__node[data-kind="final"] {
+  border-radius: 28px;
+}
+.fux-machine__node[data-selected] {
+  outline: 2px solid var(--fux-focus, #245db0);
+  outline-offset: 2px;
+}
+.fux-machine__node[data-active] {
+  border-color: var(--fux-success, #176b3b);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fux-success, #176b3b) 14%, transparent);
+}
+.fux-machine__node[data-dimmed] {
+  opacity: 0.35;
+}
+.fux-machine__node-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  text-align: start;
+  cursor: grab;
+  touch-action: none;
+}
+.fux-machine__node-label > span:not(.fux-machine__active-dot) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fux-machine__node-label:active {
+  cursor: grabbing;
+}
+.fux-machine__node[data-kind="compound"] > .fux-machine__node-label,
+.fux-machine__node[data-kind="parallel"] > .fux-machine__node-label {
+  border-block-end: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+.fux-machine__active-dot {
+  inline-size: 7px;
+  block-size: 7px;
+  flex: 0 0 7px;
+  margin-inline-start: auto;
+  background: var(--fux-success, #176b3b);
+  border-radius: 50%;
+}
+.fux-machine__node-body {
+  padding: 0 12px 8px;
+  font-size: 11px;
+  color: var(--fux-muted, #52565c);
+  max-block-size: calc(100% - 44px);
+  overflow: auto;
+}
+.fux-machine__node-body p {
+  margin: 5px 0;
+  overflow-wrap: anywhere;
+}
+.fux-machine__node-body small {
+  display: block;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+}
+.fux-machine__kind {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 9px;
+}
+.fux-machine__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding-block-start: 5px;
+}
+.fux-machine__tags > span,
+.fux-machine__badge {
+  display: inline-block;
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--fux-muted, #52565c);
+  background: var(--fux-surface-subtle, #f5f6f8);
+}
+.fux-machine__open {
+  min-block-size: 44px;
+  inline-size: 100%;
+  border: 0;
+  border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  background: transparent;
+  font-size: 11px !important;
+  cursor: pointer;
+}
+.fux-machine__port {
+  position: absolute;
+  inset-block-start: 0;
+  inline-size: 44px;
+  block-size: 44px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  cursor: crosshair;
+  border-radius: 50%;
+  opacity: 0;
+}
+.fux-machine__port--out {
+  inset-inline-end: -22px;
+}
+.fux-machine__port--in {
+  inset-inline-start: -22px;
+  opacity: 1;
+}
+.fux-machine__port > span {
+  inline-size: 8px;
+  block-size: 8px;
+  border: 1.5px solid var(--fux-accent, #213d6b);
+  background: var(--fux-surface, #fff);
+  border-radius: 50%;
+}
+.fux-machine__node:hover > .fux-machine__port,
+.fux-machine__node:focus-within > .fux-machine__port,
+.fux-machine__port[aria-pressed="true"] {
+  opacity: 1;
+}
+.fux-machine__edge-label {
+  position: absolute;
+  z-index: 30;
+  transform: translate(-50%, -50%);
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  max-inline-size: 170px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font:
+    11px ui-monospace,
+    monospace !important;
+  line-height: 1.4 !important;
+  cursor: pointer;
+  text-align: center;
+}
+.fux-machine__edge-label > span,
+.fux-machine__edge-label > small {
+  background: var(--fux-surface-subtle, #f5f6f8);
+  padding: 1px 3px;
+  overflow-wrap: anywhere;
+}
+.fux-machine__edge-label small {
+  color: var(--fux-muted, #52565c);
+  font-size: 9px;
+}
+.fux-machine__edge-label[aria-pressed="true"] {
+  border-color: var(--fux-focus, #245db0);
+  background: var(--fux-surface, #fff);
+}
+.fux-machine__edge-label[data-active] {
+  color: var(--fux-success, #176b3b);
+}
+.fux-machine__canvas-controls {
+  position: absolute;
+  inset-inline-start: 12px;
+  inset-block-end: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 5px;
+  background: var(--fux-surface, #fff);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.06);
+}
+.fux-machine__canvas-controls output {
+  font:
+    11px ui-monospace,
+    monospace;
+  min-inline-size: 40px;
+  text-align: center;
+}
+.fux-machine__canvas-caption {
+  position: absolute;
+  inset-inline-end: 12px;
+  inset-block-end: 24px;
+  color: var(--fux-muted, #52565c);
+  font-size: 10px;
+  pointer-events: none;
+  background: var(--fux-surface-subtle, #f5f6f8);
+  padding: 2px 5px;
+  max-inline-size: 40%;
+  text-align: end;
+}
+.fux-machine__connection-hint {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-inline: 12px 4px;
+  white-space: nowrap;
+  font-size: 12px;
+  background: var(--fux-accent, #213d6b);
+  color: var(--fux-on-accent, #fff);
+  border-radius: 6px;
+}
+.fux-machine__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+  pointer-events: none;
+}
+.fux-machine__empty > span {
+  font-size: 40px;
+  color: var(--fux-muted, #52565c);
+}
+.fux-machine__empty h3 {
+  font-size: 17px;
+  margin: 8px 0;
+}
+.fux-machine__empty p {
+  max-inline-size: 320px;
+  color: var(--fux-muted, #52565c);
+  font-size: 13px;
+  margin: 0;
+}
+.fux-machine__outline {
+  border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  padding-inline: 12px;
+}
+.fux-machine summary {
+  min-block-size: 44px;
+  align-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 550;
+}
+.fux-machine__outline p {
+  font-size: 12px;
+  color: var(--fux-muted, #52565c);
+}
+.fux-machine__outline ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.fux-machine__outline .fux-machine__button {
+  justify-content: flex-start;
+  inline-size: 100%;
+}
+.fux-machine__inspector {
+  border-inline-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--fux-surface, #fff);
+}
+.fux-machine__tabs {
+  display: flex;
+  border-block-end: 1px solid var(--fux-border-subtle, #e1e5ea);
+  overflow-x: auto;
+  flex: 0 0 auto;
+}
+.fux-machine__tabs > button {
+  flex: 1 0 auto;
+  min-block-size: 49px;
+  min-inline-size: 44px;
+  padding: 8px;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  background: transparent;
+  font-size: 11px;
+  color: var(--fux-muted, #52565c);
+  cursor: pointer;
+}
+.fux-machine__tabs > button[aria-selected="true"] {
+  color: var(--fux-text, #202124);
+  border-block-end-color: var(--fux-accent, #213d6b);
+}
+.fux-machine__panel {
+  padding: 16px;
+  max-block-size: 680px;
+  overflow: auto;
+  min-inline-size: 0;
+}
+.fux-machine__panel h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  font-weight: 650;
+}
+.fux-machine__panel h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 20px 0 8px;
+  color: var(--fux-muted, #52565c);
+}
+.fux-machine__panel p {
+  font-size: 12px;
+  margin: 8px 0 16px;
+}
+.fux-machine__panel-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block-end: 16px;
+}
+.fux-machine__panel-heading h3 {
+  margin: 0;
+}
+.fux-machine__panel-heading code {
+  margin-inline-start: auto;
+  color: var(--fux-muted, #52565c);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.fux-machine__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-block-end: 13px;
+  min-inline-size: 0;
+  font-size: 11px;
+  font-weight: 550;
+}
+.fux-machine__field input,
+.fux-machine__field select,
+.fux-machine__field textarea {
+  min-inline-size: 0;
+  inline-size: 100%;
+  min-block-size: 44px;
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 4px;
+  padding: 8px 10px;
+  background: var(--fux-input-surface, #fff);
+  color: var(--fux-text, #202124);
+  font-size: 13px;
+  font-weight: 400;
+}
+.fux-machine__field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.fux-machine__field :disabled {
+  opacity: 0.65;
+}
+.fux-machine__coordinate-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.fux-machine__hint {
+  color: var(--fux-muted, #52565c);
+  font-size: 11px !important;
+  line-height: 1.6;
+}
+.fux-machine__selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-block-start: 16px;
+  margin-block-start: 16px;
+  border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+}
+.fux-machine__selection-actions > span {
+  flex: 0 0 100%;
+  font-size: 11px;
+  color: var(--fux-muted, #52565c);
+}
+.fux-machine__danger {
+  color: var(--fux-danger, #a31528) !important;
+}
+.fux-machine__check {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+  gap: 8px;
+  font-size: 12px;
+}
+.fux-machine__runtime-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.fux-machine__runtime-status .fux-machine__button {
+  margin-inline-start: auto;
+}
+.fux-machine__active-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.fux-machine__active-list .fux-machine__button {
+  justify-content: flex-start;
+  color: var(--fux-success, #176b3b);
+}
+.fux-machine__event-buttons .fux-machine__button {
+  border-color: var(--fux-border-subtle, #e1e5ea);
+  background: var(--fux-surface-subtle, #f5f6f8);
+}
+.fux-machine__panel pre {
+  font:
+    10px/1.6 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  background: var(--fux-surface-subtle, #f5f6f8);
+  border-radius: 4px;
+  max-block-size: 240px;
+  overflow: auto;
+}
+.fux-machine__event-form {
+  margin-block-start: 16px;
+  padding-block-start: 4px;
+  border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+}
+.fux-machine__event-form > button {
+  background: var(--fux-accent, #213d6b);
+  color: var(--fux-on-accent, #fff);
+  inline-size: 100%;
+}
+.fux-machine__connection-state {
+  color: var(--fux-success, #176b3b);
+}
+.fux-machine__connection-state[data-status="disconnected"],
+.fux-machine__connection-state[data-status="stale"] {
+  color: var(--fux-warning, #805000);
+}
+.fux-machine__facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  font-size: 11px;
+}
+.fux-machine__facts dt {
+  color: var(--fux-muted, #52565c);
+}
+.fux-machine__facts dd {
+  margin: 0;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.fux-machine__trace,
+.fux-machine__issues {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.fux-machine__trace li {
+  border-inline-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  margin-inline-start: 4px;
+  padding-inline-start: 8px;
+}
+.fux-machine__trace .fux-machine__button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  inline-size: 100%;
+  gap: 3px;
+}
+.fux-machine__trace small {
+  color: var(--fux-muted, #52565c);
+  font-size: 10px;
+}
+.fux-machine__trace b {
+  display: inline-block;
+  min-inline-size: 20px;
+  font:
+    10px ui-monospace,
+    monospace;
+  color: var(--fux-muted, #52565c);
+}
+.fux-machine__issues .fux-machine__button {
+  align-items: flex-start;
+  justify-content: flex-start;
+  inline-size: 100%;
+  padding: 10px 4px;
+  font-size: 11px !important;
+  font-weight: 400;
+}
+.fux-machine__issues [data-severity="error"] .fux-machine__badge {
+  color: var(--fux-danger, #a31528);
+}
+.fux-machine__success {
+  color: var(--fux-success, #176b3b);
+}
+.fux-machine__footer {
+  border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-block-end: 0;
+  padding-block: 0;
+  font-size: 10px;
+  color: var(--fux-muted, #52565c);
+  gap: 16px;
+}
+.fux-machine__footer button {
+  min-block-size: 44px;
+  margin-inline-start: auto;
+  padding: 8px;
+  font-size: 10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.fux-machine__sr {
+  position: absolute !important;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .fux-machine__workspace[data-inspector] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fux-machine__inspector {
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  }
+  .fux-machine__panel {
+    max-block-size: 420px;
+  }
+  .fux-machine__canvas-caption {
+    display: none;
+  }
+}
+@media (max-width: 520px) {
+  .fux-machine__toolbar {
+    gap: 6px;
+  }
+  .fux-machine__identity {
+    flex: 1 0 100%;
+  }
+  .fux-machine__history {
+    margin-inline-start: auto;
+  }
+  .fux-machine__subbar {
+    align-items: flex-start;
+  }
+  .fux-machine__layout {
+    inline-size: 100%;
+    border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  }
+  .fux-machine__palette .fux-machine__button {
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 44px;
+    font-size: 9px !important;
+    padding: 4px 6px;
+  }
+  .fux-machine__viewport {
+    block-size: 420px;
+  }
+  .fux-machine__canvas-controls {
+    inset-inline-start: 8px;
+  }
+  .fux-machine__connection-hint {
+    inline-size: calc(100% - 16px);
+    justify-content: space-between;
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fux-machine *,
+  .fux-machine *::before,
+  .fux-machine *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .fux-machine__node[data-active] {
+    outline: 3px double Highlight;
+  }
+  .fux-machine__edge {
+    stroke: CanvasText;
+  }
+  .fux-machine__edge[data-active],
+  .fux-machine__edge[data-selected] {
+    stroke: Highlight;
+  }
+  .fux-machine__active-dot {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+}
+.fux-machine__diagnostics ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.fux-machine__diagnostics li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-block: 8px;
+  border-block-start: 1px solid var(--fux-border-subtle, #e1e5ea);
+  font-size: 11px;
+}
+.fux-machine__diagnostics strong {
+  font-weight: 550;
+}
+.fux-machine__diagnostics small {
+  flex-basis: 100%;
+  color: var(--fux-muted, #52565c);
+  overflow-wrap: anywhere;
+}
+.fux-machine__connection-state[data-status="gap"] {
+  color: var(--fux-danger, #a31528);
+}
+.fux-machine__edge--pending {
+  stroke: var(--fux-focus, #245db0);
+  stroke-dasharray: 5 4;
+  opacity: 1;
+}
+.fux-machine__replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 4px;
+  margin-block-end: 10px;
+}
+.fux-machine__replay-controls > span {
+  flex: 1;
+  text-align: center;
+  white-space: nowrap;
+  font:
+    10px ui-monospace,
+    monospace;
+}
+.fux-machine__annotation {
+  stroke: var(--fux-muted, #52565c);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  fill: none;
+  opacity: 0.65;
+}
+@media (pointer: coarse) {
+  .fux-machine__field input,
+  .fux-machine__field select,
+  .fux-machine__field textarea,
+  .fux-machine__inline-select select {
+    font-size: 16px;
+  }
+  .fux-machine__port {
+    opacity: 1;
+  }
+}
+
+/* Overview summaries never create tiny nested scroll areas. Full values remain
+   available in the inspector; custom node renderers retain their own overflow. */
+.fux-machine__node-body--summary {
+  overflow: hidden;
+}
+.fux-machine__node-body--summary p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.fux-machine__node-body--summary small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.fux-machine__node-body--summary .fux-machine__tags {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.fux-machine__node-body--summary .fux-machine__tags > span {
+  white-space: nowrap;
+}
+.fux-machine__inspector[hidden] {
+  display: none;
+}
+.fux-machine__selection-tools {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  max-inline-size: calc(100% - 24px);
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 5px;
+  background: var(--fux-surface, #fff);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.06);
+}
+
+.fux-machine__find-field {
+  display: grid;
+  gap: 8px;
+}
+.fux-machine__find input {
+  min-block-size: 44px;
+  inline-size: 100%;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  font: inherit;
+  color: inherit;
+  background: var(--fux-surface, #fff);
+  border: 1px solid var(--fux-border-subtle, #e1e5ea);
+  border-radius: 5px;
+  padding-inline: 10px;
+}
+.fux-machine__search-results,
+.fux-machine__context-diff {
+  overflow-wrap: anywhere;
+  list-style: none;
+  padding: 0;
+}
+.fux-machine__search-results button {
+  inline-size: 100%;
+  text-align: start;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.fux-machine__pinned-frame {
+  border-inline-start: 3px solid currentColor;
+  padding-inline-start: 12px;
+  overflow-wrap: anywhere;
+}
+.fux-machine__timeline-filter {
+  display: grid;
+  gap: 8px;
+}
+.fux-machine__context-diff pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,818 @@
+[
+  {
+    "name": "Button",
+    "exportName": "Button",
+    "category": "Actions",
+    "description": "Keyboard and pointer actions with primary, secondary, quiet and danger treatments.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Button"]
+  },
+  {
+    "name": "IconButton",
+    "exportName": "IconButton",
+    "category": "Actions",
+    "description": "A compact visual action with a required accessible label and a full-size hit target.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["IconButton"]
+  },
+  {
+    "name": "Link",
+    "exportName": "Link",
+    "category": "Navigation",
+    "description": "Native navigation with inline and block presentations.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Link"]
+  },
+  {
+    "name": "ToggleButton",
+    "exportName": "ToggleButton",
+    "category": "Actions",
+    "description": "An action that retains pressed state.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["ToggleButton"]
+  },
+  {
+    "name": "ToggleButtonGroup",
+    "exportName": "ToggleButtonGroup",
+    "category": "Actions",
+    "description": "Related single or multiple toggle choices.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["ToggleButtonGroup", "ToggleButtonGroupItem"]
+  },
+  {
+    "name": "Toolbar",
+    "exportName": "Toolbar",
+    "category": "Actions",
+    "description": "Arrow-key navigation across related controls.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": [
+      "Toolbar.Root",
+      "Toolbar.Button",
+      "Toolbar.Group",
+      "Toolbar.Input",
+      "Toolbar.Link",
+      "Toolbar.Separator"
+    ]
+  },
+  {
+    "name": "Field",
+    "exportName": "Field",
+    "category": "Inputs",
+    "description": "A labeled text input with validation and supporting text.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Field"]
+  },
+  {
+    "name": "TextArea",
+    "exportName": "TextArea",
+    "category": "Inputs",
+    "description": "A resizable multiline text field with accessible validation.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["TextArea"]
+  },
+  {
+    "name": "SearchField",
+    "exportName": "SearchField",
+    "category": "Inputs",
+    "description": "A search field with an owner-managed clear action.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["SearchField"]
+  },
+  {
+    "name": "NumberField",
+    "exportName": "NumberField",
+    "category": "Inputs",
+    "description": "Locale-aware numeric entry with step controls and bounds.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["NumberField"]
+  },
+  {
+    "name": "Checkbox",
+    "exportName": "Checkbox",
+    "category": "Selection",
+    "description": "A labeled binary or indeterminate choice.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Checkbox"]
+  },
+  {
+    "name": "CheckboxGroup",
+    "exportName": "CheckboxGroup",
+    "category": "Selection",
+    "description": "Multiple named choices with shared validation.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["CheckboxGroup"]
+  },
+  {
+    "name": "RadioGroup",
+    "exportName": "RadioGroup",
+    "category": "Selection",
+    "description": "One selection from a labeled set of choices.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["RadioGroup"]
+  },
+  {
+    "name": "Switch",
+    "exportName": "Switch",
+    "category": "Selection",
+    "description": "An immediate on/off setting.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Switch"]
+  },
+  {
+    "name": "Slider",
+    "exportName": "Slider",
+    "category": "Selection",
+    "description": "Single or multiple numeric thumbs with keyboard and pointer adjustment.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Slider"]
+  },
+  {
+    "name": "Select",
+    "exportName": "Select",
+    "category": "Collections",
+    "description": "A button-triggered selection list.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Select"]
+  },
+  {
+    "name": "ComboBox",
+    "exportName": "ComboBox",
+    "category": "Collections",
+    "description": "Searchable suggestions with typed collection options.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["ComboBox"]
+  },
+  {
+    "name": "ListBox",
+    "exportName": "ListBox",
+    "category": "Collections",
+    "description": "Keyboard-selectable options with disabled and descriptive states.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ListBox"]
+  },
+  {
+    "name": "GridList",
+    "exportName": "GridList",
+    "category": "Collections",
+    "description": "Selectable rows supporting rich content and nested actions.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["GridList"]
+  },
+  {
+    "name": "Table",
+    "exportName": "Table",
+    "category": "Collections",
+    "description": "An accessible data grid with typed columns and row rendering.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Table"]
+  },
+  {
+    "name": "Tree",
+    "exportName": "Tree",
+    "category": "Collections",
+    "description": "Nested selectable content with owner-managed expansion.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Tree"]
+  },
+  {
+    "name": "NavigationTree",
+    "exportName": "NavigationTree",
+    "category": "Navigation",
+    "description": "Hierarchical navigation with current-route state.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["NavigationTree"]
+  },
+  {
+    "name": "TagGroup",
+    "exportName": "TagGroup",
+    "category": "Collections",
+    "description": "Focusable tags with optional removal and selection.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["TagGroup"]
+  },
+  {
+    "name": "TokenField",
+    "exportName": "TokenField",
+    "category": "Inputs",
+    "description": "Editable text with structured inline tokens.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["TokenField"]
+  },
+  {
+    "name": "Menu",
+    "exportName": "Menu",
+    "category": "Navigation",
+    "description": "An action menu with shortcuts, disabled items and links.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Menu"]
+  },
+  {
+    "name": "Tabs",
+    "exportName": "Tabs",
+    "category": "Navigation",
+    "description": "Labeled views with arrow-key navigation and panels.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Tabs"]
+  },
+  {
+    "name": "Breadcrumbs",
+    "exportName": "Breadcrumbs",
+    "category": "Navigation",
+    "description": "A navigation path with a current-page endpoint.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Breadcrumbs"]
+  },
+  {
+    "name": "Disclosure",
+    "exportName": "Disclosure",
+    "category": "Disclosure",
+    "description": "An independently expandable section.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Disclosure"]
+  },
+  {
+    "name": "DisclosureGroup",
+    "exportName": "DisclosureGroup",
+    "category": "Disclosure",
+    "description": "Related sections with single or multiple expansion.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["DisclosureGroup"]
+  },
+  {
+    "name": "Dialog",
+    "exportName": "Dialog",
+    "category": "Overlays",
+    "description": "A labeled dialog content primitive for owner-managed overlays.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": [
+      "Dialog",
+      "DialogTrigger",
+      "DialogContent",
+      "DialogHeader",
+      "DialogTitle",
+      "DialogDescription",
+      "DialogFooter",
+      "DialogClose"
+    ]
+  },
+  {
+    "name": "ModalDialog",
+    "exportName": "ModalDialog",
+    "category": "Overlays",
+    "description": "A complete modal with focus containment, dismissal and restoration.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["ModalDialog"]
+  },
+  {
+    "name": "Popover",
+    "exportName": "Popover",
+    "category": "Overlays",
+    "description": "Anchored dialog content with a single focus and dismissal owner.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Popover", "PopoverTrigger", "PopoverContent"]
+  },
+  {
+    "name": "Tooltip",
+    "exportName": "Tooltip",
+    "category": "Overlays",
+    "description": "Additional non-interactive information on hover or focus.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Tooltip", "TooltipProvider", "TooltipTrigger", "TooltipContent"]
+  },
+  {
+    "name": "Sheet",
+    "exportName": "Sheet",
+    "category": "Overlays",
+    "description": "An edge-attached swipeable modal with snap points.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": [
+      "Sheet",
+      "SheetTrigger",
+      "SheetContent",
+      "SheetHeader",
+      "SheetTitle",
+      "SheetDescription",
+      "SheetFooter",
+      "SheetClose"
+    ]
+  },
+  {
+    "name": "Calendar",
+    "exportName": "Calendar",
+    "category": "Date and time",
+    "description": "A localized single-date calendar with full keyboard navigation.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Calendar"]
+  },
+  {
+    "name": "RangeCalendar",
+    "exportName": "RangeCalendar",
+    "category": "Date and time",
+    "description": "An inline calendar for choosing a date interval.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["RangeCalendar"]
+  },
+  {
+    "name": "DateField",
+    "exportName": "DateField",
+    "category": "Date and time",
+    "description": "Locale-aware segmented date entry.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["DateField"]
+  },
+  {
+    "name": "DatePicker",
+    "exportName": "DatePicker",
+    "category": "Date and time",
+    "description": "Date entry combined with a calendar popover.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["DatePicker"]
+  },
+  {
+    "name": "DateRangePicker",
+    "exportName": "DateRangePicker",
+    "category": "Date and time",
+    "description": "Paired date entry with a range calendar.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["DateRangePicker"]
+  },
+  {
+    "name": "TimeField",
+    "exportName": "TimeField",
+    "category": "Date and time",
+    "description": "Locale-aware segmented time entry.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["TimeField"]
+  },
+  {
+    "name": "ColorArea",
+    "exportName": "ColorArea",
+    "category": "Color",
+    "description": "Two-axis color adjustment with keyboard-accessible channel values.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ColorArea"]
+  },
+  {
+    "name": "ColorField",
+    "exportName": "ColorField",
+    "category": "Color",
+    "description": "Color text entry with parsing and validation.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ColorField"]
+  },
+  {
+    "name": "ColorPicker",
+    "exportName": "ColorPicker",
+    "category": "Color",
+    "description": "A synchronized color area, channel sliders, value field and preset palette.",
+    "owner": "native",
+    "status": "styled",
+    "parts": [
+      "ColorPicker",
+      "ColorArea",
+      "ColorSlider",
+      "ColorField",
+      "ColorSwatch",
+      "ColorSwatchPicker",
+      "ColorWheel"
+    ]
+  },
+  {
+    "name": "ColorSlider",
+    "exportName": "ColorSlider",
+    "category": "Color",
+    "description": "Adjustment of a single color channel or alpha.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ColorSlider"]
+  },
+  {
+    "name": "ColorSwatch",
+    "exportName": "ColorSwatch",
+    "category": "Color",
+    "description": "An accessible color preview with a computed color description.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ColorSwatch"]
+  },
+  {
+    "name": "ColorSwatchPicker",
+    "exportName": "ColorSwatchPicker",
+    "category": "Color",
+    "description": "Keyboard-selectable named color presets.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ColorSwatchPicker"]
+  },
+  {
+    "name": "ColorWheel",
+    "exportName": "ColorWheel",
+    "category": "Color",
+    "description": "Circular hue adjustment with keyboard and pointer support.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ColorWheel"]
+  },
+  {
+    "name": "ProgressBar",
+    "exportName": "ProgressBar",
+    "category": "Feedback",
+    "description": "Determinate or indeterminate progress with an accessible label.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["ProgressBar"]
+  },
+  {
+    "name": "Meter",
+    "exportName": "Meter",
+    "category": "Feedback",
+    "description": "A measured value within a known range.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Meter"]
+  },
+  {
+    "name": "DropZone",
+    "exportName": "DropZone",
+    "category": "Files",
+    "description": "A keyboard-accessible drop destination with a visible target state.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["DropZone"]
+  },
+  {
+    "name": "FileTrigger",
+    "exportName": "FileTrigger",
+    "category": "Files",
+    "description": "A native file chooser attached to a styled owner button.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["FileTrigger"]
+  },
+  {
+    "name": "Form",
+    "exportName": "Form",
+    "category": "Inputs",
+    "description": "Form submission and validation context.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Form"]
+  },
+  {
+    "name": "Separator",
+    "exportName": "Separator",
+    "category": "Layout",
+    "description": "A semantic horizontal or vertical divider.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Separator"]
+  },
+  {
+    "name": "Stack",
+    "exportName": "Stack",
+    "category": "Layout",
+    "description": "Vertical layout using the shared spacing scale.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Stack"]
+  },
+  {
+    "name": "Row",
+    "exportName": "Row",
+    "category": "Layout",
+    "description": "Wrapping horizontal layout with logical alignment.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Row"]
+  },
+  {
+    "name": "Panel",
+    "exportName": "Panel",
+    "category": "Layout",
+    "description": "A neutral surface with shared padding and tonal roles.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Panel"]
+  },
+  {
+    "name": "AngleSlider",
+    "exportName": "AngleSlider",
+    "category": "Selection",
+    "description": "Circular numeric adjustment with a keyboard-operable thumb.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["AngleSlider"]
+  },
+  {
+    "name": "Avatar",
+    "exportName": "Avatar",
+    "category": "Display",
+    "description": "Image identity with a resilient fallback.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Avatar"]
+  },
+  {
+    "name": "Carousel",
+    "exportName": "Carousel",
+    "category": "Display",
+    "description": "A scrollable sequence with previous, next and page controls.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Carousel"]
+  },
+  {
+    "name": "Clipboard",
+    "exportName": "Clipboard",
+    "category": "Actions",
+    "description": "A labeled value with clipboard copy feedback.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Clipboard"]
+  },
+  {
+    "name": "DownloadTrigger",
+    "exportName": "DownloadTrigger",
+    "category": "Files",
+    "description": "Download supplied local text or binary data.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["DownloadTrigger"]
+  },
+  {
+    "name": "Drawer",
+    "exportName": "Drawer",
+    "category": "Overlays",
+    "description": "An edge-attached panel with owner-managed dragging and dismissal.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": [
+      "Drawer",
+      "DrawerTrigger",
+      "DrawerContent",
+      "DrawerHeader",
+      "DrawerTitle",
+      "DrawerDescription",
+      "DrawerFooter",
+      "DrawerClose"
+    ]
+  },
+  {
+    "name": "Editable",
+    "exportName": "Editable",
+    "category": "Inputs",
+    "description": "Inline text editing with commit and cancel actions.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Editable"]
+  },
+  {
+    "name": "Fieldset",
+    "exportName": "Fieldset",
+    "category": "Inputs",
+    "description": "A semantic group with a legend, helper text and errors.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Fieldset"]
+  },
+  {
+    "name": "FileUpload",
+    "exportName": "FileUpload",
+    "category": "Files",
+    "description": "Local file picking, dropping, validation and removal.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["FileUpload"]
+  },
+  {
+    "name": "FloatingPanel",
+    "exportName": "FloatingPanel",
+    "category": "Overlays",
+    "description": "A movable and resizable non-modal workspace window.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["FloatingPanel"]
+  },
+  {
+    "name": "HoverCard",
+    "exportName": "HoverCard",
+    "category": "Overlays",
+    "description": "Supplementary contextual content on hover or focus.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["HoverCard", "HoverCardTrigger", "HoverCardContent"]
+  },
+  {
+    "name": "ImageCropper",
+    "exportName": "ImageCropper",
+    "category": "Media",
+    "description": "An image viewport with accessible crop selection and resize handles.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ImageCropper"]
+  },
+  {
+    "name": "JsonTreeView",
+    "exportName": "JsonTreeView",
+    "category": "Collections",
+    "description": "Expandable structured data rendered as inert text.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["JsonTreeView"]
+  },
+  {
+    "name": "Marquee",
+    "exportName": "Marquee",
+    "category": "Display",
+    "description": "A moving content strip with explicit pause control.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Marquee"]
+  },
+  {
+    "name": "NavigationMenu",
+    "exportName": "NavigationMenu",
+    "category": "Navigation",
+    "description": "Site navigation with expandable link groups.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["NavigationMenu"]
+  },
+  {
+    "name": "PasswordInput",
+    "exportName": "PasswordInput",
+    "category": "Inputs",
+    "description": "A labeled password field with a visibility toggle.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["PasswordInput"]
+  },
+  {
+    "name": "PinInput",
+    "exportName": "PinInput",
+    "category": "Inputs",
+    "description": "Segmented verification-code entry and paste handling.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["PinInput"]
+  },
+  {
+    "name": "QrCode",
+    "exportName": "QrCode",
+    "category": "Media",
+    "description": "A generated QR image with local download support.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["QrCode"]
+  },
+  {
+    "name": "RatingGroup",
+    "exportName": "RatingGroup",
+    "category": "Selection",
+    "description": "An accessible rating scale with pointer and keyboard selection.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["RatingGroup"]
+  },
+  {
+    "name": "ScrollArea",
+    "exportName": "ScrollArea",
+    "category": "Layout",
+    "description": "A bounded scroll viewport with styled owner scrollbars.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["ScrollArea", "ScrollBar"]
+  },
+  {
+    "name": "SegmentGroup",
+    "exportName": "SegmentGroup",
+    "category": "Selection",
+    "description": "A compact single-choice segmented control.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["SegmentGroup"]
+  },
+  {
+    "name": "SignaturePad",
+    "exportName": "SignaturePad",
+    "category": "Media",
+    "description": "A local pointer drawing surface with a clear action.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["SignaturePad"]
+  },
+  {
+    "name": "Splitter",
+    "exportName": "Splitter",
+    "category": "Layout",
+    "description": "Keyboard and pointer resizing between adjacent panels.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Splitter.Root", "Splitter.Panel", "Splitter.Handle"]
+  },
+  {
+    "name": "Steps",
+    "exportName": "Steps",
+    "category": "Navigation",
+    "description": "A sequenced workflow with progress and completion states.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Steps"]
+  },
+  {
+    "name": "TagsInput",
+    "exportName": "TagsInput",
+    "category": "Inputs",
+    "description": "Editable string tags with entry, deletion and validation.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["TagsInput"]
+  },
+  {
+    "name": "Timer",
+    "exportName": "Timer",
+    "category": "Feedback",
+    "description": "An explicitly controlled countdown or elapsed-time display.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Timer"]
+  },
+  {
+    "name": "Toast",
+    "exportName": "Toast",
+    "category": "Feedback",
+    "description": "Transient notifications with a region, dismissal and optional actions.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": ["Toast", "Toaster", "toast"]
+  },
+  {
+    "name": "Toc",
+    "exportName": "Toc",
+    "category": "Navigation",
+    "description": "Heading navigation synchronized with visible article sections.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Toc"]
+  },
+  {
+    "name": "Tour",
+    "exportName": "Tour",
+    "category": "Overlays",
+    "description": "An optional guided sequence with explicit start and dismissal.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Tour"]
+  },
+  {
+    "name": "Pagination",
+    "exportName": "Pagination",
+    "category": "Navigation",
+    "description": "Page navigation with bounds, previous/next controls and ellipses.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Pagination"]
+  }
+]
