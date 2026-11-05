@@ -18,9 +18,12 @@ This repository contains the Fast UX Kit library and its Studio consumer demo.
 Author every implementation and test independently from the written behavior
 contract. Standard shadcn-generated components and explicitly approved open-source
 components may be incorporated with their licenses and required notices preserved.
-Author the custom tools and tests independently. Keep comparative research, citations,
-project names and implementation-origin
-records out of this repository, generated artifacts and commit history. Package
-license metadata and legally required dependency notices remain intact. If copied
-or substantially derived material is discovered, stop: replace it independently
-or escalate; never delete a required notice to disguise copying.
+Author the custom tools and tests independently. Keep private comparative
+research, private project names and their references out of the repository,
+generated artifacts and commit history. Ordinary attribution, including AI tool
+mentions and co-author credits, is allowed in pull requests and commits without
+an attribution-specific review or lint check.
+
+Preserve package license metadata and required dependency notices. If you discover
+unapproved copied or substantially derived material, stop and replace it
+independently or escalate. Preserve all required notices during that review.

@@ -12,7 +12,7 @@ export async function startVite() {
   vite ??= await createServer({
     root,
     logLevel: "error",
-    server: { middlewareMode: true, hmr: false },
+    server: { middlewareMode: true, hmr: false, ws: false, watch: null },
     appType: "custom",
     optimizeDeps: { noDiscovery: true, include: [] },
   });
