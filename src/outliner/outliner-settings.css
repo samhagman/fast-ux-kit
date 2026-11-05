@@ -2,7 +2,7 @@
  * Row rhythm and type scale from the reader's settings (settings.ts sets the inputs inline on
  * the outliner root; these are the defaults and what is derived from them).
  *   --ol-line      height of a row's first line: bullet, disclosure, checkbox, ⋯ align to it
- *   --ol-row-pad   vertical padding of the row's content (touch pads the first line to 44px)
+ *   --ol-row-pad   symmetric padding around the first line, including the action target
  */
 [data-slot="outliner"] {
   --ol-text: 14px;
@@ -11,14 +11,16 @@
   --ol-note-leading: 20px;
   --ol-pad: 3px;
   --ol-touch-pad: 0px;
-  --ol-row-pad: calc(var(--ol-pad) + var(--ol-touch-pad));
+  --ol-row-pad: max(
+    calc(var(--ol-pad) + var(--ol-touch-pad)),
+    calc((max(44px, var(--fux-target, 44px)) - var(--ol-leading)) / 2)
+  );
   --ol-line: calc(var(--ol-leading) + 2 * var(--ol-row-pad));
 }
 @media (pointer: coarse) {
-  /* Touch: the first line is at least 44 px, whatever the density and text size, so the
-     disclosure, checkbox and ⋯ that align to it are 44 px targets. */
+  /* Keep the extra touch spacing even at larger text sizes. */
   [data-slot="outliner"] {
-    --ol-touch-pad: max(4px, calc((44px - var(--ol-leading)) / 2 - var(--ol-pad)));
+    --ol-touch-pad: 4px;
   }
 }
 

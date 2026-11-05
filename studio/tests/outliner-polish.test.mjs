@@ -204,22 +204,23 @@ test("⋯ menu on touch: a bottom sheet with 44 px rows, pages for submenus, and
 /* ───────────── 44 px touch targets ───────────── */
 
 test("touch targets: the first line, the toolbar, row ⋯, checkboxes, the bulk bar are all 44 px", async () => {
-  // Every density × text size gives a first line of at least 44 px on touch.
+  // The first line shares the action target on both pointer types.
   const rule = css("outliner-settings.css");
+  assert.match(rule, /--ol-row-pad:\s*max\(/);
   assert.match(
     rule,
-    /--ol-touch-pad:\s*max\(4px,\s*calc\(\(44px - var\(--ol-leading\)\) \/ 2 - var\(--ol-pad\)\)\)/,
+    /calc\(\(max\(44px, var\(--fux-target, 44px\)\) - var\(--ol-leading\)\) \/ 2\)/,
   );
+  assert.match(rule, /@media \(pointer: coarse\) \{[\s\S]*?--ol-touch-pad:\s*4px/);
   for (const density of ["compact", "cozy"])
     for (const fontSize of ["small", "default", "large"]) {
       const style = settings.settingsStyle(settings.resolveSettings({ density, fontSize }));
       const leading = parseFloat(style["--ol-leading"]);
       const pad = parseFloat(style["--ol-pad"]);
-      const touch = Math.max(4, (44 - leading) / 2 - pad);
-      assert.ok(
-        leading + 2 * (pad + touch) >= 44,
-        `${density}/${fontSize}: the line is ${leading + 2 * (pad + touch)} px`,
-      );
+      for (const touchPad of [0, 4]) {
+        const height = leading + 2 * Math.max(pad + touchPad, (44 - leading) / 2);
+        assert.ok(height >= 44, `${density}/${fontSize}: the line is ${height} px`);
+      }
     }
   // The toolbar: every control in it (the host's too) is at least 44 × 44 on touch.
   const toolbarRule = css("outliner.css").match(

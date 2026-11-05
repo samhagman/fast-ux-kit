@@ -3497,7 +3497,6 @@ const OutlineRowView = React.memo(function OutlineRowView({
                 selected && selectionEdge === "last" && "rounded-t-none",
                 cursor && "bg-foreground/[0.09] dark:bg-foreground/[0.13]",
                 row.context && "opacity-55",
-                editingField && "bg-foreground/[0.03]",
               )}
               style={{ paddingInlineStart: `calc(var(--ol-indent) * ${row.depth})` }}
               onClick={(event) => {

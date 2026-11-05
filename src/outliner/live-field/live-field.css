@@ -7,6 +7,13 @@
   outline: none;
 }
 
+/* The caret is the primary editing cue. Scope the faint outline so a host's
+   global focus ring does not turn an inline field into a boxed input. */
+[data-slot="outliner"] :is([data-ol-editor], textarea[data-field]):focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  outline-offset: 1px;
+}
+
 /* Selection drawn by the editor itself (a selected chip) hides the native one. */
 [data-ol-editor].ProseMirror-hideselection *::selection {
   background: transparent;
