@@ -4,6 +4,13 @@ The Studio is the local documentation and demonstration app in `studio/`. It
 contains a searchable gallery for all 86 component families plus the outliner,
 state-machine canvas and machine hierarchy views.
 
+The overview introduces the kit and links to each live tool. The shared shell
+uses the same quiet surfaces, compact type and focus treatment as the outliner,
+with light, dark and system appearance options. The version comes from the kit's
+package metadata. Tool and editor code remains behind lazy route boundaries.
+The package stylesheet loads before Studio's own Tailwind utilities so the
+gallery's responsive overrides take precedence over packaged utilities.
+
 ## Run locally
 
 ```sh
@@ -14,6 +21,8 @@ npm run dev
 
 The development server uses `http://127.0.0.1:5180`. Open `#/components`,
 `#/outliner`, `#/machine-view` or `#/machine-tree` to select a surface.
+The root and `#/overview` open the overview. Earlier `#machine-view`,
+`#machine-tree-view` and outliner lab bookmarks continue to open their tool.
 
 ```sh
 npm run docs:build
