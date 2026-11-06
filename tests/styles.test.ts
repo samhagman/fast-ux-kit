@@ -26,7 +26,11 @@ test("shared controls preserve focus, logical sizing and readable fields", () =>
   assert.match(css, /min-inline-size: 44px/);
   assert.match(css, /font-size: var\(--fux-input-font-size, 1rem\)/);
   assert.match(css, /\.fux-error[^}]*color: var\(--destructive\)/);
-  assert.match(css, /prefers-reduced-motion/);
+  // Reduced motion is handled where each family's motion lives: the area stylesheets.
+  const areas = ["basic", "collections", "color-date", "specialized"].map((name) =>
+    read(`components/${name}.css`),
+  );
+  assert.match(areas.join("\n"), /prefers-reduced-motion/);
 });
 
 test("compact baseline separates text, input, surface borders and outline geometry without shrinking targets", () => {
@@ -73,7 +77,7 @@ test("compound triggers, links and segmented inputs preserve full target dimensi
   const date = read("components/color-date.css");
   assert.match(css, /data-slot\$="-trigger"/);
   assert.match(css, /data-slot="toggle-group-item"/);
-  assert.match(css, /\.fux-tree-disclosure,[\s\S]*?min-inline-size: 44px/);
+  assert.match(css, /\.fux-tree-disclosure[\s,{][\s\S]*?min-inline-size: 44px/);
   assert.match(css, /\.fux-breadcrumbs a[\s\S]*?min-block-size: 44px/);
   assert.match(date, /\.fux-date-segment[\s\S]*?min-inline-size: 44px/);
   assert.match(date, /flex: 1 1 170px/);

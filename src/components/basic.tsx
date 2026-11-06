@@ -47,7 +47,7 @@ const fieldsetClass = "m-0 flex min-w-0 flex-col border-0 p-0";
 const legendClass = "mb-1.5 flex w-fit items-center gap-1 p-0 text-ui leading-5 font-medium";
 const inputExtras = "read-only:bg-muted/50 read-only:text-muted-foreground";
 const shellClass =
-  "fux-target-block h-auto items-center [&_[data-slot=input-group-control]]:h-auto [&_[data-slot=input-group-control]]:self-stretch has-[input:read-only]:bg-muted/50 has-[input:read-only]:text-muted-foreground [&_[data-slot=input-group-addon]]:text-[length:var(--fux-input-font-size,1rem)]";
+  "fux-target-block h-auto items-center [&_[data-slot=input-group-control]]:h-auto [&_[data-slot=input-group-control]]:self-stretch has-[input:read-only]:bg-muted/50 has-[input:read-only]:text-muted-foreground [&_[data-slot=input-group-addon]]:text-[length:var(--fux-input-font-size,1rem)] [&_[data-slot=input-group-addon]:has(>button)]:me-0";
 
 function componentClasses<State>(
   base: string,
@@ -799,7 +799,7 @@ export function RadioGroup({
                 aria-invalid={error ? true : undefined}
                 className="relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input transition-colors outline-none after:absolute after:inset-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-checked:border-primary data-checked:bg-primary data-disabled:opacity-50 dark:bg-input/30 dark:data-checked:bg-primary"
               >
-                <RadioPrimitive.Indicator className="block size-1.5 rounded-full bg-primary-foreground motion-safe:transition motion-safe:duration-150 motion-safe:starting:scale-50 motion-safe:starting:opacity-0" />
+                <RadioPrimitive.Indicator className="fux-radio-indicator block size-1.5 rounded-full bg-primary-foreground motion-safe:transition motion-safe:duration-150 motion-safe:starting:scale-50 motion-safe:starting:opacity-0" />
               </RadioPrimitive.Root>
             )}
           />
@@ -889,7 +889,7 @@ export function Slider({ label, thumbLabels, className, ...props }: SliderProps)
       </div>
       <SliderPrimitive.Control className="flex min-h-11 w-full touch-none items-center select-none data-disabled:opacity-50">
         <SliderPrimitive.Track className={trackClass.replace("overflow-hidden ", "")}>
-          <SliderPrimitive.Indicator className="rounded-full bg-primary" />
+          <SliderPrimitive.Indicator className="fux-slider-indicator rounded-full bg-primary" />
           {Array.from({ length: count }, (_, index) => (
             <SliderPrimitive.Thumb
               key={index}
@@ -975,7 +975,7 @@ export function Meter({ label, hint, low, high, optimum, ...props }: MeterProps)
       <MeterPrimitive.Track className={trackClass}>
         <MeterPrimitive.Indicator
           className={cn(
-            "h-full rounded-full bg-primary transition-[width,background-color] duration-300 ease-out motion-reduce:transition-none",
+            "fux-meter-indicator h-full rounded-full bg-primary transition-[width,background-color] duration-300 ease-out motion-reduce:transition-none",
             tone === "optimum" && "bg-success",
             tone === "suboptimal" && "bg-warning",
             tone === "danger" && "bg-destructive",

@@ -193,4 +193,12 @@
   .fux-toolbar-button[data-pressed] {
     border-color: Highlight;
   }
+  /* Fills drawn as backgrounds vanish in forced colours; draw them in the system highlight. */
+  .fux-slider-indicator,
+  .fux-progress-indicator,
+  .fux-meter-indicator,
+  .fux-radio-indicator {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
 }

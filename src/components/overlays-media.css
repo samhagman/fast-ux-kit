@@ -1,15 +1,6 @@
 /* overlays-media components: styles the Tailwind classes in the markup cannot express. */
 
 /*
- * The shared shadcn primitives (separator, scroll-area, toggle-group, resizable) style themselves
- * with `data-horizontal:` and `data-vertical:`, but Base UI only sets `data-orientation`. Without
- * these two variants those rules never match: a separator has no thickness and a scrollbar has
- * no size. theme.css is the natural home for them.
- */
-@custom-variant data-horizontal (&[data-orientation="horizontal"]);
-@custom-variant data-vertical (&[data-orientation="vertical"]);
-
-/*
  * A scrolling body for dialogs and sheets. Soft shadows at the top and bottom edges show there is
  * more to scroll to, and disappear once the content is fully in view.
  */

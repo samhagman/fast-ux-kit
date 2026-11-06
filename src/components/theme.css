@@ -2,6 +2,9 @@
 /* Media variants are available for consumer layouts. */
 @custom-variant coarse (@media (pointer: coarse));
 @custom-variant fine (@media (pointer: fine));
+/* Base UI marks orientation with data-orientation; the shared primitives style data-horizontal: and data-vertical:. */
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
 
 @theme inline {
   --font-heading: var(--font-sans);
