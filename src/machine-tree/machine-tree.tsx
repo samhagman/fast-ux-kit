@@ -23,6 +23,12 @@ import { ApiContext, BaseContext, useMachineTreeController } from "./machine-tre
 import { GoToDialog } from "./machine-tree-goto.js";
 import { LayoutContext } from "./machine-tree-layout.js";
 import type { MachineTreeScenarioReport } from "./machine-tree-logic.js";
+import type { MachineInspectionProps } from "../machine-shared/use-machine-inspection.js";
+export { inspectionFrameKey } from "../machine-shared/use-machine-inspection.js";
+export type {
+  MachineInspectionProps,
+  MachineInspectionAction,
+} from "../machine-shared/use-machine-inspection.js";
 import { NavigationContext } from "./machine-tree-navigation.js";
 import { MachineTreePanel } from "./machine-tree-panel.js";
 import { TreeToasterHost } from "./machine-tree-primitives.js";
@@ -80,9 +86,17 @@ export type {
 } from "./machine-tree-logic.js";
 export { MachineTreeCanvas, MachineTreeFooter, MachineTreePanel, MachineTreeToolbar };
 
-export type MachineTreePanelTab = "details" | "simulation" | "code";
+export type MachineTreePanelTab = "details" | "simulation" | "code" | "runtime";
+export type MachineTreeMode = "view" | "simulate" | "inspect";
 
-export interface MachineTreeProps {
+export interface MachineTreeProps extends MachineInspectionProps {
+  readonly mode?: MachineTreeMode;
+  readonly defaultMode?: MachineTreeMode;
+  readonly onModeChange?: (mode: MachineTreeMode) => void;
+  /** Show one container without changing saved folds or selection. Search still spans the document. */
+  readonly focusedRowId?: string | null;
+  readonly defaultFocusedRowId?: string | null;
+  readonly onFocusedRowChange?: (rowId: string | null) => void;
   readonly document: MachineDocument;
   readonly runtime?: MachineRuntimeOptions;
   readonly scenarios?: readonly MachineScenario[];
@@ -153,6 +167,10 @@ export interface MachineTreeSimulationState {
  * stable for the life of the root. Row ids are the core's `machineTreeRowId` tuples.
  */
 export interface MachineTreeApi {
+  readonly mode: MachineTreeMode;
+  readonly setMode: (mode: MachineTreeMode) => void;
+  readonly focusedRowId: string | null;
+  readonly focusContainer: (rowId: string | null) => void;
   readonly document: MachineDocument;
   readonly rootMachine: MachineGraph;
   /** The core projection on screen (rows, issues, active flags, truncation). */

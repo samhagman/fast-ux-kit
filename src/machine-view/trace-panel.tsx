@@ -10,7 +10,12 @@ import {
   LogOut,
   Zap,
 } from "lucide-react";
-import type { MachineTraceEntry } from "../core/index.js";
+import {
+  compareMachineInspectionContexts,
+  type MachineInspectionFrame,
+  type MachineTraceEntry,
+} from "../core/index.js";
+import { MachineValue, inspectionTime } from "../machine-shared/machine-inspection-panel.js";
 import { cn } from "../lib/utils.js";
 import { motionTokens } from "../lib/motion.js";
 import { Button } from "../components/ui/button.js";
@@ -24,13 +29,19 @@ function contextDiff(
   before: Readonly<Record<string, unknown>> | undefined,
   after: Readonly<Record<string, unknown>> | undefined,
 ) {
-  if (!after) return [];
-  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after)]);
-  return [...keys]
-    .filter((k) => JSON.stringify(before?.[k]) !== JSON.stringify(after[k]))
-    .map((k) => [k, before?.[k], after[k]] as const);
+  const base: MachineInspectionFrame = {
+    id: "local",
+    actorId: "local",
+    machineId: "local",
+    timestamp: 0,
+    activeIds: [],
+  };
+  return compareMachineInspectionContexts(
+    { ...base, context: before },
+    { ...base, context: after },
+  ).entries.map((e) => [e.path, e.before, e.after] as const);
 }
-const show = (value: unknown) => (value === undefined ? "—" : JSON.stringify(value));
+const show = (value: string) => value;
 
 export function TracePanel() {
   const mv = useMachine();
@@ -202,10 +213,22 @@ export function TracePanel() {
                     className="overflow-hidden"
                   >
                     <dl className="mb-2 ms-1.5 grid gap-1 rounded-md border border-hairline p-2 font-mono text-[10.5px]">
+                      {mv.steps.current.get(entry.sequence)?.timestamp !== undefined && (
+                        <div>{inspectionTime(mv.steps.current.get(entry.sequence)?.timestamp)}</div>
+                      )}
+                      {payload !== undefined && (
+                        <div>
+                          <MachineValue value={payload} label="Payload details" />
+                        </div>
+                      )}
                       {payload !== undefined && (
                         <div className="flex gap-1.5">
                           <span className="text-muted-foreground">payload</span>{" "}
-                          <span className="min-w-0 break-all">{JSON.stringify(payload)}</span>
+                          <span className="min-w-0 break-all">
+                            {typeof payload === "string"
+                              ? payload.slice(0, 1000)
+                              : "See payload details"}
+                          </span>
                         </div>
                       )}
                       {entry.exited.length > 0 && (

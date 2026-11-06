@@ -16,6 +16,14 @@
 .machine-flow .react-flow__node {
   font-family: var(--font-sans);
 }
+.machine-flow [data-preview="enter"] {
+  outline: 1px dashed var(--signal);
+  outline-offset: 3px;
+}
+.machine-flow [data-preview="exit"] {
+  outline: 1px dashed var(--muted-foreground);
+  outline-offset: 3px;
+}
 /* Chips sit on their line. The label layer makes NO stacking context of its own, so each chip's
  * z (its own edge's elevated z + 1, set inline) interleaves with nodes and edges inside the
  * viewport: a line never draws through its own chip, and a selected or dragged state (z 1000+)

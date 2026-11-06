@@ -1,4 +1,4 @@
-import ELK from "elkjs/lib/elk.bundled.js";
+import { createMachineLayoutEngine, type MachineLayoutEngine } from "./layout-worker.js";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import type {
   MachineDirection,
@@ -70,6 +70,7 @@ export interface MachineGraphLayout {
 }
 /** Layout knobs that depend on the host, not the document. */
 export interface MachineLayoutOptions {
+  readonly engine?: MachineLayoutEngine;
   /** Narrow containers: parallel regions stack vertically instead of sitting side by side. */
   readonly stackRegions?: boolean;
 }
@@ -79,7 +80,7 @@ export type MachineSizeHints = ReadonlyMap<
   { readonly key: string; readonly height: number }
 >;
 
-const elk = new ELK();
+const elk = createMachineLayoutEngine({ enabled: false });
 
 export const INITIAL_SIZE = 14;
 export const HEADER = 34;
@@ -336,7 +337,7 @@ export async function layoutMachine(
         });
     }
   }
-  const result = await elk.layout(root);
+  const result = await (options.engine ?? elk).layout(root);
   const nodes = new Map<string, LaidOutNode>();
   const visit = (items: ElkNode[] | undefined, parentId?: string) => {
     for (const item of items ?? []) {

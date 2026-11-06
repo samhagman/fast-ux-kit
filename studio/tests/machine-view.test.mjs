@@ -1312,7 +1312,7 @@ test("useMachineView: delete and run-all copy ('…, 1 nested state and 2 transi
   };
   const notices = [];
   const scenarios = [
-    { id: "s1", label: "Goes in", events: [{ type: "IN" }], expectedActiveIds: ["k"] },
+    { id: "s1", label: "Goes in", events: [{ type: "IN" }], expectedActiveIds: ["p", "k"] },
   ];
   const view = await mountHost((s) => useMachineView(s), {
     controlled: false,

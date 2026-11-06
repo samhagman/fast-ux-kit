@@ -1,5 +1,60 @@
 # Machine View
 
+The polished canvas is `MachineView` from `@samhagman/fast-ux-kit/machine-view`.
+It uses shared shadcn-style controls and Base UI, React Flow for the canvas, and
+ELK for layout. Import `tokens.css` and `machine-view.css` for the supplied skin.
+
+```tsx
+import { MachineView } from "@samhagman/fast-ux-kit/machine-view";
+import "@samhagman/fast-ux-kit/tokens.css";
+import "@samhagman/fast-ux-kit/machine-view.css";
+
+<MachineView document={document} readOnly inspectionSession={session} />;
+```
+
+Use `defaultDocument` for local editing, or `document` plus `onDocumentChange` for
+controlled editing. A controlled viewer uses `document` and `readOnly` (or
+`editable={false}`). Existing editor, import, selection, undo and redo behavior
+is unchanged. A new React key resets a distinct document's transient state.
+
+The toolbar separates Design (View when read-only), Inspect run, and Simulate.
+An inspection session initially opens inspection; `defaultMode` can choose another
+initial mode. [Shared inspection contracts](MACHINE_INSPECTION.md) describe actor
+and history control, actions, context, pending work and presentation hooks.
+
+Simulation is the existing pure local interpreter, configured through `runtime`.
+Guards must be synchronous; actions must be pure context transformations. Hovering
+or keyboard-focusing an enabled event deliberately computes a cached dry run;
+it never advances the current snapshot. Cache entries expire when the snapshot or
+payload changes. `runtime.guardDescriptions` may explain a blocked named guard.
+The kit never guesses a payload that would satisfy a guard.
+
+The scoped command palette (toolbar button or Mod+K inside this view) separates
+navigation, view controls, and simulation execution. Looking up a state or
+transition never dispatches an event. Scenarios show exact expected versus actual
+active configurations, blocked steps and cancellation. Inspect failure opens the
+retained local trace without running callbacks again. Trace timestamps come from
+local execution; unavailable microstep contexts stay unavailable.
+
+Layout runs in a lazy browser worker. The published worker asset is resolved
+relative to the machine entry using `new URL(..., import.meta.url)`; a consumer
+bundler must support module workers (Studio uses Vite). `layoutWorker` accepts
+`{ enabled: false }` for a lazy in-process fallback or `{ createWorker }` for a
+host-managed asset location. Workers returned by the factory are owned by the view
+and terminated on unmount. Construction is SSR-safe. Late results are discarded;
+the last usable diagram remains visible during layout. Observation updates do not
+rerun topology layout or reset pan/zoom. Fit deliberately restores an overview;
+Focus selection uses a readable scale. On a narrow canvas, the opening readable
+view anchors on an active or initial state instead of an empty corner of a large
+graph. Keep document identity stable when only runtime observations change.
+
+## Legacy `/react` API
+
+The following reference describes the older `MachineView` exported from `/react`.
+Its `value`, `onChange`, `runtimeOptions`, render hooks, and controlled mode props
+belong to that older component. They are not the polished `/machine-view` props.
+Both exports remain supported; they have different public interfaces.
+
 Machine View is a React statechart workspace with three deliberately separate jobs:
 
 1. **Edit** a portable graph document, including hierarchy and referenced graphs.

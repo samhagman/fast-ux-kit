@@ -4,5 +4,7 @@ export * from "./commands.js";
 export * from "./layout.js";
 export * from "./runtime.js";
 export * from "./inspection.js";
+export * from "./observations.js";
+export * from "./diagnostics.js";
 export * from "./analysis.js";
 export * from "./tree.js";

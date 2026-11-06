@@ -1,11 +1,9 @@
-import { useReactFlow } from "@xyflow/react";
 import { AlertTriangle, CircleAlert, CircleCheck } from "lucide-react";
 import { useMachine } from "./machine-context.js";
 
 /** Issues tab: validation errors and warnings; a row selects (and reveals) what it is about. */
 export function IssuesPanel() {
   const mv = useMachine();
-  const flow = useReactFlow();
   if (!mv.issues.length)
     return (
       <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/8 px-3 py-2.5 text-[12px] text-success">
@@ -27,16 +25,9 @@ export function IssuesPanel() {
           <button
             type="button"
             onClick={() => {
-              if (issue.nodeId) {
-                mv.setSelection({ type: "node", id: issue.nodeId });
-                flow.fitView({
-                  nodes: [{ id: issue.nodeId }],
-                  duration: 260,
-                  maxZoom: 1.1,
-                  padding: 0.4,
-                });
-              } else if (issue.transitionId)
-                mv.setSelection({ type: "transition", id: issue.transitionId });
+              if (issue.nodeId) mv.reveal(issue.machineId ?? mv.machineId, issue.nodeId, "node");
+              else if (issue.transitionId)
+                mv.reveal(issue.machineId ?? mv.machineId, issue.transitionId, "transition");
             }}
             className="flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-start transition-colors hover:bg-muted/60"
           >

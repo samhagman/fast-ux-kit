@@ -35,6 +35,7 @@ export interface SendResult {
 
 /** One played scenario step: the snapshot before it (for explaining a refusal) and whether it moved. */
 export interface ScenarioStep extends SendResult {
+  readonly timestamp?: number;
   readonly index: number;
   readonly event: string;
   readonly before: MachineSnapshot;
@@ -57,10 +58,15 @@ export function machineEvent(type: string, payload?: unknown): MachineEvent {
 }
 
 /** One pass rule for every runner: all expected ids active at the end (undefined when none declared). */
-function scenarioPassed(scenario: MachineScenario, activeIds: readonly string[]) {
+function scenarioPassed(scenario: MachineScenario, snapshot: MachineSnapshot) {
   if (!scenario.expectedActiveIds) return undefined;
-  const active = new Set(activeIds);
-  return scenario.expectedActiveIds.every((id) => active.has(id));
+  const expected = scenario.expectedActiveIds;
+  return (
+    snapshot.status !== "error" &&
+    new Set(expected).size === expected.length &&
+    expected.length === snapshot.activeIds.length &&
+    expected.every((id) => snapshot.activeIds.includes(id))
+  );
 }
 
 /**
@@ -79,6 +85,7 @@ export function runMachineScenario(
     const before = current;
     current = sendMachineEvent(document, current, event, runtime);
     steps.push({
+      timestamp: Date.now(),
       index,
       event: event.type,
       changed: current.sequence !== before.sequence,
@@ -87,7 +94,7 @@ export function runMachineScenario(
       ...(event.payload !== undefined ? { payload: event.payload } : {}),
     });
   }
-  const passed = scenarioPassed(scenario, current.activeIds);
+  const passed = scenarioPassed(scenario, current);
   return {
     id: scenario.id,
     steps,
@@ -146,6 +153,9 @@ export function useMachineSimulation(
     setLastTransitionIds([]);
     setLastResult(null);
   }, []);
+  React.useEffect(() => {
+    stop();
+  }, [document, graph.id, stop]);
 
   const snapshotRef = React.useRef(snapshot);
   snapshotRef.current = snapshot;
@@ -205,6 +215,7 @@ export function useMachineSimulation(
         current = sendMachineEvent(document, current, event, runtimeRef.current);
         const changed = current.sequence !== before.sequence;
         const step: ScenarioStep = {
+          timestamp: Date.now(),
           index,
           event: event.type,
           changed,
@@ -221,7 +232,7 @@ export function useMachineSimulation(
       }
       if (token !== runToken.current) return null;
       setPlaying(null);
-      const passed = scenarioPassed(scenario, current.activeIds);
+      const passed = scenarioPassed(scenario, current);
       return {
         id: scenario.id,
         steps,
@@ -295,6 +306,20 @@ export function useMachineSimulation(
     payload,
     lastResult,
     run,
+    /** Loads an already-computed local result for inspection without replaying callbacks. */
+    inspectScenario: (result: ScenarioResult, index = 0) => {
+      runToken.current++;
+      const final = result.steps.at(-1)?.after;
+      if (!final) return;
+      snapshotRef.current = final;
+      setPlaying(null);
+      setSnapshot(final);
+      const step = result.steps[Math.max(0, Math.min(result.steps.length - 1, index))];
+      const sequence = step?.changed ? step.after.sequence : step?.before.sequence;
+      const cursor = final.trace.findIndex((t) => t.sequence === sequence);
+      setCursor(cursor < 0 ? null : cursor);
+      setLastTransitionIds([]);
+    },
   };
 }
 

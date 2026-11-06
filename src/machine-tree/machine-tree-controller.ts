@@ -44,9 +44,22 @@ import {
 import { useMediaQuery } from "../hooks/use-media-query.js";
 import { createFocusHandoff, type FocusHandoff } from "../machine-shared/machine-focus.js";
 import { structuralIssues } from "../machine-shared/machine-issues.js";
+import {
+  useMachineInspection,
+  type MachineInspectionController,
+} from "../machine-shared/use-machine-inspection.js";
+import { useControllable } from "./machine-tree-store.js";
+import type { MachineTreeMode } from "./machine-tree.js";
+const EMPTY_STATES = new Set<string>();
+const EMPTY_CANDIDATES = { enabled: EMPTY_STATES, blocked: EMPTY_STATES };
 
 /** What every concern shares: the document as the core sees it, the row registry, the live region. */
 export interface TreeBase {
+  readonly inspection: MachineInspectionController;
+  readonly mode: MachineTreeMode;
+  readonly setMode: (mode: MachineTreeMode) => void;
+  readonly beginSimulation: () => boolean;
+  readonly liveSim: MachineSimulation;
   readonly document: MachineDocument;
   readonly scenarios: readonly MachineScenario[];
   readonly runtimeRef: React.RefObject<MachineRuntimeOptions | undefined>;
@@ -97,7 +110,33 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
   const rootGraph =
     document.machines.find((m) => m.id === document.rootId) ?? document.machines[0]!;
   const ownSim = useMachineSimulation(document, rootGraph, runtime);
-  const sim = simulation ?? ownSim;
+  const liveSim = simulation ?? ownSim;
+  const inspection = useMachineInspection(document, props);
+  const [mode, setMode] = useControllable<MachineTreeMode>(
+    props.mode,
+    () => props.defaultMode ?? (props.inspectionSession ? "inspect" : "view"),
+    props.onModeChange,
+  );
+  const beginSimulation = useEvent(() => {
+    setMode("simulate");
+    return props.mode === undefined || props.mode === "simulate";
+  });
+  const sim = React.useMemo<MachineSimulation>(
+    () =>
+      mode === "inspect"
+        ? {
+            ...liveSim,
+            snapshot: null,
+            frame: null,
+            cursor: null,
+            playing: null,
+            leafIds: EMPTY_STATES,
+            activeSet: EMPTY_STATES,
+            candidates: EMPTY_CANDIDATES,
+          }
+        : liveSim,
+    [mode, liveSim],
+  );
   const isPhone = useMediaQuery("(max-width: 767px)");
   const coarse = useMediaQuery("(pointer: coarse)");
   const [store] = React.useState(createViewStore);
@@ -124,9 +163,14 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
     [document, maxItems, structural],
   );
   // Only the deepest active states are "active"; their ancestors become `activeDescendant`.
-  const active = sim.frame
-    ? [{ machineId: rootGraph.id, activeIds: [...sim.leafIds] }]
-    : hostActive;
+  const active =
+    mode === "inspect"
+      ? inspection.frame && !inspection.mismatch
+        ? [{ machineId: inspection.frame.machineId, activeIds: [...inspection.leafIds] }]
+        : undefined
+      : sim.frame
+        ? [{ machineId: rootGraph.id, activeIds: [...sim.leafIds] }]
+        : hostActive;
   const activeKey = active?.length ? JSON.stringify(active) : "";
   const model = React.useMemo(
     () =>
@@ -200,6 +244,11 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
   );
 
   const base: TreeBase = {
+    inspection,
+    mode,
+    setMode,
+    beginSimulation,
+    liveSim,
     document,
     scenarios,
     runtimeRef,
@@ -221,17 +270,30 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
     announceSerial,
   };
 
-  const layout = useLayoutController(props, { isPhone, coarse, dir, rootRef, scrollerRef });
+  const layout = useLayoutController(
+    {
+      ...props,
+      defaultPanelOpen: props.defaultPanelOpen ?? !!props.inspectionSession,
+      defaultPanelTab: props.defaultPanelTab ?? (props.inspectionSession ? "runtime" : "details"),
+    },
+    { isPhone, coarse, dir, rootRef, scrollerRef },
+  );
   // Enter / click on a row belongs to the simulation concern, created just below.
   const activate = useEvent((id: string) => run.activate(id));
   const nav = useNavigationController(props, base, layout, activate);
   const run = useSimulationController(base, layout, nav, props.onSimulationChange);
 
   const trimmedQuery = nav.deferredQuery.trim();
+  const displayCollapsed = React.useMemo(() => {
+    if (!nav.focused) return nav.collapsed;
+    const ids = new Set(nav.collapsed);
+    ids.delete(nav.focused);
+    return ids;
+  }, [nav.collapsed, nav.focused]);
   const first = nav.order[0];
   const layoutEpoch = React.useMemo(
-    () => ({ collapsed: nav.collapsed, query: trimmedQuery }),
-    [nav.collapsed, trimmedQuery],
+    () => ({ collapsed: nav.collapsed, query: trimmedQuery, focused: nav.focused }),
+    [nav.collapsed, trimmedQuery, nav.focused],
   );
   const modelCtx = React.useMemo<TreeModelCtx>(
     () => ({
@@ -243,9 +305,12 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       links,
       issues,
       rootMachineId: rootGraph.id,
+      inspectionMachineId:
+        mode === "inspect" && !inspection.mismatch ? inspection.frame?.machineId : undefined,
+      presentation: props.presentation,
       searching: nav.searching,
       query: trimmedQuery,
-      collapsed: nav.collapsed,
+      collapsed: displayCollapsed,
       layoutEpoch,
       sim: run.view,
       coarse,
@@ -271,9 +336,14 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       links,
       issues,
       rootGraph.id,
+      mode,
+      inspection.mismatch,
+      inspection.frame?.machineId,
+      props.presentation,
       nav.searching,
       trimmedQuery,
       nav.collapsed,
+      displayCollapsed,
       layoutEpoch,
       run.view,
       coarse,
@@ -323,6 +393,10 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
   const api = React.useMemo<MachineTreeApi>(
     () => ({
       document,
+      mode,
+      setMode,
+      focusedRowId: nav.focused,
+      focusContainer: nav.focusContainer,
       rootMachine: rootGraph,
       model,
       selectedId: nav.selected,
@@ -357,6 +431,10 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       rootGraph,
       model,
       nav.selected,
+      mode,
+      setMode,
+      nav.focused,
+      nav.focusContainer,
       selectedRow,
       nav.select,
       nav.reveal,

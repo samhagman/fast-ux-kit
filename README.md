@@ -101,7 +101,11 @@ connect file storage, version history and application actions.
 
 `MachineView` from `/machine-view` provides the state-machine canvas and local
 simulation. `MachineTree` from `/machine-tree` provides the hierarchy view. Both
-use the portable `MachineDocument` model exported from `/machine`.
+use the portable `MachineDocument` model exported from `/machine`, shared Base UI
+controls, supplied-run inspection, pinned history, pending work and optional app
+actions. See [canvas](docs/MACHINE_VIEW.md), [tree](docs/MACHINE_TREE_VIEW.md), and
+[inspection contracts](docs/MACHINE_INSPECTION.md). The older machine exports in
+`/react` remain available with their original, different APIs.
 
 Use `defaultDocument` for an uncontrolled canvas or `document` with its change
 callback for controlled editing. The hierarchy accepts `document`. Host runtime

@@ -1,4 +1,6 @@
 import * as React from "react";
+import { MachineObservationDemo } from "@/demo/machine-observation-demo";
+import { Button } from "@samhagman/fast-ux-kit/components/ui/button";
 import type {
   MachineDocument,
   MachineGraph,
@@ -128,6 +130,9 @@ export function MachineTreePage() {
     else url.searchParams.delete(key);
     window.history.replaceState(null, "", url);
   };
+  const [inspectDemo, setInspectDemo] = React.useState(
+    () => new URLSearchParams(window.location.search).get("inspect") === "1",
+  );
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-background/60 px-4">
@@ -144,36 +149,48 @@ export function MachineTreePage() {
           </span>
         )}
         <div className="ms-auto flex items-center gap-2">
-          <span className="text-ui text-muted-foreground max-sm:hidden">Example</span>
-          <Select
-            value={caseId}
-            onValueChange={(id) => {
-              setCaseId(id);
-              setRun("");
-              writeParam("machine", id);
-              // A query belongs to the machine it was typed against.
-              setQuery("");
-              writeParam("q", "");
-            }}
+          <Button
+            size="sm"
+            variant={inspectDemo ? "secondary" : "outline"}
+            aria-pressed={inspectDemo}
+            onClick={() => setInspectDemo((value) => !value)}
           >
-            {/* `data-[size=sm]:h-7` out-specifies a bare `coarse:h-11`: match its variant to win on touch. */}
-            <SelectTrigger size="sm" className="w-48 text-ui coarse:data-[size=sm]:h-11">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {machineLabCases.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-ui">
-                  {c.label}
-                </SelectItem>
-              ))}
-              <SelectSeparator />
-              {synthetic.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-ui">
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            Inspect sample run
+          </Button>
+          {!inspectDemo && (
+            <>
+              <span className="text-ui text-muted-foreground max-sm:hidden">Example</span>
+              <Select
+                value={caseId}
+                onValueChange={(id) => {
+                  setCaseId(id);
+                  setRun("");
+                  writeParam("machine", id);
+                  // A query belongs to the machine it was typed against.
+                  setQuery("");
+                  writeParam("q", "");
+                }}
+              >
+                {/* `data-[size=sm]:h-7` out-specifies a bare `coarse:h-11`: match its variant to win on touch. */}
+                <SelectTrigger size="sm" className="w-48 text-ui coarse:data-[size=sm]:h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {machineLabCases.map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="text-ui">
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                  <SelectSeparator />
+                  {synthetic.map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="text-ui">
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
         </div>
       </div>
       <div
@@ -181,29 +198,33 @@ export function MachineTreePage() {
           pair ? "grid min-h-0 flex-1 grid-rows-2 gap-4 p-0 sm:p-4" : "min-h-0 flex-1 p-0 sm:p-4"
         }
       >
-        <MachineTree
-          key={caseId}
-          document={lab.document}
-          runtime={lab.options}
-          scenarios={lab.scenarios}
-          {...(lab.maxItems ? { maxItems: lab.maxItems } : {})}
-          {...(dir ? { dir } : {})}
-          {...(pair ? { label: `${machineLabel} (top)` } : {})}
-          query={query}
-          onQueryChange={(next) => {
-            setQuery(next);
-            writeParam("q", next);
-          }}
-          onSimulationChange={(snapshot) =>
-            setRun(
-              snapshot
-                ? `${snapshot.status}${snapshot.status === "error" && snapshot.error ? ` (${snapshot.error})` : ""} · ${plural(Math.max(0, snapshot.trace.length - 1), "step")}`
-                : "",
-            )
-          }
-          className="h-full max-sm:rounded-none max-sm:border-x-0"
-        />
-        {pair && (
+        {inspectDemo ? (
+          <MachineObservationDemo dir={dir} view="tree" />
+        ) : (
+          <MachineTree
+            key={caseId}
+            document={lab.document}
+            runtime={lab.options}
+            scenarios={lab.scenarios}
+            {...(lab.maxItems ? { maxItems: lab.maxItems } : {})}
+            {...(dir ? { dir } : {})}
+            {...(pair ? { label: `${machineLabel} (top)` } : {})}
+            query={query}
+            onQueryChange={(next) => {
+              setQuery(next);
+              writeParam("q", next);
+            }}
+            onSimulationChange={(snapshot) =>
+              setRun(
+                snapshot
+                  ? `${snapshot.status}${snapshot.status === "error" && snapshot.error ? ` (${snapshot.error})` : ""} · ${plural(Math.max(0, snapshot.trace.length - 1), "step")}`
+                  : "",
+              )
+            }
+            className="h-full max-sm:rounded-none max-sm:border-x-0"
+          />
+        )}
+        {pair && !inspectDemo && (
           <MachineTree
             key={`${caseId}-pair`}
             document={lab.document}

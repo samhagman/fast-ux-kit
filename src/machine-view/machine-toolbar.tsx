@@ -59,7 +59,7 @@ export function MachineToolbar({ toolbarStart }: { readonly toolbarStart?: React
   const mv = useMachine();
   const chrome = useMachineChrome();
   const simulating = mv.mode === "simulate";
-  const layoutTools = !simulating && mv.editable;
+  const layoutTools = mv.mode === "design" && mv.editable;
   // Orientation is view state: read-only views may flip it too, unless that would drop manual positions (an edit).
   const canFlip = !simulating && (mv.editable || mv.pinnedCount === 0);
   const saving = useSaving();
@@ -80,6 +80,13 @@ export function MachineToolbar({ toolbarStart }: { readonly toolbarStart?: React
       <MachinePath />
       <ModeSwitch />
       <div className="ms-auto flex items-center gap-0.5">
+        <ToolButton
+          label="Machine commands"
+          kbd={shortcut("mod", "K")}
+          onClick={chrome.showCommands}
+        >
+          <Keyboard />
+        </ToolButton>
         {/* Phones reserve this two-button slot (Undo/Redo, or Restart/Stop) even while it is empty, so
             the first edit or a mode switch never shoves the mode switch out from under the thumb. */}
         <div
@@ -281,7 +288,8 @@ function ModeSwitch() {
     <ToggleGroup
       value={[mv.mode]}
       onValueChange={(value) => {
-        if (value[0] === "design" || value[0] === "simulate") mv.setMode(value[0]);
+        if (value[0] === "design" || value[0] === "simulate" || value[0] === "inspect")
+          mv.setMode(value[0]);
       }}
       aria-label="Mode"
       className={cn(
@@ -292,7 +300,8 @@ function ModeSwitch() {
       {(
         [
           // Read-only: the first mode only looks, so it says so.
-          mv.editable ? (["design", "Design", Box] as const) : (["design", "View", Eye] as const),
+          mv.canEdit ? (["design", "Design", Box] as const) : (["design", "View", Eye] as const),
+          ...(mv.inspection.session ? [["inspect", "Inspect run", Eye] as const] : []),
           ["simulate", "Simulate", Play] as const,
         ] as const
       ).map(([id, label, Icon]) => {
@@ -510,17 +519,20 @@ export function MachineStatusBar() {
   // status bar keeps only the mode word and validity (one "done" on screen, not two).
   const peekShowing = chrome.compact && !chrome.panelOpen;
   const saving = useSaving();
-  const status = mv.snapshot
-    ? mv.cursor !== null
-      ? `replay ${mv.cursor + 1}/${mv.snapshot.trace.length}`
-      : mv.snapshot.status === "done"
-        ? peekShowing
-          ? "simulation ended"
-          : "done"
-        : "simulating"
-    : mv.editable
-      ? mv.mode
-      : "view";
+  const status =
+    mv.mode === "inspect"
+      ? `${mv.inspection.historical ? "history" : "observing"} · ${mv.inspection.session?.connection ?? "unavailable"}`
+      : mv.snapshot
+        ? mv.cursor !== null
+          ? `replay ${mv.cursor + 1}/${mv.snapshot.trace.length}`
+          : mv.snapshot.status === "done"
+            ? peekShowing
+              ? "simulation ended"
+              : "done"
+            : "simulating"
+        : mv.editable
+          ? mv.mode
+          : "view";
   // Every piece is bidi-isolated (`dir="auto"`): "6 states" never renders as "states 6" in RTL.
   return (
     <div

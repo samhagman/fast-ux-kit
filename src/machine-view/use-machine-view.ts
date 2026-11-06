@@ -3,10 +3,12 @@ import { toast } from "../components/ui/sonner.js";
 import {
   applyMachineCommand,
   commitMachineHistory,
-  machineAncestors,
   redoMachineHistory,
   undoMachineHistory,
   validateMachineDocument,
+  explainMachineEvent,
+  previewMachineEvent,
+  type MachineEventPreview,
   type MachineCommand,
   type MachineDirection,
   type MachineDocument,
@@ -17,17 +19,13 @@ import {
   type MachineSnapshot,
 } from "../core/index.js";
 import { machineToast, type MachineToaster } from "../machine-shared/machine-toast.js";
-import {
-  describeBlocked,
-  describeSend,
-  describeStart,
-  guardIsFalse,
-} from "../machine-shared/machine-copy.js";
+import { describeBlocked, describeSend, describeStart } from "../machine-shared/machine-copy.js";
 import { structuralIssues } from "../machine-shared/machine-issues.js";
 import {
   runMachineScenario,
   useMachineSimulation,
   type ScenarioStep,
+  type ScenarioResult,
 } from "../machine-shared/use-machine-simulation.js";
 import { sameDocument } from "./controlled-document.js";
 import { useControlledDocument, type DocumentChangeHandler } from "./use-controlled-document.js";
@@ -41,6 +39,11 @@ import {
   type MachineSizeHints,
 } from "./layout.js";
 import { countStates, plural } from "./machine-context.js";
+import { createMachineLayoutEngine, type MachineLayoutWorkerOptions } from "./layout-worker.js";
+import {
+  useMachineInspection,
+  type MachineInspectionProps,
+} from "../machine-shared/use-machine-inspection.js";
 
 /**
  * Machine View controller.
@@ -55,7 +58,7 @@ import { countStates, plural } from "./machine-context.js";
  *
  * Nothing here executes document strings: guards and actions resolve only through `runtime`.
  */
-export type MachineMode = "design" | "simulate";
+export type MachineMode = "design" | "simulate" | "inspect";
 export type MachineSelection = { readonly type: "node" | "transition"; readonly id: string } | null;
 export interface MachineNotice {
   readonly message: string;
@@ -106,20 +109,23 @@ export type MachineDocumentProps =
       readonly onDocumentChange?: DocumentChangeHandler;
     };
 
-export type UseMachineViewOptions = MachineDocumentProps & {
-  readonly runtime?: MachineRuntimeOptions;
-  readonly scenarios?: readonly MachineScenario[];
-  /** `false`: view and simulate only. Exactly the same switch as `readOnly` (including the handler-less viewer). */
-  readonly editable?: boolean;
-  /** Preset: view and simulate only (no palette, no edits, no drag). Same as `editable={false}`. With `document`, either one is a live viewer that needs no `onDocumentChange`. */
-  readonly readOnly?: boolean;
-  readonly defaultDirection?: MachineDirection | "auto";
-  /** Controlled selection (pass with `onSelectionChange`); `undefined` leaves it uncontrolled. */
-  readonly selection?: MachineSelection;
-  readonly onSelectionChange?: (selection: MachineSelection) => void;
-  /** Refusals, deletions and blocked events. Defaults to a sonner toast (with Undo when offered). */
-  readonly onNotice?: (notice: MachineNotice, undo: () => void) => void;
-};
+export type UseMachineViewOptions = MachineDocumentProps &
+  MachineInspectionProps & {
+    readonly defaultMode?: MachineMode;
+    readonly layoutWorker?: MachineLayoutWorkerOptions;
+    readonly runtime?: MachineRuntimeOptions;
+    readonly scenarios?: readonly MachineScenario[];
+    /** `false`: view and simulate only. Exactly the same switch as `readOnly` (including the handler-less viewer). */
+    readonly editable?: boolean;
+    /** Preset: view and simulate only (no palette, no edits, no drag). Same as `editable={false}`. With `document`, either one is a live viewer that needs no `onDocumentChange`. */
+    readonly readOnly?: boolean;
+    readonly defaultDirection?: MachineDirection | "auto";
+    /** Controlled selection (pass with `onSelectionChange`); `undefined` leaves it uncontrolled. */
+    readonly selection?: MachineSelection;
+    readonly onSelectionChange?: (selection: MachineSelection) => void;
+    /** Refusals, deletions and blocked events. Defaults to a sonner toast (with Undo when offered). */
+    readonly onNotice?: (notice: MachineNotice, undo: () => void) => void;
+  };
 
 export interface BlockedEvent {
   /** Trace sequence the attempt was made after. */
@@ -203,9 +209,13 @@ function pathTo(document: MachineDocument, id: string): string[] {
 
 /** How a finished scenario went, kept per scenario id until the next run or a document edit. */
 export interface ScenarioOutcome {
+  readonly blockedReasons?: readonly string[];
   readonly passed?: boolean;
   readonly blocked: number;
   readonly activeIds: readonly string[];
+  readonly expectedActiveIds?: readonly string[];
+  readonly result?: ScenarioResult;
+  readonly cancelled?: boolean;
 }
 
 /** Host chrome facts the controller needs but the document does not carry. */
@@ -230,7 +240,7 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
   const answerable = options.document === undefined || !!options.onDocumentChange;
   /** `readOnly` and `editable={false}` are one switch. */
   const readOnly = !!options.readOnly || options.editable === false;
-  const editable = !readOnly && answerable;
+  const canEdit = !readOnly && answerable;
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
   const compactRef = React.useRef(compact);
@@ -318,7 +328,11 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     if (path.at(-1) !== machineId) setPath([document.rootId]);
   }, [path, machineId, document.rootId]);
 
-  const [mode, setModeState] = React.useState<MachineMode>("design");
+  const [mode, setModeState] = React.useState<MachineMode>(
+    options.defaultMode ?? (options.inspectionSession ? "inspect" : "design"),
+  );
+  const editable = canEdit && mode === "design";
+  const inspection = useMachineInspection(document, options);
   const [innerSelection, setInnerSelection] = React.useState<MachineSelection>(null);
   const controlledSelection = options.selection !== undefined;
   const selection = controlledSelection ? options.selection! : innerSelection;
@@ -358,6 +372,19 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
   } | null>(null);
   const requestFocus = (field: "event" | "name" | "target") =>
     setFocusRequest({ field, nonce: Date.now() });
+  const [revealRequest, setRevealRequest] = React.useState<{
+    machineId: string;
+    id: string;
+    nonce: number;
+  } | null>(null);
+  const reveal = (machineId: string, id: string, type: "node" | "transition") => {
+    const target = document.machines.find((m) => m.id === machineId);
+    if (!target || !(type === "node" ? target.nodes : target.transitions).some((n) => n.id === id))
+      return;
+    switchMachine(machineId);
+    setSelection({ type, id });
+    setRevealRequest({ machineId, id, nonce: Date.now() });
+  };
   const announce = React.useCallback((text: string) => setAnnouncement(text), []);
 
   const issues = React.useMemo<readonly MachineIssue[]>(() => {
@@ -454,6 +481,12 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
   );
   const [layout, setLayout] = React.useState<MachineGraphLayout | null>(null);
   const [layoutVersion, setLayoutVersion] = React.useState(0);
+  const [layoutError, setLayoutError] = React.useState<string | null>(null);
+  const layoutEngine = React.useMemo(
+    () => createMachineLayoutEngine(options.layoutWorker),
+    [options.layoutWorker?.enabled, options.layoutWorker?.createWorker],
+  );
+  React.useEffect(() => () => layoutEngine.dispose(), [layoutEngine]);
   const [hints, setHints] = React.useState<MachineSizeHints>(() => new Map());
   const elkCache = React.useRef(
     new Map<string, MachineGraphLayout & { direction: MachineDirection }>(),
@@ -477,6 +510,7 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     const keyFor = (dir: string) => `${dir}|${compact ? "stack" : "wide"}|${hintKey}|${structure}`;
     const finish = (raw: MachineGraphLayout & { direction: MachineDirection }) => {
       if (!live) return;
+      setLayoutError(null);
       setResolvedDirection(raw.direction);
       // Auto picks once; afterwards the orientation is stable across edits.
       if (requestedDirection === "auto") setRequestedDirection(raw.direction);
@@ -488,17 +522,22 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     else
       layoutMachineAuto(graph, requestedDirection, viewportFor(), hints, {
         stackRegions: compact,
-      }).then((raw) => {
-        const cache = elkCache.current;
-        cache.set(keyFor(requestedDirection), raw);
-        cache.set(keyFor(raw.direction), raw);
-        while (cache.size > 24) cache.delete(cache.keys().next().value!);
-        finish(raw);
-      });
+        engine: layoutEngine,
+      })
+        .then((raw) => {
+          const cache = elkCache.current;
+          cache.set(keyFor(requestedDirection), raw);
+          cache.set(keyFor(raw.direction), raw);
+          while (cache.size > 24) cache.delete(cache.keys().next().value!);
+          finish(raw);
+        })
+        .catch((error) => {
+          if (live) setLayoutError(error instanceof Error ? error.message : "Layout failed");
+        });
     return () => {
       live = false;
     };
-  }, [graph, requestedDirection, hints, compact]);
+  }, [graph, requestedDirection, hints, compact, layoutEngine]);
 
   /** The canvas reports natural content heights; differences > 1px re-run layout once. */
   const reportHeights = React.useCallback(
@@ -555,7 +594,10 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
   const [blocked, setBlocked] = React.useState<readonly BlockedEvent[]>([]);
   /** Context and payload captured per trace sequence, so a step can show what changed. */
   const steps = React.useRef(
-    new Map<number, { context: Readonly<Record<string, unknown>>; payload?: unknown }>(),
+    new Map<
+      number,
+      { context: Readonly<Record<string, unknown>>; payload?: unknown; timestamp?: number }
+    >(),
   );
   const pendingPayload = React.useRef<unknown>(undefined);
   /** A finished scenario's verdict rides along with its last step's announcement (it lands in the same tick). */
@@ -570,6 +612,7 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     steps.current.set(entry.sequence, {
       context: snapshot.context,
       payload: pendingPayload.current,
+      timestamp: Date.now(),
     });
     pendingPayload.current = undefined;
     const lead = startLead.current;
@@ -623,37 +666,51 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
   const stop = () => {
     sim.stop();
     resetRun();
-    setModeState("design");
-    announce("Simulation stopped. Design mode.");
+    setModeState(options.inspectionSession ? "inspect" : "design");
+    announce(
+      options.inspectionSession
+        ? "Simulation stopped. Inspection mode."
+        : "Simulation stopped. Design mode.",
+    );
   };
   const setMode = (next: MachineMode) => {
     if (next === mode) return;
     if (next === "simulate") start();
-    else stop();
+    else {
+      sim.stop();
+      resetRun();
+      setModeState(next);
+    }
   };
 
   /** Why `type` did not move `before`. Guards are opaque host functions, so the copy never guesses which input they read. */
-  const explainBlock = (type: string, before: MachineSnapshot | null) => {
-    const active = new Set<string>();
-    for (const id of before?.activeIds ?? []) {
-      active.add(id);
-      for (const a of machineAncestors(graph, id)) active.add(a.id);
-    }
-    const handlers = graph.transitions.filter((t) => t.event === type && active.has(t.sourceId));
-    const guards = [...new Set(handlers.map((t) => t.guard).filter(Boolean))];
-    return !handlers.length
-      ? `no transition handles ${type} here`
-      : guards.length
-        ? guardIsFalse(guards as string[])
-        : "it did not change the state";
+  const explainBlock = (type: string, before: MachineSnapshot | null, payload?: unknown) => {
+    return explainMachineEvent(graph, before, { type, payload }, runtime);
   };
+  const [previewType, setPreviewType] = React.useState<string | null>(null);
+  const previewCache = React.useMemo(
+    () => new Map<string, MachineEventPreview | undefined>(),
+    [snapshot, sim.payload, document, runtime],
+  );
+  const previewEvent = (type: string | null) => {
+    if (mode !== "simulate" || !snapshot || sim.cursor !== null || !sim.payload.ok)
+      return setPreviewType(null);
+    if (type && !previewCache.has(type))
+      previewCache.set(
+        type,
+        previewMachineEvent(document, snapshot, { type, payload: sim.payload.value }, runtime),
+      );
+    setPreviewType(type);
+  };
+  React.useEffect(() => setPreviewType(null), [snapshot, sim.payload, mode, sim.cursor]);
+  const preview = previewType ? previewCache.get(previewType) : undefined;
   const recordBlock = (
     type: string,
     before: MachineSnapshot | null,
     payload: unknown,
     source: "manual" | "scenario",
   ) => {
-    const reason = explainBlock(type, before);
+    const reason = explainBlock(type, before, payload);
     const after = before?.trace.at(-1)?.sequence ?? 0;
     setBlocked((list) => [
       ...list,
@@ -686,9 +743,18 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
   const [scenarioResults, setScenarioResults] = React.useState<
     Readonly<Record<string, ScenarioOutcome>>
   >({});
+  const [traceRequest, setTraceRequest] = React.useState(0);
+  const scenarioToken = React.useRef(0);
+  React.useEffect(() => {
+    scenarioToken.current++;
+    return () => {
+      scenarioToken.current++;
+    };
+  }, [document, graph.id]);
   // Results describe the document they ran against: any edit makes them stale.
   React.useEffect(() => setScenarioResults({}), [document]);
   const playScenario = async (scenario: MachineScenario) => {
+    const token = ++scenarioToken.current;
     resetRun();
     setModeState("simulate");
     setScenarioResults(({ [scenario.id]: _stale, ...rest }) => rest);
@@ -700,7 +766,15 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
       else recordBlock(step.event, step.before, step.payload, "scenario");
     };
     const result = await sim.playScenario(scenario, onStep);
-    if (!result) return;
+    if (token !== scenarioToken.current) return;
+    if (!result) {
+      setScenarioResults((current) =>
+        current[scenario.id]
+          ? current
+          : { ...current, [scenario.id]: { cancelled: true, blocked: 0, activeIds: [] } },
+      );
+      return;
+    }
     const label = (id: string) => graph.nodes.find((n) => n.id === id)?.label ?? id;
     const ended = result.activeIds.map(label).join(", ");
     setScenarioResults((current) => ({
@@ -709,6 +783,12 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
         passed: result.passed,
         blocked: result.blocked.length,
         activeIds: result.activeIds,
+        expectedActiveIds: scenario.expectedActiveIds,
+        result,
+        blockedReasons: result.blocked.map(
+          (step) =>
+            `Step ${step.index + 1}: ${step.event} — ${explainBlock(step.event, step.before, step.payload)}`,
+        ),
       },
     }));
     const blockedNote = result.blocked.length ? `, ${result.blocked.length} blocked` : "";
@@ -738,6 +818,7 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
    * pass rule as an animated run), so the live simulation is untouched.
    */
   const runAllScenarios = () => {
+    scenarioToken.current++;
     const list = options.scenarios ?? [];
     if (!list.length) return;
     const next: Record<string, ScenarioOutcome> = {};
@@ -747,6 +828,12 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
         ...(result.passed !== undefined ? { passed: result.passed } : {}),
         blocked: result.blocked.length,
         activeIds: result.activeIds,
+        expectedActiveIds: scenario.expectedActiveIds,
+        result,
+        blockedReasons: result.blocked.map(
+          (step) =>
+            `Step ${step.index + 1}: ${step.event} — ${explainBlock(step.event, step.before, step.payload)}`,
+        ),
       };
     }
     setScenarioResults(next);
@@ -989,6 +1076,8 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     setRenaming,
     focusRequest,
     requestFocus,
+    revealRequest,
+    reveal,
     announcement,
     announce,
     // layout
@@ -1000,6 +1089,7 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     viewport,
     layout,
     layoutVersion,
+    layoutError,
     fitPending,
     reportHeights,
     // document
@@ -1026,6 +1116,9 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     reparent,
     addConnected,
     editable,
+    canEdit,
+    inspection,
+    presentation: options.presentation,
     notify,
     // simulation
     sim,
@@ -1033,19 +1126,60 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     start,
     stop,
     sendEvent,
+    explainEvent: (type: string) =>
+      explainBlock(type, snapshot, sim.payload.ok ? sim.payload.value : undefined),
     cursor: sim.cursor,
     setCursor: sim.setCursor,
-    frame: sim.frame,
-    activeSet: sim.activeSet,
-    leafIds: sim.leafIds,
+    frame:
+      mode === "inspect"
+        ? inspection.frame?.machineId === machineId && !inspection.mismatch
+          ? {
+              activeIds: inspection.frame.activeIds,
+              transitionIds: inspection.frame.transitionIds ?? [],
+            }
+          : null
+        : sim.frame,
+    activeSet:
+      mode === "inspect"
+        ? inspection.frame?.machineId === machineId
+          ? inspection.activeSet
+          : new Set<string>()
+        : sim.activeSet,
+    leafIds:
+      mode === "inspect"
+        ? inspection.frame?.machineId === machineId
+          ? inspection.leafIds
+          : new Set<string>()
+        : sim.leafIds,
     candidates: sim.candidates,
     scenarios: options.scenarios ?? [],
     playScenario,
     runAllScenarios,
+    inspectScenario: (outcome: ScenarioOutcome) => {
+      if (!outcome.result) return;
+      resetRun();
+      for (const step of outcome.result.steps) {
+        steps.current.set(step.before.sequence, { context: step.before.context });
+        steps.current.set(step.after.sequence, {
+          context: step.after.context,
+          payload: step.payload,
+          timestamp: step.timestamp,
+        });
+      }
+      const failed = outcome.result.steps.findIndex(
+        (step) => !step.changed || step.after.status === "error",
+      );
+      sim.inspectScenario(outcome.result, failed < 0 ? outcome.result.steps.length - 1 : failed);
+      setModeState("simulate");
+      setTraceRequest((n) => n + 1);
+    },
+    traceRequest,
     scenarioResults,
     playing: sim.playing,
     blocked,
     steps,
+    preview,
+    previewEvent,
   };
 }
 

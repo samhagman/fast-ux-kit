@@ -50,7 +50,8 @@ export function MachineTreeCanvas() {
   const { visible } = nav;
   const { sheetInset } = layout;
   const ctl = { ...layout, ...nav, documentItems };
-  const roots = model.rootIds.filter((id) => visible.has(id));
+  const roots =
+    nav.focused && !nav.searching ? [nav.focused] : model.rootIds.filter((id) => visible.has(id));
   // On a phone the sheet covers the bottom of the canvas: keep scroll targets above it.
   const covered = sheetInset ? `${sheetInset}px` : undefined;
   useLiveCardClearOfToast({
@@ -100,14 +101,18 @@ export function MachineTreeCanvas() {
             className="grid min-h-full content-start gap-8 p-4 sm:p-6"
             style={covered ? { paddingBottom: `calc(${covered} + 1rem)` } : undefined}
           >
-            {roots.map((id, index) => (
-              <MachineSection
-                key={id}
-                id={id}
-                primary={index === 0 && rows.get(id)?.machineId === rootGraph.id}
-                divided={index > 0}
-              />
-            ))}
+            {roots.map((id, index) =>
+              rows.get(id)?.kind === "node" ? (
+                <StateCell key={id} id={id} />
+              ) : (
+                <MachineSection
+                  key={id}
+                  id={id}
+                  primary={index === 0 && rows.get(id)?.machineId === rootGraph.id}
+                  divided={index > 0}
+                />
+              ),
+            )}
             {ctl.searching && ctl.matchIds.length === 0 && (
               <div
                 role="status"
@@ -643,6 +648,8 @@ export function StateBlock({
   readonly contains: boolean;
 }) {
   const { toggle, searching, sim, links, rows, follow, rootMachineId, query, issues } = useTree();
+  const { inspectionMachineId, presentation: descriptions } = useTree();
+  const presentation = descriptions?.nodes?.[row.elementId];
   const node = row.node!;
   const isSelected = !!(flags & FLAG.selected);
   const isMatch = !!(flags & FLAG.match);
@@ -653,9 +660,16 @@ export function StateBlock({
   const context = searching && row.context && !(flags & FLAG.spotlight);
   const pinging = leaf && row.machineId === rootMachineId && sim.entered.has(row.elementId);
   const subTarget = sub ? rows.get(links.get(row.id) ?? "") : undefined;
-  const kind = kindLabel(row, rows.get(row.parentId ?? ""));
+  const kind = presentation?.kindLabel ?? kindLabel(row, rows.get(row.parentId ?? ""));
   const hasBody =
-    !container && !!(node.description || node.entry?.length || node.exit?.length || sub);
+    !container &&
+    !!(
+      node.description ||
+      node.entry?.length ||
+      node.exit?.length ||
+      sub ||
+      presentation?.activities?.length
+    );
   const matchedVia = searching
     ? hiddenMatch(
         row,
@@ -668,13 +682,13 @@ export function StateBlock({
         rows,
       )
     : null;
-  const hiddenLeaves =
-    container && !open && contains && row.machineId === rootMachineId
-      ? hiddenActiveLeaves(row, rows)
-      : [];
+  const hiddenLeaves = container && !open && contains ? hiddenActiveLeaves(row, rows) : [];
   // Simulation emphasis through the shared `data-sim` tokens (machine-sim.css), exactly as Machine
   // View's nodes: colour, never opacity. Only the root machine runs; other machines keep design colours.
-  const simulating = sim.live && row.machineId === rootMachineId;
+  const simulating =
+    inspectionMachineId !== undefined
+      ? row.machineId === inspectionMachineId
+      : sim.live && row.machineId === rootMachineId;
   const simState: SimState = simStateOf({ leaf, ancestor: contains, simulating });
   // Every state that can hold the run reserves the live dot's slot while a run is on, so a send moves
   // the dot without resizing two cards (and reflowing a parallel's columns).
@@ -713,15 +727,12 @@ export function StateBlock({
         </span>
       )}
       {row.initial && !pseudo && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <CornerDownRight
-              aria-hidden
-              className="size-3.5 shrink-0 text-[color:var(--sim-icon,var(--muted-foreground))] rtl:-scale-x-100"
-            />
-          </TooltipTrigger>
-          <TooltipContent>Initial state</TooltipContent>
-        </Tooltip>
+        <span title="Initial state" className="inline-flex shrink-0 items-center">
+          <CornerDownRight
+            aria-hidden
+            className="size-3.5 text-[color:var(--sim-icon,var(--muted-foreground))] rtl:-scale-x-100"
+          />
+        </span>
       )}
       {pseudo && <span aria-hidden className="size-2 shrink-0 rounded-full bg-foreground/70" />}
       {final && (
@@ -760,7 +771,7 @@ export function StateBlock({
       </span>
       <IssueMark messages={issues.get(row.id)} />
       {/* Kind badge sits beside the label, not at the far edge of a wide header. */}
-      {(parallel || (node.kind === "compound" && !region)) && (
+      {(presentation?.kindLabel || parallel || (node.kind === "compound" && !region)) && (
         <span
           className={cn(
             "shrink-0 font-mono text-[9.5px] tracking-wider text-[color:var(--sim-tag,var(--muted-foreground))] uppercase",
@@ -820,7 +831,7 @@ export function StateBlock({
         "relative w-full transition-[border-color,background-color,box-shadow,outline-color] duration-200",
         region
           ? // A region is a column inside its parallel, not another box.
-            cn("rounded-md", isSelected && "bg-muted/70")
+            cn("rounded-md", isSelected && "outline outline-1 outline-foreground/20")
           : cn(
               // Border and fill come from the shared sim tokens while a run is on (active, ancestor,
               // inactive), and fall back to the design colours otherwise.
@@ -831,14 +842,13 @@ export function StateBlock({
               pseudo && "border-dashed bg-transparent",
               final && "mt-final",
               // The live leaf's glow (stronger in dark, where the 7% tint all but disappears).
-              leaf &&
-                "shadow-[0_0_0_3px_color-mix(in_oklab,var(--signal)_16%,transparent)] dark:shadow-[0_0_0_3px_color-mix(in_oklab,var(--signal)_24%,transparent)]",
+              leaf && "shadow-[0_0_0_2px_color-mix(in_oklab,var(--signal)_8%,transparent)]",
               isSelected &&
                 !leaf &&
-                "border-foreground/55 shadow-[0_0_0_3px_color-mix(in_oklab,var(--foreground)_8%,transparent)]",
+                "border-foreground/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--foreground)_8%,transparent)]",
               isSelected &&
                 leaf &&
-                "shadow-[0_0_0_3px_color-mix(in_oklab,var(--signal)_30%,transparent)] dark:shadow-[0_0_0_3px_color-mix(in_oklab,var(--signal)_36%,transparent)]",
+                "shadow-[0_0_0_2px_color-mix(in_oklab,var(--signal)_14%,transparent)]",
               !leaf && !isSelected && !contains && "hover:border-foreground/25",
             ),
         flags & FLAG.peek && "mt-peek",
@@ -870,6 +880,15 @@ export function StateBlock({
       {header}
       {hasBody && (
         <div className="space-y-1 border-t border-hairline px-2.5 pt-1.5 pb-2">
+          {presentation?.activities?.slice(0, 4).map((activity) => (
+            <p
+              key={activity.id}
+              title={activity.description}
+              className="max-w-72 truncate text-[11px] text-muted-foreground"
+            >
+              {activity.label}
+            </p>
+          ))}
           {node.description && (
             <p
               dir="auto"

@@ -68,6 +68,8 @@ export interface SimulationCtx {
   readonly stop: () => void;
   /** Context after each step, by snapshot sequence. */
   readonly contexts: ReadonlyMap<number, Readonly<Record<string, unknown>>>;
+  readonly timestamps: ReadonlyMap<number, number>;
+  readonly inspectScenario: (report: MachineTreeScenarioReport) => void;
   readonly playScenario: (scenario: MachineScenario) => Promise<void>;
   readonly runAllScenarios: () => { readonly passed: number; readonly total: number };
   readonly reports: ReadonlyMap<string, MachineTreeScenarioReport>;
@@ -219,19 +221,23 @@ export function useSimulationController(
   const [contextLog, setContextLog] = React.useState<{
     snapshot: MachineSnapshot | null;
     map: ReadonlyMap<number, Readonly<Record<string, unknown>>>;
-  }>({ snapshot: null, map: new Map() });
+    times: ReadonlyMap<number, number>;
+  }>({ snapshot: null, map: new Map(), times: new Map() });
   if (contextLog.snapshot !== snapshot) {
     const map = new Map(!snapshot || snapshot.trace.length <= 1 ? [] : contextLog.map);
     if (snapshot) map.set(snapshot.sequence, snapshot.context);
-    setContextLog({ snapshot, map });
+    const times = new Map(!snapshot || snapshot.trace.length <= 1 ? [] : contextLog.times);
+    if (snapshot && !times.has(snapshot.sequence)) times.set(snapshot.sequence, Date.now());
+    setContextLog({ snapshot, map, times });
   }
   const onSimulationChangeRef = React.useRef(onSimulationChange);
   onSimulationChangeRef.current = onSimulationChange;
   const mounted = React.useRef(false);
+  const liveSnapshot = base.liveSim.snapshot;
   React.useEffect(() => {
-    if (mounted.current || snapshot) onSimulationChangeRef.current?.(snapshot);
+    if (mounted.current || liveSnapshot) onSimulationChangeRef.current?.(liveSnapshot);
     mounted.current = true;
-  }, [snapshot]);
+  }, [liveSnapshot]);
 
   /* — feedback — */
   const [notice, setNotice] = React.useState<TreeNotice | null>(null);
@@ -336,6 +342,7 @@ export function useSimulationController(
   /** Steps the scenario in flight has played, for "stopped at step k". */
   const scenarioStep = React.useRef(0);
   const sendEvent = useEvent((input: string | MachineEvent): SendResult | null => {
+    if (base.mode === "inspect") return null;
     const playing = sim.playing ? scenarios.find((s) => s.id === sim.playing) : undefined;
     const result = sim.send(input);
     if (!result) return null;
@@ -402,19 +409,46 @@ export function useSimulationController(
   });
 
   /* — scenarios: refused steps are explained like manual sends; each run leaves a pass/fail report — */
+  const scenarioToken = React.useRef(0);
+  React.useEffect(
+    () => () => {
+      scenarioToken.current++;
+    },
+    [],
+  );
   const playScenario = useEvent(async (scenario: MachineScenario) => {
+    if (!base.beginSimulation()) return;
+    const token = ++scenarioToken.current;
     setNotice(null);
     scenarioStep.current = 0;
     const blocked: string[] = [];
-    const result = await sim.playScenario(scenario, (step) => {
+    const result = await base.liveSim.playScenario(scenario, (step) => {
       scenarioStep.current = step.index + 1;
       if (step.changed) return;
       const text = stepSentence(step, rootGraph, runtimeRef.current);
       blocked.push(text);
       say(text, `${step.after.sequence}:live`);
     });
-    if (!result) return; // stopped or taken over: sendEvent already reported a takeover
-    setReports((current) => new Map(current).set(scenario.id, { passed: result.passed, blocked }));
+    if (token !== scenarioToken.current) return;
+    if (!result) {
+      setReports((current) =>
+        new Map(current).set(scenario.id, {
+          passed: undefined,
+          blocked,
+          stoppedAt: scenarioStep.current,
+          expectedActiveIds: scenario.expectedActiveIds,
+        }),
+      );
+      return;
+    }
+    setReports((current) =>
+      new Map(current).set(scenario.id, {
+        passed: result.passed,
+        blocked,
+        result,
+        expectedActiveIds: scenario.expectedActiveIds,
+      }),
+    );
     const verdict = result.passed === undefined ? "finished" : result.passed ? "passed" : "failed";
     announce(
       `${scenario.label} ${verdict}${blocked.length ? `, ${plural(blocked.length, "step")} refused${result.passed ? " as expected" : ""}` : ""}`,
@@ -422,6 +456,7 @@ export function useSimulationController(
   });
   /** The scenarios as a test suite: every one headless and instant; the live run is untouched. */
   const runAllScenarios = useEvent(() => {
+    scenarioToken.current++;
     const next = new Map<string, MachineTreeScenarioReport>();
     for (const scenario of scenarios)
       next.set(scenario.id, scenarioReport(document, rootGraph, scenario, runtimeRef.current));
@@ -435,21 +470,41 @@ export function useSimulationController(
   });
 
   const start = useEvent(() => {
+    if (!base.beginSimulation()) return;
     nav.parkFocus();
     // Simulate / Restart: a "Back to …" trail describes a path the new run has nothing to do with.
     nav.setBack(null);
     pendingNotice.current = { started: true };
-    sim.start();
+    base.liveSim.start();
     setNotice(null);
     if (panel) setPanelTab("simulation");
   });
   const stop = useEvent(() => {
     nav.parkFocus();
-    sim.stop();
+    base.liveSim.stop();
+    base.setMode(base.inspection.session ? "inspect" : "view");
     setNotice(null);
     if (panel && panelTab === "simulation") setPanelTab(isPhone ? "details" : "code");
   });
 
+  const inspectScenario = useEvent((report: MachineTreeScenarioReport) => {
+    if (!report.result || !base.beginSimulation()) return;
+    const result = report.result;
+    const failed = result.steps.find((step) => !step.changed || step.after.status === "error");
+    base.liveSim.inspectScenario(result, failed?.index ?? Math.max(0, result.steps.length - 1));
+    const map = new Map<number, Readonly<Record<string, unknown>>>();
+    const times = new Map<number, number>();
+    for (const step of result.steps) {
+      map.set(step.before.sequence, step.before.context);
+      map.set(step.after.sequence, step.after.context);
+      if (step.timestamp !== undefined) times.set(step.after.sequence, step.timestamp);
+    }
+    setContextLog({ snapshot: result.steps.at(-1)?.after ?? null, map, times });
+    layout.openPanel("simulation", true);
+    const active = (failed?.after ?? result.steps.at(-1)?.after)?.activeIds.at(-1);
+    const row = active ? stateRowIds.get(active) : undefined;
+    if (row) nav.reveal(row);
+  });
   const visibleNotice = notice && notice.key === frameKey ? notice : null;
   return React.useMemo<SimulationCtx>(
     () => ({
@@ -466,6 +521,8 @@ export function useSimulationController(
       start,
       stop,
       contexts: contextLog.map,
+      timestamps: contextLog.times,
+      inspectScenario,
       playScenario,
       runAllScenarios,
       reports,
@@ -484,6 +541,8 @@ export function useSimulationController(
       start,
       stop,
       contextLog.map,
+      contextLog.times,
+      inspectScenario,
       playScenario,
       runAllScenarios,
       reports,

@@ -139,6 +139,8 @@ export function useRowFlags(id: string, first: string | undefined): number {
  * simulation frame do, so a focus move never re-renders the tree. */
 
 export interface TreeModelCtx {
+  readonly inspectionMachineId?: string;
+  readonly presentation?: import("../core/index.js").MachinePresentation;
   readonly model: MachineTreeModel;
   readonly rows: ReadonlyMap<string, MachineTreeRow>;
   /** Projection rows (search-filtered, unfolded), keyed by id. */

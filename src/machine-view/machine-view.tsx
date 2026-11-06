@@ -20,6 +20,10 @@ import {
   COMPACT_BREAKPOINT,
   ChromeContext,
   MachineContext,
+  DiagramContext,
+  useDiagramFacts,
+  CanvasContext,
+  useCanvasController,
   PANEL_W,
   countStates,
   stepCursor,
@@ -29,6 +33,8 @@ import {
 import { MachineCanvas } from "./machine-canvas.js";
 import { MachineStatusBar, MachineToolbar, ShortcutsDialog } from "./machine-toolbar.js";
 import { PeekBar } from "./machine-phone.js";
+import { MachineCommands } from "./machine-commands.js";
+import { viewportDuration } from "./machine-viewport.js";
 import { MachineToasterHost, useMachineToaster } from "../machine-shared/machine-toast.js";
 
 /**
@@ -227,6 +233,8 @@ function MachineViewInner(props: MachineViewProps) {
     toasterId: compact ? undefined : toasterId,
     touchToast: touch.toast.show,
   });
+  const diagram = useDiagramFacts(mv);
+  const canvas = useCanvasController(mv, diagram);
   const flow = useReactFlow();
   /** Selection as it was before React Flow handled this keydown (Enter selects first). */
   const selectedBeforeKey = React.useRef<string | null>(null);
@@ -237,6 +245,7 @@ function MachineViewInner(props: MachineViewProps) {
   const [minimapPref, setMinimapPref] = React.useState<boolean | null>(null);
   const minimap = !compact && (minimapPref ?? countStates(mv.graph) >= 12);
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  const [commandsOpen, setCommandsOpen] = React.useState(false);
   // Switching between phone and desktop shells resets the panel to that shell's default.
   React.useEffect(() => setPanelPref(null), [compact]);
   useFocusContinuity(root, mv);
@@ -253,6 +262,7 @@ function MachineViewInner(props: MachineViewProps) {
       minimap,
       setMinimap: setMinimapPref,
       showShortcuts: () => setShortcutsOpen(true),
+      showCommands: () => setCommandsOpen(true),
     }),
     [compact, panelOpen, snap, sheetInset, minimap],
   );
@@ -282,6 +292,11 @@ function MachineViewInner(props: MachineViewProps) {
       const c = chromeRef.current;
       const mod = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
+      if (mod && key === "k") {
+        event.preventDefault();
+        setCommandsOpen(true);
+        return;
+      }
       if (mod && (key === "z" || key === "y")) {
         if (m.mode !== "design" || !m.editable) return;
         event.preventDefault();
@@ -332,9 +347,10 @@ function MachineViewInner(props: MachineViewProps) {
         event.preventDefault();
         const id = m.selection?.type === "node" ? m.selection.id : null;
         flow.fitView({
-          duration: 260,
+          duration: viewportDuration(260),
           padding: 0.2,
           maxZoom: 1.2,
+          ...(id ? { minZoom: 1 } : {}),
           ...(id ? { nodes: [{ id }] } : {}),
         });
       } else if (
@@ -376,8 +392,20 @@ function MachineViewInner(props: MachineViewProps) {
             <MachineToolbar toolbarStart={toolbarStart} />
             <div className="relative flex min-h-0 flex-1">
               <div ref={column} data-mv-column className="relative min-w-0 flex-1">
+                {mv.layoutError && (
+                  <p
+                    role="status"
+                    className="absolute inset-x-3 top-3 z-10 rounded-md border bg-surface p-2 text-2xs"
+                  >
+                    Layout unavailable: {mv.layoutError}. The last diagram is retained.
+                  </p>
+                )}
                 <CanvasBoundary resetKey={mv.machineId}>
-                  <MachineCanvas />
+                  <DiagramContext.Provider value={diagram}>
+                    <CanvasContext.Provider value={canvas}>
+                      <MachineCanvas />
+                    </CanvasContext.Provider>
+                  </DiagramContext.Provider>
                 </CanvasBoundary>
                 {compact && !panelOpen && <PeekBar />}
                 {compact && (
@@ -413,6 +441,13 @@ function MachineViewInner(props: MachineViewProps) {
               {mv.announcement}
             </div>
             <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+            <MachineCommands
+              open={commandsOpen}
+              onOpenChange={setCommandsOpen}
+              fit={() => {
+                void flow.fitView({ padding: 0.2, duration: viewportDuration(200) });
+              }}
+            />
             {!compact && <ViewToaster id={toasterId} direction={direction} />}
             {compact && (
               <MachineToasterHost

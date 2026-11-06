@@ -16,6 +16,8 @@ import { useControllable, useEvent } from "./machine-tree-store.js";
 import { focusNextFrame } from "../machine-shared/machine-focus.js";
 
 export interface NavigationCtx {
+  readonly focused: string | null;
+  readonly focusContainer: (id: string | null) => void;
   /* selection */
   readonly selected: string | null;
   readonly select: (id: string | null) => void;
@@ -92,6 +94,9 @@ export function useNavigationController(
     | "defaultQuery"
     | "onQueryChange"
     | "captureFindShortcut"
+    | "focusedRowId"
+    | "defaultFocusedRowId"
+    | "onFocusedRowChange"
   >,
   base: TreeBase,
   layout: LayoutCtx,
@@ -128,6 +133,28 @@ export function useNavigationController(
     () => props.defaultQuery ?? "",
     props.onQueryChange,
   );
+  const [focusedValue, setFocused] = useControllable<string | null>(
+    props.focusedRowId,
+    () => props.defaultFocusedRowId ?? null,
+    props.onFocusedRowChange,
+  );
+  const focusRowValue = focusedValue ? rows.get(focusedValue) : undefined;
+  const focused =
+    focusRowValue &&
+    (focusRowValue.kind === "machine" ||
+      focusRowValue.childIds.some((id) => rows.get(id)?.kind === "node"))
+      ? focusedValue
+      : null;
+  const focusContainer = useEvent((id: string | null) => {
+    const row = id ? rows.get(id) : undefined;
+    if (
+      id &&
+      (!row ||
+        !(row.kind === "machine" || row.childIds.some((child) => rows.get(child)?.kind === "node")))
+    )
+      return;
+    setFocused(id);
+  });
   const deferredQuery = React.useDeferredValue(query);
   const searching = deferredQuery.trim().length > 0;
   const [searchOpen, setSearchOpen] = React.useState(false);
@@ -165,23 +192,44 @@ export function useNavigationController(
     const visible = new Map<string, MachineTreeVisibleRow>();
     const order: string[] = [];
     const hidden = new Set<string>();
+    const focusedIds = new Set<string>();
+    if (focused && !searching) {
+      const visit = (id: string) => {
+        if (focusedIds.has(id)) return;
+        focusedIds.add(id);
+        for (const child of rows.get(id)?.childIds ?? []) visit(child);
+      };
+      visit(focused);
+    }
     for (const row of projection.rows) {
+      if (focused && !searching && !focusedIds.has(row.id)) continue;
       const parent = row.parentId ? projected.get(row.parentId) : undefined;
       // A folded compound hides its states but keeps its own outgoing routes; a folded machine hides everything.
       const folded =
         !searching &&
+        row.id !== focused &&
         parent &&
+        parent.id !== focused &&
         collapsed.has(parent.id) &&
         (row.kind === "node" || parent.kind === "machine");
       if ((row.parentId && hidden.has(row.parentId)) || folded) {
         hidden.add(row.id);
         continue;
       }
-      visible.set(row.id, row);
+      visible.set(
+        row.id,
+        focused && !searching
+          ? {
+              ...row,
+              level: row.level - (projected.get(focused)?.level ?? 1) + 1,
+              ...(row.id === focused ? { posInSet: 1, setSize: 1 } : {}),
+            }
+          : row,
+      );
       order.push(row.id);
     }
     return { projected, visible, order };
-  }, [projection, collapsed, searching]);
+  }, [projection, collapsed, searching, focused, rows]);
 
   const matchIds = React.useMemo(
     () => (searching ? order.filter((id) => visible.get(id)!.match) : []),
@@ -213,7 +261,12 @@ export function useNavigationController(
       store.set({ focus: to ?? null });
       if (to && hadFocus) handoff.focus(elements.get(to));
     }
-    if (selected && projected.has(selected) && !visible.has(selected)) {
+    if (
+      selected &&
+      projected.has(selected) &&
+      !visible.has(selected) &&
+      (!focused || machineTreeAncestors(topology, selected).includes(focused))
+    ) {
       const to = nearestVisible(selected);
       if (to) setSelectedRaw(to);
     }
@@ -261,19 +314,31 @@ export function useNavigationController(
   });
 
   const toggle = React.useCallback(
-    (id: string) =>
+    (id: string) => {
+      if (id === focused) {
+        setFocused(null);
+        return;
+      }
       setCollapsed((current) => {
         const next = new Set(current);
         if (next.has(id)) next.delete(id);
         else next.add(id);
         return next;
-      }),
-    [setCollapsed],
+      });
+    },
+    [setCollapsed, focused, setFocused],
   );
 
   const reveal = useEvent((id: string, from?: string) => {
     const target = rows.get(id);
     if (!target) return;
+    if (focused && id !== focused && !machineTreeAncestors(topology, id).includes(focused)) {
+      setFocused(null);
+      if (props.focusedRowId !== undefined && props.focusedRowId !== null && !searching) {
+        announce("Return to the full hierarchy to reveal this item");
+        return;
+      }
+    }
     const ancestors = machineTreeAncestors(topology, id);
     const wasFolded = ancestors.some((ancestor) => collapsed.has(ancestor));
     if (wasFolded)
@@ -469,7 +534,7 @@ export function useNavigationController(
     const forward = dir === "rtl" ? "ArrowLeft" : "ArrowRight";
     const backward = dir === "rtl" ? "ArrowRight" : "ArrowLeft";
     const foldable = isFoldable(row, projected);
-    const open = foldable && (searching || !collapsed.has(id));
+    const open = foldable && (searching || id === focused || !collapsed.has(id));
     // Selection follows focus (single-select tree): Details and the breadcrumb track the arrow keys.
     const move = (next: string) => {
       focusRow(next);
@@ -571,6 +636,8 @@ export function useNavigationController(
 
   return React.useMemo<NavigationCtx>(
     () => ({
+      focused,
+      focusContainer,
       selected,
       select,
       reveal,
@@ -611,6 +678,8 @@ export function useNavigationController(
       onTreeKeyDown,
     }),
     [
+      focused,
+      focusContainer,
       selected,
       select,
       reveal,
