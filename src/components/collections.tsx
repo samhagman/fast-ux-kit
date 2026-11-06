@@ -1440,8 +1440,192 @@ export interface TokenFieldProps {
   disabled?: boolean;
   placeholder?: string;
   hint?: string;
+  /**
+   * Suggest matching tokens in a list under the field while typing (arrow keys move, Enter picks).
+   * On by default when there are suggestions; `false` keeps a plain field where Enter adds what
+   * was typed.
+   */
+  autocomplete?: boolean;
 }
-export function TokenField({
+
+/**
+ * TokenField with its suggestions in a list: a multiple-selection combobox whose chips are the
+ * tokens. Enter picks the highlighted suggestion; with nothing highlighted it adds what was typed
+ * (an exact suggestion, else `createToken`).
+ */
+function TokenAutocomplete({
+  label,
+  name,
+  value,
+  defaultValue = [],
+  onValueChange,
+  suggestions = [],
+  createToken,
+  disabled,
+  placeholder,
+  hint,
+}: TokenFieldProps) {
+  const [own, setOwn] = React.useState<readonly Token[]>(defaultValue);
+  const tokens = value ?? own;
+  const [text, setText] = React.useState("");
+  const [error, setError] = React.useState("");
+  const highlighted = React.useRef<string | undefined>(undefined);
+  const chips = React.useRef<HTMLDivElement>(null);
+  const id = React.useId();
+  const known = new Map([...suggestions, ...tokens].map((token) => [token.id, token]));
+  const items = [
+    ...new Set([...suggestions.map((token) => token.id), ...tokens.map((token) => token.id)]),
+  ];
+  const ids = tokens.map((token) => token.id);
+  function update(next: readonly Token[]) {
+    if (disabled) return;
+    if (value === undefined) setOwn(next);
+    onValueChange?.(next);
+  }
+  function addTyped() {
+    const query = text.trim();
+    if (!query) return;
+    const token =
+      suggestions.find(
+        (entry) =>
+          !entry.disabled &&
+          (entry.label.toLowerCase() === query.toLowerCase() || entry.id === query),
+      ) ?? createToken?.(query);
+    if (!token || !token.id || token.disabled) {
+      setError("Choose an available token.");
+      return;
+    }
+    if (!ids.includes(token.id)) update([...tokens, token]);
+    setText("");
+    setError("");
+  }
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+  return (
+    <div className="fux-field">
+      <Combobox.Root
+        multiple
+        items={items}
+        value={ids}
+        onValueChange={(next: string[]) => {
+          update(
+            next.map((tokenId) => known.get(tokenId)).filter((token): token is Token => !!token),
+          );
+          setText("");
+          setError("");
+        }}
+        inputValue={text}
+        onInputValueChange={(next) => {
+          setText(next);
+          setError("");
+        }}
+        onItemHighlighted={(next) => (highlighted.current = next)}
+        itemToStringLabel={(tokenId) => known.get(tokenId)?.label ?? tokenId}
+        // Without free typing, Enter takes the top match; with it, Enter adds what was typed.
+        autoHighlight={!createToken}
+        disabled={disabled}
+      >
+        <label htmlFor={`${id}-input`} className="fux-label">
+          {label}
+        </label>
+        <Combobox.Chips
+          ref={chips}
+          className="fux-chip-field"
+          data-disabled={disabled || undefined}
+          data-invalid={error ? "" : undefined}
+        >
+          <Combobox.Value>
+            {(selected: string[]) =>
+              selected.map((tokenId) => {
+                const token = known.get(tokenId);
+                const chipLabel = token?.label ?? tokenId;
+                return (
+                  <Combobox.Chip key={tokenId} className="fux-chip" aria-label={chipLabel}>
+                    <span className="fux-chip-label">{chipLabel}</span>
+                    {name && (
+                      <input
+                        type="hidden"
+                        name={name}
+                        value={token?.value ?? tokenId}
+                        disabled={disabled}
+                      />
+                    )}
+                    <Combobox.ChipRemove
+                      className="fux-chip-remove"
+                      aria-label={`Remove ${chipLabel}`}
+                      disabled={disabled || token?.disabled}
+                    >
+                      <XIcon aria-hidden />
+                    </Combobox.ChipRemove>
+                  </Combobox.Chip>
+                );
+              })
+            }
+          </Combobox.Value>
+          <Combobox.Input
+            id={`${id}-input`}
+            placeholder={ids.length ? undefined : placeholder}
+            aria-invalid={Boolean(error)}
+            aria-describedby={describedBy}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+              if (highlighted.current !== undefined) return; // the list picks it
+              event.preventDefault();
+              addTyped();
+            }}
+          />
+        </Combobox.Chips>
+        <Combobox.Portal>
+          <Combobox.Positioner anchor={chips} className="isolate z-50 outline-none" sideOffset={4}>
+            <Combobox.Popup
+              className={cn(
+                popupSurface,
+                "max-h-(--available-height) w-(--anchor-width) max-w-(--available-width)",
+              )}
+            >
+              <Combobox.Empty className="px-3 py-4 text-center text-ui text-muted-foreground empty:hidden empty:p-0">
+                {createToken && text.trim()
+                  ? `Press Enter to add “${text.trim()}”`
+                  : "No matching tokens"}
+              </Combobox.Empty>
+              <Combobox.List className="max-h-[min(18rem,var(--available-height))] overflow-y-auto p-1 outline-none data-empty:p-0">
+                {(tokenId: string) => (
+                  <Combobox.Item
+                    key={tokenId}
+                    value={tokenId}
+                    disabled={known.get(tokenId)?.disabled}
+                    className={cn(
+                      optionRow,
+                      "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                    )}
+                  >
+                    <span className="truncate">{known.get(tokenId)?.label ?? tokenId}</span>
+                    <Combobox.ItemIndicator render={<span className={checkSlot} />} aria-hidden>
+                      <CheckIcon />
+                    </Combobox.ItemIndicator>
+                  </Combobox.Item>
+                )}
+              </Combobox.List>
+            </Combobox.Popup>
+          </Combobox.Positioner>
+        </Combobox.Portal>
+      </Combobox.Root>
+      {error ? (
+        <FieldMessage id={`${id}-error`} error={error} alert />
+      ) : (
+        <FieldMessage id={`${id}-hint`} hint={hint} />
+      )}
+    </div>
+  );
+}
+
+export function TokenField(props: TokenFieldProps) {
+  if (props.autocomplete !== false && props.suggestions?.length)
+    return <TokenAutocomplete {...props} />;
+  return <TokenEntry {...props} />;
+}
+
+/** TokenField without a suggestion list: type, then Enter adds an exact suggestion or a created token. */
+function TokenEntry({
   label,
   name,
   value,
@@ -1516,7 +1700,6 @@ export function TokenField({
           value={text}
           disabled={disabled}
           placeholder={tokens.length ? undefined : placeholder}
-          list={`${id}-suggestions`}
           aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
           aria-invalid={Boolean(error)}
           onChange={(event) => {
@@ -1540,13 +1723,6 @@ export function TokenField({
             }
           }}
         />
-        <datalist id={`${id}-suggestions`}>
-          {suggestions
-            .filter((token) => !token.disabled && !tokens.some((entry) => entry.id === token.id))
-            .map((token) => (
-              <option key={token.id} value={token.label} />
-            ))}
-        </datalist>
       </div>
       {error ? (
         <FieldMessage id={`${id}-error`} error={error} alert />

@@ -21,6 +21,54 @@ import * as C from "@samhagman/fast-ux-kit/components";
 import { example, click, input, key, Variants, type ComponentFixture } from "./fixture-kit";
 
 /** A fixed-width column so side-by-side field variants line up. */
+const labelSuggestions = [
+  "planning",
+  "design",
+  "research",
+  "engineering",
+  "marketing",
+  "finance",
+  "support",
+  "legal",
+  "operations",
+  "security",
+].map((label) => ({ id: label, label }));
+
+/** A labels field with suggestions, and a switch that turns the suggestion list on and off. */
+function TokenDemo({ report }: { report: (value: unknown) => void }) {
+  const [suggest, setSuggest] = React.useState(true);
+  // The labels live here, so turning suggestions on or off keeps what was picked.
+  const [tokens, setTokens] = React.useState<readonly C.Token[]>([
+    { id: "planning", label: "planning" },
+  ]);
+  return (
+    <div className="flex max-w-md flex-col gap-4">
+      <C.TokenField
+        label="Labels"
+        value={tokens}
+        suggestions={labelSuggestions}
+        autocomplete={suggest}
+        placeholder="Add a label"
+        hint={
+          suggest
+            ? "Type to filter the list, then ↑ ↓ and Enter to pick."
+            : "Type a label exactly and press Enter."
+        }
+        onValueChange={(next) => {
+          setTokens(next);
+          report(next.map((token) => token.label));
+        }}
+      />
+      <C.Switch
+        label="Suggest as you type"
+        description="The autocomplete prop: on by default when there are suggestions."
+        checked={suggest}
+        onCheckedChange={setSuggest}
+      />
+    </div>
+  );
+}
+
 function Box({ children }: { children: React.ReactNode }) {
   return <div className="w-full max-w-64">{children}</div>;
 }
@@ -557,19 +605,23 @@ export const collectionsFixtures: Readonly<Record<string, ComponentFixture>> = {
     [click('button[aria-label="Remove planning"]', ".fixture-status", "planning")],
   ),
   TokenField: example(
-    "Enter a token and press Enter. Backspace on an empty field moves to the last token's remove button.",
+    "Type to see matching suggestions; arrow keys and Enter pick one. Flip the switch to turn suggestions off.",
     (s) => (
       <div className="flex flex-col gap-8">
-        <Box>
+        <TokenDemo report={s.report} />
+        <Variants title="Free typing" layout="grid">
           <C.TokenField
-            label="Tokens"
-            defaultValue={[{ id: "planning", label: "planning" }]}
-            suggestions={[{ id: "design", label: "design" }]}
-            placeholder="Add a token"
-            hint="Pick from the suggestions."
-            onValueChange={(tokens) => s.report(tokens.map((token) => token.label))}
+            label="Recipients"
+            suggestions={[
+              { id: "avery", label: "Avery Chen" },
+              { id: "riley", label: "Riley Okafor" },
+              { id: "taylor", label: "Taylor Novak" },
+            ]}
+            createToken={(text) => ({ id: text.toLowerCase(), label: text })}
+            placeholder="Name or email"
+            hint="Pick a suggestion or press Enter to add what you typed."
           />
-        </Box>
+        </Variants>
         <Variants title="States" layout="grid">
           <C.TokenField label="Empty" placeholder="Add a recipient" />
           <C.TokenField
