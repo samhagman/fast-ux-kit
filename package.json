@@ -1,6 +1,6 @@
 {
   "name": "@samhagman/fast-ux-kit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": false,
   "description": "Reusable React UX layer, rich outliner and extensible text intelligence",
   "type": "module",
