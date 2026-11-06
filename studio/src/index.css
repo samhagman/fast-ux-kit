@@ -1,6 +1,7 @@
+@layer theme, base, components, utilities;
+@import "@samhagman/fast-ux-kit/styles.css";
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@samhagman/fast-ux-kit/styles.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
