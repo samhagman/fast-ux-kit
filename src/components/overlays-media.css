@@ -1,1 +1,48 @@
 /* overlays-media components: styles the Tailwind classes in the markup cannot express. */
+
+/*
+ * The shared shadcn primitives (separator, scroll-area, toggle-group, resizable) style themselves
+ * with `data-horizontal:` and `data-vertical:`, but Base UI only sets `data-orientation`. Without
+ * these two variants those rules never match: a separator has no thickness and a scrollbar has
+ * no size. theme.css is the natural home for them.
+ */
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
+/*
+ * A scrolling body for dialogs and sheets. Soft shadows at the top and bottom edges show there is
+ * more to scroll to, and disappear once the content is fully in view.
+ */
+.fux-dialog-body,
+.fux-scroll-shadow {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background:
+    linear-gradient(var(--popover) 30%, transparent) top / 100% 1.5rem no-repeat local,
+    linear-gradient(transparent, var(--popover) 70%) bottom / 100% 1.5rem no-repeat local,
+    radial-gradient(
+        farthest-side at 50% 0,
+        color-mix(in oklab, var(--foreground) 14%, transparent),
+        transparent
+      )
+      top / 100% 0.5rem no-repeat scroll,
+    radial-gradient(
+        farthest-side at 50% 100%,
+        color-mix(in oklab, var(--foreground) 14%, transparent),
+        transparent
+      )
+      bottom / 100% 0.5rem no-repeat scroll;
+}
+.fux-dialog-body {
+  max-block-size: min(60dvh, 26rem);
+  margin-inline: -1rem;
+  /* Room for focus rings, which the scroll container would otherwise clip. */
+  margin-block: -0.25rem;
+  padding: 0.25rem 1rem;
+}
+
+/* The paper a signature is drawn on stays light in both themes, so the ink matches the export. */
+.fux-signature-paper {
+  background: oklch(0.985 0 0);
+  color: oklch(0.2 0.01 265);
+}
