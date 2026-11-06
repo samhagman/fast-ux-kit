@@ -173,7 +173,7 @@ function ToolbarInput(props: React.ComponentProps<typeof ToolbarPrimitive.Input>
     <ToolbarPrimitive.Input
       render={<Input />}
       {...props}
-      className={componentClasses("h-auto w-44 max-w-full", props.className)}
+      className={componentClasses("h-7 w-44 max-w-full py-0.5", props.className)}
     />
   );
 }

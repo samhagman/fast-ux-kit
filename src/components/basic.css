@@ -52,7 +52,9 @@
 .fux-toolbar-group {
   gap: 0.125rem;
 }
+/* Toolbar items share one compact height (28px, the scale's sm step): buttons and inputs line up. */
 .fux-toolbar-button {
+  min-block-size: 1.75rem;
   min-inline-size: 2rem;
   padding: 0 0.75rem;
   border-color: transparent;

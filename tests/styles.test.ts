@@ -69,7 +69,7 @@ test("shared controls preserve focus, logical sizing and readable fields", () =>
   assert.match(tokens, /--fux-control-font-size: var\(--fux-input-font-size\);/);
   assert.match(
     tokens,
-    /@media \(min-width: 48rem\) and \(pointer: fine\) \{\s*:root \{\s*--fux-control-font-size: 0\.875rem;/,
+    /@media \(hover: hover\) and \(pointer: fine\) \{\s*:root \{\s*--fux-control-font-size: 0\.875rem;/,
   );
   assert.match(css, /\.fux-error[^}]*color: var\(--destructive\)/);
   // Reduced motion is handled where each family's motion lives: the area stylesheets.

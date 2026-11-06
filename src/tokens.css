@@ -32,7 +32,7 @@
 /* Optional semantic roles for products with distinct fields, controls and surfaces. */
 :root {
   --fux-input-font-size: max(1rem, var(--fux-font-size));
-  /* Component fields: 16px where a phone would zoom into smaller text, 14px on desktop. */
+  /* Component fields: 16px on touch devices (which zoom into smaller text), 14px with a mouse. */
   --fux-control-font-size: var(--fux-input-font-size);
   --fux-error-text: var(--fux-danger);
   --fux-input-surface: var(--fux-surface);
@@ -71,8 +71,9 @@
   --fux-checker-light: #fff;
   --fux-checker-dark: #bfc4cc;
 }
-/* Desktop (a wide window with a fine pointer) never zooms into a field: fields match the UI text. */
-@media (min-width: 48rem) and (pointer: fine) {
+/* With a mouse or trackpad nothing zooms into a field, whatever the window width: fields match the
+   UI text. Touch devices keep 16px. */
+@media (hover: hover) and (pointer: fine) {
   :root {
     --fux-control-font-size: 0.875rem;
   }
