@@ -497,7 +497,8 @@ export function useSimulationController(
     for (const step of result.steps) {
       map.set(step.before.sequence, step.before.context);
       map.set(step.after.sequence, step.after.context);
-      if (step.timestamp !== undefined) times.set(step.after.sequence, step.timestamp);
+      if (step.changed && step.timestamp !== undefined)
+        times.set(step.after.sequence, step.timestamp);
     }
     setContextLog({ snapshot: result.steps.at(-1)?.after ?? null, map, times });
     layout.openPanel("simulation", true);

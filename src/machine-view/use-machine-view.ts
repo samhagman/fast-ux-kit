@@ -1159,12 +1159,14 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
       if (!outcome.result) return;
       resetRun();
       for (const step of outcome.result.steps) {
-        steps.current.set(step.before.sequence, { context: step.before.context });
-        steps.current.set(step.after.sequence, {
-          context: step.after.context,
-          payload: step.payload,
-          timestamp: step.timestamp,
-        });
+        if (!steps.current.has(step.before.sequence))
+          steps.current.set(step.before.sequence, { context: step.before.context });
+        if (step.changed)
+          steps.current.set(step.after.sequence, {
+            context: step.after.context,
+            payload: step.payload,
+            timestamp: step.timestamp,
+          });
       }
       const failed = outcome.result.steps.findIndex(
         (step) => !step.changed || step.after.status === "error",

@@ -209,3 +209,31 @@ test("readable mobile fit anchors a distant state, while overview fits the whole
   assert.ok(viewport.x + 20000 * viewport.zoom <= 366);
   assert.ok(viewport.y + 15000 * viewport.zoom <= 576);
 });
+
+test("scenario inspection preserves the accepted frame's payload/time across later blocked attempts", () => {
+  const scenario = {
+    id: "retry",
+    label: "Retry",
+    events: [
+      { type: "GO", payload: { ok: true } },
+      { type: "UNKNOWN", payload: { ok: false } },
+    ],
+  };
+  const result = runMachineScenario(doc, "m", scenario, runtime);
+  const captured = {
+    ...result,
+    steps: result.steps.map((s, i) => ({ ...s, timestamp: (i + 1) * 1000 })),
+  };
+  const hook = renderHook(() => useMachineView({ document: doc, readOnly: true, runtime }));
+  act(() =>
+    hook.result.current.inspectScenario({
+      result: captured,
+      blocked: 1,
+      activeIds: result.activeIds,
+    }),
+  );
+  const sequence = captured.steps[0]!.after.sequence;
+  assert.equal(hook.result.current.steps.current.get(sequence)?.timestamp, 1000);
+  assert.deepEqual(hook.result.current.steps.current.get(sequence)?.payload, { ok: true });
+  assert.equal(hook.result.current.mode, "simulate");
+});
