@@ -467,7 +467,7 @@ export function NumberField({ label, hint, error, unit, className, ...props }: N
           {label}
           {props.required && <RequiredMark />}
         </FieldPrimitive.Label>
-        <NumberPrimitive.Group className="flex h-8 overflow-hidden rounded-lg border border-input transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-[input:disabled]:bg-input/50 has-[input:disabled]:opacity-50 has-[input:read-only]:bg-muted/50 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-3 has-[input[aria-invalid=true]]:ring-destructive/20 dark:bg-input/30">
+        <NumberPrimitive.Group className="flex h-8 overflow-hidden rounded-lg border border-input transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 has-[input:disabled]:bg-input/50 has-[input:disabled]:opacity-50 has-[input:read-only]:bg-muted/50 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-2 has-[input[aria-invalid=true]]:ring-destructive/15 dark:bg-input/30">
           <NumberPrimitive.Decrement
             className={cn(stepperClass, "border-e border-input")}
             aria-label="Decrease"
@@ -794,7 +794,7 @@ export function RadioGroup({
                 disabled={option.disabled}
                 aria-describedby={describedBy}
                 aria-invalid={error ? true : undefined}
-                className="relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-checked:border-primary data-checked:bg-primary data-disabled:opacity-50 dark:bg-input/30 dark:data-checked:bg-primary"
+                className="relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/15 data-checked:border-primary data-checked:bg-primary data-disabled:opacity-50 dark:bg-input/30 dark:data-checked:bg-primary"
               >
                 <RadioPrimitive.Indicator className="fux-radio-indicator block size-1.5 rounded-full bg-primary-foreground motion-safe:transition motion-safe:duration-150 motion-safe:starting:scale-50 motion-safe:starting:opacity-0" />
               </RadioPrimitive.Root>
@@ -892,7 +892,7 @@ export function Slider({ label, thumbLabels, className, ...props }: SliderProps)
               key={index}
               index={index}
               aria-label={thumbLabels?.[index]}
-              className="relative size-4 rounded-full border border-primary bg-background shadow-sm ring-ring/50 transition-[box-shadow,scale] outline-none after:absolute after:content-[''] hover:ring-4 has-focus-visible:ring-4 data-dragging:scale-110 data-dragging:ring-4 data-disabled:cursor-not-allowed motion-reduce:transition-none"
+              className="relative size-4 rounded-full border border-primary bg-background shadow-sm ring-ring/20 transition-[box-shadow,scale] outline-none after:absolute after:content-[''] hover:ring-3 has-focus-visible:ring-3 data-dragging:scale-110 data-dragging:ring-3 data-disabled:cursor-not-allowed motion-reduce:transition-none"
             />
           ))}
         </SliderPrimitive.Track>
@@ -1039,7 +1039,7 @@ export function PinInput({
           <React.Fragment key={index}>
             <OTPField.Input
               aria-invalid={error ? true : undefined}
-              className="h-12 w-11 min-w-0 shrink rounded-lg border border-input bg-transparent text-center text-lg font-medium tabular-nums transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-filled:border-foreground/30 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 read-only:bg-muted/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:data-filled:border-foreground/40"
+              className="h-12 w-11 min-w-0 shrink rounded-lg border border-input bg-transparent text-center text-lg font-medium tabular-nums transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 data-filled:border-foreground/30 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 read-only:bg-muted/50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/15 dark:bg-input/30 dark:data-filled:border-foreground/40"
             />
             {groupSize && (index + 1) % groupSize === 0 && index + 1 < length && (
               <span aria-hidden="true" className="h-px w-2 shrink-0 bg-muted-foreground/40" />

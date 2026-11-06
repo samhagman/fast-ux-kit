@@ -372,7 +372,7 @@ export function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-1"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
@@ -397,7 +397,7 @@ function SplitterHandle({ grip = true, className, children, ...props }: Splitter
         "aria-[orientation=vertical]:w-px aria-[orientation=vertical]:cursor-col-resize aria-[orientation=vertical]:after:absolute aria-[orientation=vertical]:after:inset-y-0 aria-[orientation=vertical]:after:-inset-x-1.5",
         "aria-[orientation=horizontal]:h-px aria-[orientation=horizontal]:w-full aria-[orientation=horizontal]:cursor-row-resize aria-[orientation=horizontal]:after:absolute aria-[orientation=horizontal]:after:-inset-y-1.5 aria-[orientation=horizontal]:after:inset-x-0",
         "data-[separator=hover]:bg-signal/50 data-[separator=active]:bg-signal data-[separator=focus]:bg-signal",
-        "focus-visible:ring-3 focus-visible:ring-ring/50",
+        "focus-visible:ring-2 focus-visible:ring-ring/20",
         className,
       )}
     >

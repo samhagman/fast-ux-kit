@@ -488,7 +488,7 @@ export function DropZone({ children, hint, invalid, compact, ...props }: DropZon
       data-compact={compact || undefined}
       className={cn(
         "group/dropzone relative flex w-full flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card/40 p-6 text-center transition-[border-color,background-color,box-shadow] duration-150 motion-reduce:transition-none dark:border-input",
-        "hover:border-ring/50 data-[dragging]:border-solid data-[dragging]:border-ring data-[dragging]:bg-signal-muted data-[dragging]:ring-3 data-[dragging]:ring-ring/30",
+        "hover:border-ring/50 data-[dragging]:border-solid data-[dragging]:border-ring data-[dragging]:bg-signal-muted data-[dragging]:ring-2 data-[dragging]:ring-ring/30",
         "data-[invalid]:border-destructive/60 data-[invalid]:bg-destructive/5",
         "aria-disabled:pointer-events-none aria-disabled:opacity-60",
         "data-[compact]:flex-row data-[compact]:gap-3 data-[compact]:p-3 data-[compact]:text-start",
@@ -774,7 +774,7 @@ export function AngleSlider({
         className={cn(
           "relative grid size-36 cursor-grab touch-none place-items-center rounded-full border border-border shadow-xs outline-none select-none dark:border-input",
           "bg-[conic-gradient(from_0deg,var(--signal-muted)_var(--angle),var(--card)_0)]",
-          "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-[dragging]:cursor-grabbing",
+          "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 data-[dragging]:cursor-grabbing",
           "aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
         )}
         onPointerDown={(event) => {
@@ -935,7 +935,7 @@ export function RatingGroup({
                       aria-label={ratingLabel(choice)}
                       onPointerEnter={() => interactive && setHover(choice)}
                       className={cn(
-                        "absolute inset-y-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                        "absolute inset-y-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
                         allowHalf ? (choice % 1 ? "start-0 w-1/2" : "end-0 w-1/2") : "inset-x-0",
                         interactive ? "cursor-pointer" : "cursor-default",
                       )}
@@ -1046,7 +1046,7 @@ export function SegmentGroup({
             "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent px-3 font-medium whitespace-nowrap outline-none select-none",
             heights[size],
             fullWidth && "flex-1",
-            "transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 data-[pressed]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0",
+            "transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 data-[pressed]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0",
             "group-[:not([data-ready])]/seg:data-[pressed]:bg-background",
           )}
         >
@@ -1228,7 +1228,7 @@ export function Toc({
                 className={cn(
                   "relative -ms-px flex min-h-8 items-center border-s-2 border-transparent pe-2 text-[13px] leading-snug text-muted-foreground outline-none",
                   "ps-[calc(0.75rem+(var(--toc-level)-1)*0.75rem)]",
-                  "motion-safe:transition-colors motion-safe:duration-150 hover:text-foreground focus-visible:rounded-md focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "motion-safe:transition-colors motion-safe:duration-150 hover:text-foreground focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring/20",
                   "aria-[current]:border-signal aria-[current]:font-medium aria-[current]:text-foreground",
                   level > 2 && "text-xs",
                 )}
@@ -1265,7 +1265,7 @@ export interface NavigationMenuItem {
   current?: boolean;
 }
 const navItemClasses =
-  "inline-flex h-8 items-center justify-center gap-1 rounded-lg px-3 text-sm font-medium whitespace-nowrap text-foreground outline-none transition-colors select-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 data-[popup-open]:bg-muted aria-[current]:bg-muted";
+  "inline-flex h-8 items-center justify-center gap-1 rounded-lg px-3 text-sm font-medium whitespace-nowrap text-foreground outline-none transition-colors select-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/20 data-[popup-open]:bg-muted aria-[current]:bg-muted";
 export function NavigationMenu({
   label,
   items,
@@ -1287,14 +1287,20 @@ export function NavigationMenu({
                   </NavigationPrimitive.Icon>
                 </NavigationPrimitive.Trigger>
                 <NavigationPrimitive.Content className="p-1.5 transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none">
-                  {item.children ?? (
+                  {item.children != null ? (
+                    // Custom panel content gets a panel of its own: room, a readable measure and
+                    // the same type as the link panels.
+                    <div className="w-[min(20rem,calc(100vw-3rem))] p-2 text-sm text-pretty text-popover-foreground">
+                      {item.children}
+                    </div>
+                  ) : (
                     <ul className="m-0 grid w-[min(26rem,calc(100vw-3rem))] list-none gap-0.5 p-0 sm:grid-cols-2">
                       {item.links?.map((link) => (
                         <li key={link.id}>
                           <NavigationPrimitive.Link
                             closeOnClick
                             href={safeNavigationHref(link.href)}
-                            className="flex items-start gap-3 rounded-lg p-2.5 no-underline outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="flex items-start gap-3 rounded-lg p-2.5 no-underline outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/20"
                           >
                             {link.icon && (
                               <span
@@ -1736,7 +1742,7 @@ export function Carousel({ label, children }: { label: string; children: React.R
         ref={viewport}
         tabIndex={0}
         aria-label={`${label} slides`}
-        className="fux-carousel-viewport flex snap-x snap-mandatory overflow-x-auto rounded-xl border border-border bg-card shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:border-input"
+        className="fux-carousel-viewport flex snap-x snap-mandatory overflow-x-auto rounded-xl border border-border bg-card shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 dark:border-input"
         onScroll={readScroll}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
@@ -1781,7 +1787,7 @@ export function Carousel({ label, children }: { label: string; children: React.R
               aria-label={`Go to slide ${index + 1}`}
               aria-current={index === active ? "true" : undefined}
               onClick={() => go(index)}
-              className="group/dot grid size-6 place-items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="group/dot grid size-6 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
             >
               <span
                 aria-hidden

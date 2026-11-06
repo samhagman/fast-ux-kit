@@ -341,7 +341,36 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
               {
                 id: "docs",
                 label: "Documentation",
-                children: <C.Link href="#guide">Read the guide</C.Link>,
+                links: [
+                  {
+                    id: "guide",
+                    label: "Getting started",
+                    description: "Set up a workspace and invite your team.",
+                    href: "#guide",
+                    icon: <Sparkles />,
+                  },
+                  {
+                    id: "guides",
+                    label: "Guides",
+                    description: "Walkthroughs for boards, reports and imports.",
+                    href: "#guides",
+                    icon: <BookOpen />,
+                  },
+                  {
+                    id: "api",
+                    label: "API reference",
+                    description: "Endpoints, webhooks and rate limits.",
+                    href: "#api",
+                    icon: <List />,
+                  },
+                  {
+                    id: "templates",
+                    label: "Templates",
+                    description: "Starting points for common workflows.",
+                    href: "#templates",
+                    icon: <LayoutGrid />,
+                  },
+                ],
               },
               {
                 id: "product",
@@ -412,10 +441,37 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
             />
           </Header>
         </Variants>
+        <Variants title="Custom panel content" layout="stack">
+          <Header>
+            <C.NavigationMenu
+              label="Release sections"
+              items={[
+                {
+                  id: "whats-new",
+                  label: "What's new",
+                  children: (
+                    <div className="flex flex-col gap-3 p-1">
+                      <div className="flex flex-col gap-1">
+                        <p className="font-medium">Version 4.2 is out</p>
+                        <p className="text-muted-foreground">
+                          Swimlanes on boards, faster search and a new export format.
+                        </p>
+                      </div>
+                      <C.Link href="#release-notes" inline>
+                        Read the release notes
+                      </C.Link>
+                    </div>
+                  ),
+                },
+                { id: "roadmap", label: "Roadmap", href: "#roadmap" },
+              ]}
+            />
+          </Header>
+        </Variants>
       </>
     ),
     '[aria-label="Site sections"]',
-    [click("button", 'a[href="#guide"]', "Read the guide")],
+    [click("button", 'a[href="#guide"]', "Getting started")],
   ),
   QrCode: example(
     "The QR contains a synthetic example URL.",

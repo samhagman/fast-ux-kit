@@ -41,7 +41,7 @@
 }
 .fux-control:focus-visible,
 .fux-tree-row:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 1px solid var(--ring);
   outline-offset: 2px;
 }
 .fux-stack {

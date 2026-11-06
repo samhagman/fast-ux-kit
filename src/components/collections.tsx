@@ -176,7 +176,7 @@ export function Select<Multiple extends boolean = false>({
         <SelectPrimitive.Trigger
           data-slot="select-trigger"
           className={cn(
-            "flex w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent py-1 ps-2.5 pe-2 text-[length:var(--fux-input-font-size,1rem)] whitespace-nowrap transition-colors outline-none select-none hover:border-ring/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-popup-open:border-ring data-readonly:cursor-default data-readonly:bg-muted/40 data-readonly:hover:border-input dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+            "flex w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent py-1 ps-2.5 pe-2 text-[length:var(--fux-input-font-size,1rem)] whitespace-nowrap transition-colors outline-none select-none hover:border-ring/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/15 data-placeholder:text-muted-foreground data-popup-open:border-ring data-readonly:cursor-default data-readonly:bg-muted/40 data-readonly:hover:border-input dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/25 [&_svg]:pointer-events-none [&_svg]:shrink-0",
           )}
           aria-labelledby={id}
           aria-invalid={Boolean(error)}
@@ -267,7 +267,7 @@ export interface ComboBoxProps extends Omit<
 }
 
 const comboIconButton =
-  "grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4";
+  "grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4";
 
 export function ComboBox({
   label,
@@ -316,7 +316,7 @@ export function ComboBox({
         </label>
         <Combobox.InputGroup
           data-slot="combobox-input-group"
-          className="flex min-h-8 w-full items-center gap-0.5 rounded-lg border border-input bg-transparent ps-1 pe-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 hover:border-ring/40 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-3 has-[input[aria-invalid=true]]:ring-destructive/20 has-[input:disabled]:pointer-events-none has-[input:disabled]:opacity-50 dark:bg-input/30"
+          className="flex min-h-8 w-full items-center gap-0.5 rounded-lg border border-input bg-transparent ps-1 pe-1 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 hover:border-ring/40 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-2 has-[input[aria-invalid=true]]:ring-destructive/15 has-[input:disabled]:pointer-events-none has-[input:disabled]:opacity-50 dark:bg-input/30"
         >
           <Combobox.Input
             id={`${id}-input`}
@@ -1214,7 +1214,7 @@ export function Breadcrumbs({
                   aria-current={current ? "page" : undefined}
                   className={cn(
                     textClass,
-                    "outline-none hover:text-foreground hover:underline underline-offset-4 focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "outline-none hover:text-foreground hover:underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring/20",
                   )}
                 >
                   <span className="truncate">{item.label}</span>

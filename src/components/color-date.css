@@ -303,20 +303,20 @@
 }
 .fux-date-input:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 20%, transparent);
 }
 .fux-date-input[data-invalid],
 .fux-date-input:has([aria-invalid="true"]) {
   border-color: var(--destructive);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--destructive) 15%, transparent);
 }
 .fux-date-input[data-invalid]:focus-within {
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 35%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--destructive) 25%, transparent);
 }
 .dark .fux-date-input[data-invalid],
 .dark .fux-date-input:has([aria-invalid="true"]) {
   border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 40%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--destructive) 25%, transparent);
 }
 .fux-date-input[data-readonly] {
   background: color-mix(in oklab, var(--muted) 60%, transparent);

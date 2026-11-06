@@ -186,7 +186,7 @@ export function ImageCropper({
           role="group"
           tabIndex={0}
           aria-label={`Crop ${alt}. Use arrow keys to position the image.`}
-          className="relative h-72 touch-none bg-muted outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+          className="relative h-72 touch-none bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:ring-inset"
           onKeyDown={(event) => {
             if (event.target !== event.currentTarget) return;
             const distance = event.shiftKey ? 10 : 1;
@@ -561,7 +561,7 @@ export function SignaturePad({
       </div>
       <div
         data-slot="signature-surface"
-        className="fux-signature-paper relative h-44 overflow-hidden rounded-xl border shadow-xs focus-within:ring-3 focus-within:ring-ring/50"
+        className="fux-signature-paper relative h-44 overflow-hidden rounded-xl border shadow-xs focus-within:ring-2 focus-within:ring-ring/20"
       >
         <canvas
           ref={canvas}

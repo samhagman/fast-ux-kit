@@ -69,7 +69,7 @@
   background: var(--signal);
 }
 .fux-tree-row:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 1px solid var(--ring);
   outline-offset: -2px;
 }
 /* One hairline per ancestor level, centred under that ancestor's chevron. */
@@ -216,7 +216,7 @@ span.fux-tree-disclosure {
   color: var(--foreground);
 }
 .fux-tab-trigger:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 20%, transparent);
 }
 .fux-tab-trigger[data-disabled] {
   opacity: 0.5;
@@ -288,7 +288,7 @@ span.fux-tree-disclosure {
   animation: fux-collection-in calc(var(--fux-motion-duration) * 1.5) var(--ease-standard);
 }
 .fux-tab-panel:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 1px solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -318,7 +318,7 @@ span.fux-tree-disclosure {
   background: var(--muted);
 }
 .fux-collapse-trigger:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 20%, transparent);
 }
 .fux-collapse-trigger[data-disabled] {
   opacity: 0.5;
@@ -440,7 +440,7 @@ span.fux-tree-disclosure {
   color: var(--foreground);
 }
 .fux-chip-remove:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 1px solid var(--ring);
   outline-offset: -1px;
 }
 .fux-chip-remove:disabled {
@@ -482,11 +482,11 @@ span.fux-tree-disclosure {
 }
 .fux-chip-field:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 20%, transparent);
 }
 .fux-chip-field[data-invalid] {
   border-color: var(--destructive);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 20%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--destructive) 15%, transparent);
 }
 .fux-chip-field[data-disabled] {
   opacity: 0.5;
