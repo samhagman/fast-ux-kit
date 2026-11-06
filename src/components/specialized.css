@@ -1,13 +1,12 @@
 /* specialized components: styles the Tailwind classes in the markup cannot express. */
 
 /* JsonTreeView: type colours come from tokens, mixed toward the foreground so they hold contrast
-   on both themes, and indentation guides are drawn on each row from its aria-level. */
+   on both themes. Indentation guides and the selection bar are the Tree's own. */
 .fux-json {
   --fux-json-string: color-mix(in oklch, var(--success) 72%, var(--foreground));
   --fux-json-number: color-mix(in oklch, var(--signal) 78%, var(--foreground));
   --fux-json-boolean: color-mix(in oklch, var(--warning) 68%, var(--foreground));
   --fux-json-null: var(--muted-foreground);
-  --fux-json-guide: var(--border);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.8125rem;
 }
@@ -54,63 +53,6 @@
   flex: 0 1 auto;
   min-inline-size: 0;
   overflow: hidden;
-}
-/* One hairline per ancestor level, centred under that ancestor's disclosure chevron. The row's
-   start padding is 1.25rem per level and a disclosure is 1.5rem wide. */
-.fux-json [role="treeitem"]:not([aria-level="1"])::before {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  inline-size: calc((var(--fux-json-level, 1) - 1) * 1.25rem);
-  pointer-events: none;
-  background-image: repeating-linear-gradient(
-    to right,
-    transparent 0,
-    transparent calc(0.75rem - 0.5px),
-    var(--fux-json-guide) calc(0.75rem - 0.5px),
-    var(--fux-json-guide) calc(0.75rem + 0.5px),
-    transparent calc(0.75rem + 0.5px),
-    transparent 1.25rem
-  );
-}
-.fux-json [role="treeitem"]:dir(rtl)::before {
-  background-image: repeating-linear-gradient(
-    to left,
-    transparent 0,
-    transparent calc(0.75rem - 0.5px),
-    var(--fux-json-guide) calc(0.75rem - 0.5px),
-    var(--fux-json-guide) calc(0.75rem + 0.5px),
-    transparent calc(0.75rem + 0.5px),
-    transparent 1.25rem
-  );
-}
-.fux-json [role="treeitem"][aria-level="2"] {
-  --fux-json-level: 2;
-}
-.fux-json [role="treeitem"][aria-level="3"] {
-  --fux-json-level: 3;
-}
-.fux-json [role="treeitem"][aria-level="4"] {
-  --fux-json-level: 4;
-}
-.fux-json [role="treeitem"][aria-level="5"] {
-  --fux-json-level: 5;
-}
-.fux-json [role="treeitem"][aria-level="6"] {
-  --fux-json-level: 6;
-}
-.fux-json [role="treeitem"][aria-level="7"] {
-  --fux-json-level: 7;
-}
-.fux-json [role="treeitem"][aria-level="8"] {
-  --fux-json-level: 8;
-}
-.fux-json [role="treeitem"][aria-level="9"] {
-  --fux-json-level: 9;
-}
-.fux-json [role="treeitem"][aria-level="10"] {
-  --fux-json-level: 10;
 }
 
 /* Marquee: two equal copies slide by half the track, so the loop is seamless. Edges fade out. */

@@ -34,15 +34,17 @@ The static build is written to `studio/dist/`. The preview server uses
 
 ## Gallery behavior
 
-Search filters by family name, category and description. Selecting a family
-shows a real component example, interaction instructions and its package import.
-Only the selected example is mounted. Switching examples resets their temporary
-state and closes their overlays.
+`#/components` is one scrolling page of every family: a card per family with its
+live demo, grouped by category. Category tabs and a family index follow the
+scroll and jump to what they name, and `#/components/<Family>` links straight to
+a card. Search filters the cards and the index together. Each demo mounts as its
+card nears the view (or at once when jumped to).
 
-`studio/src/pages/components-page.tsx` defines the shared fixture map used by the
-gallery and `tests/components-catalog.test.tsx`. Each canonical manifest entry
-must have a corresponding fixture. The tests exercise accessible output and
-applicable state changes.
+Each family's demo lives in `studio/src/pages/components-gallery/`, one file per
+area, and `studio/src/pages/components-page.tsx` gathers them into the fixture
+map used by the gallery and `tests/components-catalog.test.tsx`. Each canonical
+manifest entry must have a corresponding fixture. The tests exercise accessible
+output and applicable state changes.
 
 The examples use synthetic documents and local state. File selection, clipboard,
 download and media actions are initiated explicitly. Outliner preferences may be
