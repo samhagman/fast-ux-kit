@@ -906,7 +906,7 @@ export function RatingGroup({
               <span
                 key={index}
                 data-slot="rating-star"
-                className="relative grid size-8 place-items-center coarse:size-11"
+                className="relative grid size-8 place-items-center"
               >
                 <Star
                   aria-hidden
@@ -917,7 +917,7 @@ export function RatingGroup({
                   className="pointer-events-none absolute inset-y-0 start-0 flex items-center overflow-hidden"
                   style={{ width: `${fill * 100}%` }}
                 >
-                  <span className="grid size-8 shrink-0 place-items-center coarse:size-11">
+                  <span className="grid size-8 shrink-0 place-items-center">
                     <Star
                       className={cn(
                         "size-6 fill-current stroke-current",
@@ -1044,7 +1044,6 @@ export function SegmentGroup({
           disabled={item.disabled}
           className={cn(
             "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-transparent px-3 font-medium whitespace-nowrap outline-none select-none",
-            "coarse:min-h-11",
             heights[size],
             fullWidth && "flex-1",
             "transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 data-[pressed]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0",
@@ -1227,7 +1226,7 @@ export function Toc({
                 href={`#${encodeURIComponent(item.id)}`}
                 aria-current={active ? "location" : undefined}
                 className={cn(
-                  "relative -ms-px flex min-h-8 items-center border-s-2 border-transparent pe-2 text-[13px] leading-snug text-muted-foreground outline-none coarse:min-h-11",
+                  "relative -ms-px flex min-h-8 items-center border-s-2 border-transparent pe-2 text-[13px] leading-snug text-muted-foreground outline-none",
                   "ps-[calc(0.75rem+(var(--toc-level)-1)*0.75rem)]",
                   "motion-safe:transition-colors motion-safe:duration-150 hover:text-foreground focus-visible:rounded-md focus-visible:ring-3 focus-visible:ring-ring/50",
                   "aria-[current]:border-signal aria-[current]:font-medium aria-[current]:text-foreground",
@@ -1266,7 +1265,7 @@ export interface NavigationMenuItem {
   current?: boolean;
 }
 const navItemClasses =
-  "inline-flex h-8 items-center justify-center gap-1 rounded-lg px-3 text-sm font-medium whitespace-nowrap text-foreground outline-none transition-colors select-none coarse:min-h-11 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 data-[popup-open]:bg-muted aria-[current]:bg-muted";
+  "inline-flex h-8 items-center justify-center gap-1 rounded-lg px-3 text-sm font-medium whitespace-nowrap text-foreground outline-none transition-colors select-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 data-[popup-open]:bg-muted aria-[current]:bg-muted";
 export function NavigationMenu({
   label,
   items,
@@ -1295,7 +1294,7 @@ export function NavigationMenu({
                           <NavigationPrimitive.Link
                             closeOnClick
                             href={safeNavigationHref(link.href)}
-                            className="flex items-start gap-3 rounded-lg p-2.5 no-underline outline-none transition-colors coarse:min-h-11 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="flex items-start gap-3 rounded-lg p-2.5 no-underline outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
                           >
                             {link.icon && (
                               <span
@@ -1782,7 +1781,7 @@ export function Carousel({ label, children }: { label: string; children: React.R
               aria-label={`Go to slide ${index + 1}`}
               aria-current={index === active ? "true" : undefined}
               onClick={() => go(index)}
-              className="group/dot grid size-6 place-items-center rounded-full outline-none coarse:size-11 focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="group/dot grid size-6 place-items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <span
                 aria-hidden

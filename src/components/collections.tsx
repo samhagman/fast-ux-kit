@@ -92,7 +92,7 @@ function OptionBody({ option }: { option: CollectionOption }) {
 }
 
 const optionRow =
-  "relative flex min-h-11 w-full cursor-default items-center gap-2 rounded-md py-1.5 ps-2 pe-8 text-ui outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50";
+  "relative flex w-full cursor-default items-center gap-2 rounded-md py-1.5 ps-2 pe-8 text-ui outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50";
 const popupSurface =
   "origin-(--transform-origin) overflow-y-auto overflow-x-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 motion-reduce:animate-none";
 const groupLabel = "px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground select-none";
@@ -267,7 +267,7 @@ export interface ComboBoxProps extends Omit<
 }
 
 const comboIconButton =
-  "grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 coarse:size-11 [&_svg]:size-4";
+  "grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4";
 
 export function ComboBox({
   label,
@@ -316,7 +316,7 @@ export function ComboBox({
         </label>
         <Combobox.InputGroup
           data-slot="combobox-input-group"
-          className="flex min-h-11 w-full items-center gap-0.5 rounded-lg border border-input bg-transparent ps-1 pe-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 hover:border-ring/40 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-3 has-[input[aria-invalid=true]]:ring-destructive/20 has-[input:disabled]:pointer-events-none has-[input:disabled]:opacity-50 dark:bg-input/30"
+          className="flex min-h-8 w-full items-center gap-0.5 rounded-lg border border-input bg-transparent ps-1 pe-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 hover:border-ring/40 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-3 has-[input[aria-invalid=true]]:ring-destructive/20 has-[input:disabled]:pointer-events-none has-[input:disabled]:opacity-50 dark:bg-input/30"
         >
           <Combobox.Input
             id={`${id}-input`}
@@ -536,7 +536,7 @@ export function ListBox({ label, options, ...props }: ListBoxProps) {
             role="option"
             className={cn(
               rowState,
-              "flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-ui",
+              "flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-ui",
             )}
             {...collection.itemProps(option)}
           >
@@ -585,7 +585,7 @@ export function GridList({ label, items, renderItem, ...props }: GridListProps) 
           key={item.id}
           className={cn(
             rowState,
-            "fux-gridlist-row flex min-h-11 items-center gap-3 border-b border-hairline px-3 py-2 text-ui last:border-b-0",
+            "fux-gridlist-row flex min-h-10 items-center gap-3 border-b border-hairline px-3 py-2 text-ui last:border-b-0",
           )}
           {...collection.itemProps(item)}
         >
@@ -625,7 +625,7 @@ export interface TableProps<T extends { id: string }> extends SelectionProps {
   sort?: { column: string; direction: "ascending" | "descending" };
   onSortChange?: (sort: { column: string; direction: "ascending" | "descending" }) => void;
   isRowDisabled?: (row: T) => boolean;
-  /** Row height. Compact rows still grow to 44px on touch screens. */
+  /** Row height: comfortable (40px) or compact (32px). */
   density?: "comfortable" | "compact";
   /** Keeps the header visible while the body scrolls (needs `maxHeight` or a bounded parent). */
   stickyHeader?: boolean;
@@ -697,7 +697,7 @@ export function Table<T extends { id: string }>({
   const compact = density === "compact";
   const cell = cn(
     "border-b border-hairline px-3 align-middle",
-    compact ? "h-8 py-1 text-xs coarse:h-11" : "h-11 py-2 text-ui",
+    compact ? "h-8 py-1 text-xs" : "h-10 py-2 text-ui",
   );
   const cssLength = (value: string | number | undefined) =>
     typeof value === "number" ? `${value}px` : value;
@@ -730,7 +730,7 @@ export function Table<T extends { id: string }>({
                     "h-10 border-b border-border bg-muted px-3 text-xs font-medium whitespace-nowrap text-muted-foreground",
                     columnAlign(entry),
                     sorted && "text-foreground",
-                    compact && "h-8 coarse:h-11",
+                    compact && "h-8",
                     entry.allowsSorting && "p-0",
                   )}
                 >
@@ -739,7 +739,7 @@ export function Table<T extends { id: string }>({
                       type="button"
                       onClick={() => changeSort(entry.id)}
                       className={cn(
-                        "group/sort flex min-h-full w-full items-center gap-1 px-3 py-2 text-xs font-medium outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-inset coarse:min-h-11",
+                        "group/sort flex min-h-full w-full items-center gap-1 px-3 py-2 text-xs font-medium outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-inset",
                         (entry.numeric || entry.align === "end") && "justify-end",
                         entry.align === "center" && "justify-center",
                       )}
@@ -1152,7 +1152,7 @@ export function Menu({
               {group.items.map((item) => (
                 <DropdownMenuItem
                   key={item.id}
-                  className="min-h-11 gap-2"
+                  className="min-h-8 gap-2"
                   disabled={item.disabled}
                   variant={item.destructive ? "destructive" : "default"}
                   render={

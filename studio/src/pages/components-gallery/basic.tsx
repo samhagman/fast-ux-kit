@@ -192,6 +192,13 @@ export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
           <C.Button variant="destructive">Delete</C.Button>
           <C.Button variant="link">Link</C.Button>
         </Variants>
+        <Variants title="Sizes">
+          <C.Button size="xs">Extra small</C.Button>
+          <C.Button size="sm">Small</C.Button>
+          <C.Button>Default</C.Button>
+          <C.Button size="lg">Large</C.Button>
+          <C.Button size="xl">Extra large</C.Button>
+        </Variants>
         <Variants title="With icons">
           <C.Button>
             <PlusIcon data-icon="inline-start" />
@@ -263,6 +270,13 @@ export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
           <C.IconButton label="Delete" variant="destructive">
             <Trash2Icon />
           </C.IconButton>
+        </Variants>
+        <Variants title="Sizes">
+          {(["icon-xs", "icon-sm", "icon", "icon-lg", "icon-xl"] as const).map((size) => (
+            <C.IconButton key={size} label={`Add (${size})`} variant="outline" size={size}>
+              <PlusIcon />
+            </C.IconButton>
+          ))}
         </Variants>
         <Variants title="States">
           <C.IconButton label="Download" variant="outline" disabled>

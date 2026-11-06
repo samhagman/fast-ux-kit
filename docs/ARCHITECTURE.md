@@ -20,7 +20,8 @@ and dismissal owner. Compound parts from the same family share that owner.
 The common styles use semantic variables for color, spacing, radius and focus.
 Consumers set theme and direction at their application boundary and carry those
 values into portal content. Component composition preserves keyboard access,
-44px targets, logical properties and reduced-motion behavior.
+logical properties and reduced-motion behavior. Controls follow their size
+variant, from `xs` to `xl`.
 
 ## Document boundaries
 

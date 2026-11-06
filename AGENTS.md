@@ -9,7 +9,8 @@ This repository contains the Fast UX Kit library and its Studio consumer demo.
 - Use one interaction owner per element: Base UI through the shared shadcn component layer. Never combine two focus/overlay managers on one primitive.
 - Default rendering is a mobile-first in-place outline; no raw Markdown source view, card-per-node redesign, editor activation or new app shell.
 - Rich content renderers are consumer-owned trusted React, not HTML parsers. No unsanitized HTML or executable content from document data.
-- Preserve 44px targets, semantic labels, keyboard focus, RTL logical properties, reduced motion and SSR stability.
+- Preserve semantic labels, keyboard focus, RTL logical properties, reduced motion and SSR stability.
+- Components take the size their variant gives them (`xs`, `sm`, default, `lg`, `xl`); there is no global minimum size. Pick the size that fits the layout. The outliner and machine views keep their own touch targets.
 - No private application data, credentials, deployments or product palettes in this repository.
 - Author implementation independently and preserve required dependency notices. Do not silently change license, private flags, repository visibility, publish, merge or deploy.
 

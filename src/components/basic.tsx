@@ -36,7 +36,7 @@ export { Button, Input, Textarea };
 
 // ---------------------------------------------------------------------------------------------
 // Shared anatomy. Every field-shaped family uses the same label, hint and error treatment so a
-// form reads as one system. Heights come from the shared 44px target (`fux-target-block`).
+// form reads as one system. Heights follow the shared control scale (h-8, like Input and Button).
 // ---------------------------------------------------------------------------------------------
 
 const labelClass =
@@ -47,7 +47,7 @@ const fieldsetClass = "m-0 flex min-w-0 flex-col border-0 p-0";
 const legendClass = "mb-1.5 flex w-fit items-center gap-1 p-0 text-ui leading-5 font-medium";
 const inputExtras = "read-only:bg-muted/50 read-only:text-muted-foreground";
 const shellClass =
-  "fux-target-block h-auto items-center [&_[data-slot=input-group-control]]:h-auto [&_[data-slot=input-group-control]]:self-stretch has-[input:read-only]:bg-muted/50 has-[input:read-only]:text-muted-foreground [&_[data-slot=input-group-addon]]:text-[length:var(--fux-input-font-size,1rem)] [&_[data-slot=input-group-addon]:has(>button)]:me-0";
+  "h-8 items-center [&_[data-slot=input-group-addon]]:py-0 [&_[data-slot=input-group-control]]:h-auto [&_[data-slot=input-group-control]]:self-stretch has-[input:read-only]:bg-muted/50 has-[input:read-only]:text-muted-foreground [&_[data-slot=input-group-addon]]:text-[length:var(--fux-input-font-size,1rem)] [&_[data-slot=input-group-addon]:has(>button)]:me-0";
 
 function componentClasses<State>(
   base: string,
@@ -78,7 +78,7 @@ function ErrorMessage({
   );
 }
 
-/** A small icon button that lives inside an input shell; its hit area still reaches 44px. */
+/** A small icon button that lives inside an input shell. */
 function AddonButton({ className, ...props }: React.ComponentProps<typeof Button>) {
   return (
     <Button
@@ -86,10 +86,7 @@ function AddonButton({ className, ...props }: React.ComponentProps<typeof Button
       variant="ghost"
       size="icon-sm"
       data-slot="field-addon-button"
-      className={cn(
-        "relative text-muted-foreground after:absolute after:inset-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 hover:text-foreground",
-        className,
-      )}
+      className={cn("relative text-muted-foreground hover:text-foreground", className)}
       {...props}
     />
   );
@@ -123,7 +120,7 @@ export function IconButton({ label, children, ...props }: IconButtonProps) {
 }
 
 export interface LinkProps extends React.ComponentProps<"a"> {
-  /** Flows with surrounding text instead of keeping the 44px target of a standalone link. */
+  /** Flows with surrounding text instead of standing alone as a control-height link. */
   inline?: boolean;
   /** Opens in a new tab with an icon and a hidden announcement. */
   external?: boolean;
@@ -455,7 +452,7 @@ export interface NumberFieldProps extends React.ComponentProps<typeof NumberPrim
 }
 
 const stepperClass =
-  "grid min-w-11 shrink-0 place-items-center text-muted-foreground outline-none transition-colors select-none hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground active:bg-muted/70 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4";
+  "grid min-w-8 shrink-0 place-items-center text-muted-foreground outline-none transition-colors select-none hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground active:bg-muted/70 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4";
 
 export function NumberField({ label, hint, error, unit, className, ...props }: NumberFieldProps) {
   return (
@@ -470,7 +467,7 @@ export function NumberField({ label, hint, error, unit, className, ...props }: N
           {label}
           {props.required && <RequiredMark />}
         </FieldPrimitive.Label>
-        <NumberPrimitive.Group className="fux-target-block flex overflow-hidden rounded-lg border border-input transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-[input:disabled]:bg-input/50 has-[input:disabled]:opacity-50 has-[input:read-only]:bg-muted/50 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-3 has-[input[aria-invalid=true]]:ring-destructive/20 dark:bg-input/30">
+        <NumberPrimitive.Group className="flex h-8 overflow-hidden rounded-lg border border-input transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-[input:disabled]:bg-input/50 has-[input:disabled]:opacity-50 has-[input:read-only]:bg-muted/50 has-[input[aria-invalid=true]]:border-destructive has-[input[aria-invalid=true]]:ring-3 has-[input[aria-invalid=true]]:ring-destructive/20 dark:bg-input/30">
           <NumberPrimitive.Decrement
             className={cn(stepperClass, "border-e border-input")}
             aria-label="Decrease"
@@ -620,7 +617,7 @@ function Choice({
       <label
         className={cn(
           "flex cursor-pointer items-start gap-2.5 text-ui leading-5 text-foreground has-data-disabled:cursor-not-allowed has-data-disabled:text-muted-foreground",
-          description ? "pt-3" : "min-h-11 py-3",
+          description ? "pt-2" : "py-2",
           justified && "flex-row-reverse justify-between",
         )}
       >
@@ -797,7 +794,7 @@ export function RadioGroup({
                 disabled={option.disabled}
                 aria-describedby={describedBy}
                 aria-invalid={error ? true : undefined}
-                className="relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input transition-colors outline-none after:absolute after:inset-1/2 after:size-11 after:-translate-x-1/2 after:-translate-y-1/2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-checked:border-primary data-checked:bg-primary data-disabled:opacity-50 dark:bg-input/30 dark:data-checked:bg-primary"
+                className="relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-checked:border-primary data-checked:bg-primary data-disabled:opacity-50 dark:bg-input/30 dark:data-checked:bg-primary"
               >
                 <RadioPrimitive.Indicator className="fux-radio-indicator block size-1.5 rounded-full bg-primary-foreground motion-safe:transition motion-safe:duration-150 motion-safe:starting:scale-50 motion-safe:starting:opacity-0" />
               </RadioPrimitive.Root>
@@ -887,7 +884,7 @@ export function Slider({ label, thumbLabels, className, ...props }: SliderProps)
         <SliderPrimitive.Label className={labelClass}>{label}</SliderPrimitive.Label>
         <SliderPrimitive.Value className={valueClass} />
       </div>
-      <SliderPrimitive.Control className="flex min-h-11 w-full touch-none items-center select-none data-disabled:opacity-50">
+      <SliderPrimitive.Control className="flex min-h-6 w-full touch-none items-center select-none data-disabled:opacity-50">
         <SliderPrimitive.Track className={trackClass.replace("overflow-hidden ", "")}>
           <SliderPrimitive.Indicator className="fux-slider-indicator rounded-full bg-primary" />
           {Array.from({ length: count }, (_, index) => (
@@ -895,7 +892,7 @@ export function Slider({ label, thumbLabels, className, ...props }: SliderProps)
               key={index}
               index={index}
               aria-label={thumbLabels?.[index]}
-              className="relative size-4 rounded-full border border-primary bg-background shadow-sm ring-ring/50 transition-[box-shadow,scale] outline-none after:absolute after:-inset-3.5 after:content-[''] hover:ring-4 has-focus-visible:ring-4 data-dragging:scale-110 data-dragging:ring-4 data-disabled:cursor-not-allowed motion-reduce:transition-none"
+              className="relative size-4 rounded-full border border-primary bg-background shadow-sm ring-ring/50 transition-[box-shadow,scale] outline-none after:absolute after:content-[''] hover:ring-4 has-focus-visible:ring-4 data-dragging:scale-110 data-dragging:ring-4 data-disabled:cursor-not-allowed motion-reduce:transition-none"
             />
           ))}
         </SliderPrimitive.Track>
@@ -1042,7 +1039,7 @@ export function PinInput({
           <React.Fragment key={index}>
             <OTPField.Input
               aria-invalid={error ? true : undefined}
-              className="fux-target-block h-12 w-11 min-w-0 shrink rounded-lg border border-input bg-transparent text-center text-lg font-medium tabular-nums transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-filled:border-foreground/30 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 read-only:bg-muted/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:data-filled:border-foreground/40"
+              className="h-12 w-11 min-w-0 shrink rounded-lg border border-input bg-transparent text-center text-lg font-medium tabular-nums transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-filled:border-foreground/30 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 read-only:bg-muted/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:data-filled:border-foreground/40"
             />
             {groupSize && (index + 1) % groupSize === 0 && index + 1 < length && (
               <span aria-hidden="true" className="h-px w-2 shrink-0 bg-muted-foreground/40" />

@@ -20,8 +20,6 @@
 }
 .fux-control {
   display: inline-flex;
-  min-block-size: 44px;
-  min-inline-size: 44px;
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
@@ -116,7 +114,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  min-block-size: 44px;
+  min-block-size: 2rem;
   border-radius: calc(var(--radius) * 0.6);
   cursor: default;
 }
@@ -161,45 +159,17 @@
   }
 }
 
-/* Shared hit areas stay usable when a consumer chooses compact visual variants. */
-[data-slot="button"],
-[data-slot="toggle"],
-[data-slot="tabs-trigger"],
-[data-slot="select-trigger"],
-[data-slot="dropdown-menu-item"],
-[data-slot="context-menu-item"],
-[data-slot="command-item"] {
-  min-block-size: max(44px, var(--fux-target, 44px));
-  min-inline-size: 44px;
-}
+/* Controls take the size their variant gives them; there is no global minimum. */
 [data-slot="input"],
 [data-slot="textarea"] {
-  min-block-size: max(44px, var(--fux-target, 44px));
   font-size: var(--fux-input-font-size, 1rem);
-}
-
-[data-slot$="-trigger"],
-[data-slot="toggle-group-item"] {
-  min-block-size: max(44px, var(--fux-target, 44px));
-  min-inline-size: 44px;
-}
-.fux-tree-disclosure {
-  min-inline-size: 44px;
-  min-block-size: 44px;
 }
 .fux-link,
 .fux-breadcrumbs a {
   display: inline-flex;
   align-items: center;
-  min-block-size: 44px;
-  min-inline-size: 44px;
 }
 .fux-field input:not([type="hidden"]),
 .fux-field textarea {
   font-size: var(--fux-input-font-size, 1rem);
-}
-
-[data-slot$="-close"] {
-  min-block-size: max(44px, var(--fux-target, 44px));
-  min-inline-size: 44px;
 }

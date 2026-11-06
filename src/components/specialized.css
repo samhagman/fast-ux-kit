@@ -45,16 +45,10 @@
   color: var(--fux-json-null);
   font-style: italic;
 }
-/* A JSON view is dense: with a fine pointer the rows tighten to 1.75rem and the disclosure to its
-   1.5rem glyph box (touch keeps the 44px targets). Long values truncate instead of overflowing. */
-@media (pointer: fine) {
-  .fux-json [role="treeitem"] {
-    min-block-size: 1.75rem;
-  }
-  .fux-json .fux-tree-disclosure {
-    min-inline-size: 0;
-    min-block-size: 0;
-  }
+/* A JSON view is dense: rows are 1.75rem and the disclosure its 1.5rem glyph box. Long values
+   truncate instead of overflowing. */
+.fux-json [role="treeitem"] {
+  min-block-size: 1.75rem;
 }
 .fux-json [role="treeitem"] > span:last-child {
   flex: 0 1 auto;

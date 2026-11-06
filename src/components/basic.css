@@ -1,11 +1,5 @@
 /* basic components: styles the Tailwind classes in the markup cannot express. */
 
-/* One touch-target floor for every field-shaped control, the same one the shared Button and
-   Input use, so inputs, steppers and pin cells line up. */
-.fux-target-block {
-  min-block-size: max(44px, var(--fux-target, 44px));
-}
-
 /* Links ---------------------------------------------------------------------------------- */
 .fux-link {
   gap: 0.25rem;
@@ -59,7 +53,7 @@
   gap: 0.125rem;
 }
 .fux-toolbar-button {
-  min-inline-size: 44px;
+  min-inline-size: 2rem;
   padding: 0 0.75rem;
   border-color: transparent;
   border-radius: calc(var(--radius) - 2px);

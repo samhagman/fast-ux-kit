@@ -14,16 +14,55 @@ test("all shared semantic tokens used by component, reader and editor skins are 
   }
 });
 
-test("theme target overrides cannot shrink baseline shared controls below 44px", () => {
-  for (const path of ["components/catalog.css", "styles.css", "react/editor.css"]) {
+test("the outliner and editor keep their own touch targets; theme overrides cannot shrink them", () => {
+  for (const path of ["styles.css", "react/editor.css"]) {
     assert.match(read(path), /max\(44px, var\(--fux-target(?:, 44px)?\)\)/);
   }
+});
+
+test("components take the size their variant gives them: no hidden 44px floor", () => {
+  const sheets = ["catalog", "basic", "collections", "color-date", "overlays-media", "specialized"];
+  for (const name of sheets) {
+    const css = read(`components/${name}.css`);
+    assert.doesNotMatch(css, /44px|--fux-target/, `${name}.css sets no minimum target size`);
+  }
+  const sources = ["basic", "collections", "colors", "dates", "overlays", "media", "specialized"]
+    .map((name) => `components/${name}.tsx`)
+    .concat(
+      ["button", "toggle", "checkbox", "switch", "select", "dropdown-menu", "context-menu"].map(
+        (name) => `components/ui/${name}.tsx`,
+      ),
+    );
+  for (const path of sources) {
+    assert.doesNotMatch(
+      read(path),
+      /coarse:(?:after:)?(?:min-)?[hw]-11|coarse:size-11|after:size-11|after:min-h-11/,
+      `${path} has no touch-only 44px floor`,
+    );
+  }
+});
+
+test("the button scale is distinct, from xs to xl", () => {
+  const button = read("components/ui/button.tsx");
+  for (const [size, height] of [
+    ["xs", "h-6"],
+    ["sm", "h-7"],
+    ["default", "h-8"],
+    ["lg", "h-9"],
+    ["xl", "h-11"],
+  ])
+    assert.match(
+      button,
+      new RegExp(`\\b${size}:\\s*\\n?\\s*"${height}\\b`),
+      `${size} is ${height}`,
+    );
+  assert.match(button, /"icon-xl": "size-11/);
+  assert.match(read("components/ui/toggle.tsx"), /xl: "h-11 min-w-11/);
 });
 
 test("shared controls preserve focus, logical sizing and readable fields", () => {
   const css = read("components/catalog.css");
   assert.match(css, /:focus-visible/);
-  assert.match(css, /min-inline-size: 44px/);
   assert.match(css, /font-size: var\(--fux-input-font-size, 1rem\)/);
   assert.match(css, /\.fux-error[^}]*color: var\(--destructive\)/);
   // Reduced motion is handled where each family's motion lives: the area stylesheets.
@@ -72,13 +111,6 @@ test("editor input, text decoration and placeholder retain readable input typogr
   );
 });
 
-test("compound triggers, links and segmented inputs preserve full target dimensions", () => {
-  const css = read("components/catalog.css");
-  const date = read("components/color-date.css");
-  assert.match(css, /data-slot\$="-trigger"/);
-  assert.match(css, /data-slot="toggle-group-item"/);
-  assert.match(css, /\.fux-tree-disclosure[\s,{][\s\S]*?min-inline-size: 44px/);
-  assert.match(css, /\.fux-breadcrumbs a[\s\S]*?min-block-size: 44px/);
-  assert.match(date, /\.fux-date-segment[\s\S]*?min-inline-size: 44px/);
-  assert.match(date, /flex: 1 1 170px/);
+test("date ranges put each endpoint on its own line on narrow screens", () => {
+  assert.match(read("components/color-date.css"), /flex: 1 1 170px/);
 });

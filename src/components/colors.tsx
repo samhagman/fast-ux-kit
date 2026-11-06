@@ -442,7 +442,7 @@ export function ColorField({ label, hint, error, isInvalid, name, ...props }: Co
         <Input
           id={id}
           name={name}
-          className="fux-color-field__input coarse:h-11"
+          className="fux-color-field__input"
           value={draft}
           disabled={state.disabled}
           readOnly={state.readOnly}

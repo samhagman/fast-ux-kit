@@ -394,8 +394,8 @@ function SplitterHandle({ grip = true, className, children, ...props }: Splitter
       className={cn(
         "group/splitter relative z-10 flex shrink-0 items-center justify-center bg-border outline-none motion-safe:transition-colors",
         // The drawn line is one pixel; the pointer target is wider, and wider still on touch.
-        "aria-[orientation=vertical]:w-px aria-[orientation=vertical]:cursor-col-resize aria-[orientation=vertical]:after:absolute aria-[orientation=vertical]:after:inset-y-0 aria-[orientation=vertical]:after:-inset-x-1.5 aria-[orientation=vertical]:coarse:after:-inset-x-[22px]",
-        "aria-[orientation=horizontal]:h-px aria-[orientation=horizontal]:w-full aria-[orientation=horizontal]:cursor-row-resize aria-[orientation=horizontal]:after:absolute aria-[orientation=horizontal]:after:-inset-y-1.5 aria-[orientation=horizontal]:after:inset-x-0 aria-[orientation=horizontal]:coarse:after:-inset-y-[22px]",
+        "aria-[orientation=vertical]:w-px aria-[orientation=vertical]:cursor-col-resize aria-[orientation=vertical]:after:absolute aria-[orientation=vertical]:after:inset-y-0 aria-[orientation=vertical]:after:-inset-x-1.5",
+        "aria-[orientation=horizontal]:h-px aria-[orientation=horizontal]:w-full aria-[orientation=horizontal]:cursor-row-resize aria-[orientation=horizontal]:after:absolute aria-[orientation=horizontal]:after:-inset-y-1.5 aria-[orientation=horizontal]:after:inset-x-0",
         "data-[separator=hover]:bg-signal/50 data-[separator=active]:bg-signal data-[separator=focus]:bg-signal",
         "focus-visible:ring-3 focus-visible:ring-ring/50",
         className,

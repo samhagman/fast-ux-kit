@@ -55,8 +55,9 @@ operations, date bounds, RTL color controls and exported compound parts.
 
 Chromium desktop and 390px mobile checks exercise all 86 component families.
 Additional checks cover keyboard navigation, overlay focus return, touch
-activation, RTL behavior, reduced motion and all tool routes. Measured visible
-controls retain 44px targets and editable mobile fields retain 16px text.
+activation, RTL behavior, reduced motion and all tool routes. Measured outliner and
+machine-view controls retain their 44px touch targets, component sizes follow
+their variants, and editable mobile fields retain 16px text.
 
 Browser emulation is recorded separately from physical-device and assistive
 technology testing. Physical iOS/Android devices, native IMEs, VoiceOver and

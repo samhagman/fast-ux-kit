@@ -344,7 +344,7 @@
 }
 .fux-date-segment {
   box-sizing: border-box;
-  min-inline-size: 44px;
+  min-inline-size: 0;
   flex: none;
   align-self: stretch;
   margin-block: 2px;
@@ -384,9 +384,9 @@
 .fux-date-segment[readonly] {
   cursor: default;
 }
-/* Separators hug their neighbours: the segments keep 44px targets, the text does not need the room. */
+/* Separators are quiet: muted, untouchable, and not part of the value. */
 .fux-date-sep {
-  margin-inline: -0.375rem;
+  margin-inline: 0;
   color: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
   font-size: var(--fux-input-font-size, 1rem);
   font-variant-numeric: tabular-nums;
@@ -434,7 +434,7 @@
 .fux-date-group {
   padding-inline-end: 0.1875rem;
 }
-/* On narrow screens the 44px segments cannot share a line: each endpoint takes its own. */
+/* On narrow screens each endpoint of a range takes its own line. */
 @media (max-width: 30rem) {
   .fux-date-range .fux-date-segments {
     flex: 1 1 170px;
@@ -538,11 +538,6 @@
   align-items: center;
   min-block-size: 1.75rem;
   touch-action: none;
-}
-@media (pointer: coarse) {
-  .fux-slider__control {
-    min-block-size: 44px;
-  }
 }
 .fux-slider__track {
   position: relative;
