@@ -61,10 +61,11 @@ function sample(name: string, type: string, size: number) {
   return file;
 }
 
-test("pagination shows a stable window, fills one-page gaps and keeps its names", () => {
+test("pagination pins the ends around a three-page window and keeps its names", () => {
   const view = render(<Pagination label="Results" count={400} defaultPage={12} />);
   const nav = view.getByRole("navigation", { name: "Results" });
-  const labels = Array.from(nav.querySelectorAll("button")).map(
+  // Pages sliding in or out of the window stay mounted but inert: only reachable buttons count.
+  const labels = Array.from(nav.querySelectorAll("button:not([inert])")).map(
     (button) => button.getAttribute("aria-label") ?? button.textContent,
   );
   assert.deepEqual(labels, [
@@ -77,6 +78,23 @@ test("pagination shows a stable window, fills one-page gaps and keeps its names"
     "Next",
   ]);
   assert.equal(nav.querySelectorAll('[aria-hidden="true"] svg').length >= 2, true);
+  for (const hidden of nav.querySelectorAll("button[inert]")) {
+    assert.equal(hidden.getAttribute("tabindex"), "-1", "an off-window page takes no focus");
+    assert.equal(hidden.getAttribute("aria-hidden"), "true");
+  }
+  // The strip moves, the selection keeps its middle slot: page 13 is now in the middle.
+  fireEvent.click(view.getByRole("button", { name: "Next" }));
+  const after = Array.from(nav.querySelectorAll("button:not([inert])")).map(
+    (button) => button.getAttribute("aria-label") ?? button.textContent,
+  );
+  assert.deepEqual(after.slice(2, 5), ["Page 12", "Page 13", "Page 14"]);
+  assert.equal(view.getByRole("button", { name: "Page 13" }).getAttribute("aria-current"), "page");
+  // At the last page the window stops and the selection moves to the pinned end.
+  fireEvent.click(view.getByRole("button", { name: "Page 40" }));
+  const end = Array.from(nav.querySelectorAll("button:not([inert])")).map(
+    (button) => button.getAttribute("aria-label") ?? button.textContent,
+  );
+  assert.deepEqual(end, ["Previous", "Page 1", "Page 37", "Page 38", "Page 39", "Page 40", "Next"]);
   view.rerender(<Pagination label="Results" count={50} defaultPage={1} />);
   // Five pages: nothing is hidden behind an ellipsis.
   assert.equal(view.getAllByRole("button", { name: /^Page / }).length, 5);

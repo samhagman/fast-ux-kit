@@ -61,23 +61,118 @@ export interface PaginationProps {
   compact?: boolean;
 }
 
-/** The page numbers to show, with `null` marking a gap. A gap of exactly one page is filled. */
-function pageWindow(current: number, pages: number): (number | null)[] {
-  const visible = new Set(
-    [1, pages, current - 1, current, current + 1].filter((value) => value > 0 && value <= pages),
+/** Up to this many pages show every number; more pages pin the ends and slide a strip between them. */
+const ALL_PAGES = 7;
+/** Pages kept mounted on each side of the strip's window, so a one-step move slides instead of popping. */
+const STRIP_BUFFER = 3;
+
+/**
+ * The numbered pages when there are many: the first and last are pinned, and between them a
+ * three-slot window looks onto a strip of every other page. Moving a page at a time slides the
+ * strip under the window while the selection keeps its slot; at the ends the window stops and the
+ * selection moves instead. Pages outside the window stay mounted (inert) just long enough to
+ * slide in or out.
+ *
+ *   ‹  [1]  …  ┃ 17  [18]  19 ┃  …  [40]  ›
+ */
+function PageStrip({
+  current,
+  pages,
+  select,
+}: {
+  current: number;
+  pages: number;
+  select: (page: number) => void;
+}) {
+  const start = Math.min(Math.max(current - 1, 2), pages - 3);
+  // Slots fit the widest page number; tabular digits keep every number the same width.
+  const slot = `max(2rem, calc(${String(pages).length}ch + 1.25rem))`;
+  const step = `calc(${slot} + 0.25rem)`;
+  const pageButton = (
+    value: number,
+    className?: string,
+    style?: React.CSSProperties,
+    hidden = false,
+  ) => (
+    <Button
+      key={value}
+      variant="ghost"
+      aria-current={value === current ? "page" : undefined}
+      aria-label={`Page ${value}`}
+      aria-hidden={hidden || undefined}
+      tabIndex={hidden ? -1 : undefined}
+      inert={hidden || undefined}
+      onClick={() => select(value)}
+      style={{ inlineSize: slot, ...style }}
+      className={cn(
+        "px-0 tabular-nums",
+        value === current
+          ? "font-semibold text-foreground hover:bg-transparent"
+          : "text-muted-foreground hover:text-foreground",
+        className,
+      )}
+    >
+      {value}
+    </Button>
   );
-  if (current <= 2 && pages >= 3) visible.add(3);
-  if (current >= pages - 1 && pages >= 3) visible.add(pages - 2);
-  const ordered = [...visible].sort((a, b) => a - b);
-  const result: (number | null)[] = [];
-  ordered.forEach((value, index) => {
-    result.push(value);
-    const next = ordered[index + 1];
-    if (next === undefined) return;
-    if (next - value === 2) result.push(value + 1);
-    else if (next - value > 2) result.push(null);
-  });
-  return result;
+  const pinned = (value: number) => (
+    <span className="relative grid" style={{ inlineSize: slot }}>
+      {value === current && <PageMarker style={{ insetInline: 0 }} />}
+      {pageButton(value, "relative")}
+    </span>
+  );
+  const gap = (shown: boolean) => (
+    <span
+      aria-hidden
+      className={cn(
+        "grid size-8 place-items-center text-muted-foreground transition-opacity duration-200 motion-reduce:transition-none max-sm:hidden",
+        shown ? "opacity-100" : "opacity-0",
+      )}
+    >
+      <Ellipsis className="size-4" />
+    </span>
+  );
+  const strip: number[] = [];
+  for (let value = start - STRIP_BUFFER; value <= start + 2 + STRIP_BUFFER; value++)
+    if (value > 1 && value < pages) strip.push(value);
+  const inWindow = current >= start && current <= start + 2;
+  return (
+    <>
+      {pinned(1)}
+      {gap(start > 2)}
+      <span
+        className="relative h-8 shrink-0 overflow-hidden"
+        style={{ inlineSize: `calc(3 * ${slot} + 0.5rem)` }}
+      >
+        {inWindow && (
+          <PageMarker
+            style={{ insetInlineStart: `calc(${current - start} * ${step})`, inlineSize: slot }}
+          />
+        )}
+        {strip.map((value) =>
+          pageButton(
+            value,
+            "absolute inset-y-0 transition-[inset-inline-start] duration-250 ease-(--ease-standard) motion-reduce:transition-none",
+            { insetInlineStart: `calc(${value - start} * ${step})` },
+            value < start || value > start + 2,
+          ),
+        )}
+      </span>
+      {gap(start + 2 < pages - 1)}
+      {pinned(pages)}
+    </>
+  );
+}
+
+/** The selected page's box, drawn over the numbers: in the strip it holds its slot while they slide under it. */
+function PageMarker({ style }: { style?: React.CSSProperties }) {
+  return (
+    <span
+      aria-hidden
+      style={style}
+      className="pointer-events-none absolute inset-y-0 z-10 rounded-lg border border-ring/60 shadow-xs transition-[inset-inline-start] duration-250 ease-(--ease-standard) motion-reduce:transition-none"
+    />
+  );
 }
 
 export function Pagination({
@@ -156,16 +251,10 @@ export function Pagination({
       style={{ flexWrap: "wrap" }}
     >
       {previous}
-      {pageWindow(current, pages).map((value, index) =>
-        value === null ? (
-          <span
-            key={`gap-${index}`}
-            aria-hidden
-            className="grid size-8 place-items-center text-muted-foreground max-sm:hidden"
-          >
-            <Ellipsis className="size-4" />
-          </span>
-        ) : (
+      {pages > ALL_PAGES ? (
+        <PageStrip current={current} pages={pages} select={select} />
+      ) : (
+        Array.from({ length: pages }, (_, index) => index + 1).map((value) => (
           <Button
             key={value}
             variant={value === current ? "outline" : "ghost"}
@@ -181,7 +270,7 @@ export function Pagination({
           >
             {value}
           </Button>
-        ),
+        ))
       )}
       {next}
     </nav>

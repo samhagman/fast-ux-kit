@@ -164,6 +164,90 @@ function SettingsPanel() {
 }
 
 /** The main example: fields keep a readable measure instead of stretching across the page. */
+const people = [
+  { name: "Avery Chen", team: "Design" },
+  { name: "Jordan Patel", team: "Engineering" },
+  { name: "Riley Okafor", team: "Design" },
+  { name: "Sam Lindqvist", team: "Support" },
+  { name: "Morgan Reyes", team: "Engineering" },
+  { name: "Quinn Adebayo", team: "Product" },
+  { name: "Taylor Novak", team: "Design" },
+  { name: "Casey Moreau", team: "Finance" },
+];
+/** `text` with the part matching `query` marked. */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const at = query ? text.toLowerCase().indexOf(query.toLowerCase()) : -1;
+  if (at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className="rounded-sm bg-signal/15 px-px text-foreground">
+        {text.slice(at, at + query.length)}
+      </mark>
+      {text.slice(at + query.length)}
+    </>
+  );
+}
+/** A search over a small team directory: results filter under the field as you type. */
+function PeopleSearch({ report }: { report: (value: unknown) => void }) {
+  const [query, setQuery] = React.useState("");
+  const needle = query.trim().toLowerCase();
+  const matches = people.filter((person) =>
+    `${person.name} ${person.team}`.toLowerCase().includes(needle),
+  );
+  return (
+    <div className="flex max-w-md flex-col gap-2">
+      <C.SearchField
+        label="Search people"
+        placeholder="Name or team"
+        hint="Try a team such as Design."
+        value={query}
+        onValueChange={(value) => {
+          setQuery(value);
+          report(value);
+        }}
+      />
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <p
+          aria-live="polite"
+          className="border-b border-hairline px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
+        >
+          {matches.length === 1 ? "1 person" : `${matches.length} people`}
+        </p>
+        {matches.length ? (
+          <ul
+            aria-label="Matching people"
+            className="max-h-56 divide-y divide-hairline overflow-y-auto"
+          >
+            {matches.map((person) => (
+              <li key={person.name} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <span
+                  aria-hidden
+                  className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground"
+                >
+                  {person.name
+                    .split(" ")
+                    .map((part) => part[0])
+                    .join("")}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  <Highlight text={person.name} query={query.trim()} />
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  <Highlight text={person.team} query={query.trim()} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+            No one matches “{query.trim()}”.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 const Lead = ({ children }: { children: React.ReactNode }) => (
   <div className="w-full max-w-md">{children}</div>
 );
@@ -440,18 +524,16 @@ export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
     [input("textarea", "A useful note")],
   ),
   SearchField: example(
-    "Search text is reported as it changes. Escape or the clear button empties it.",
+    "Type a name or a team (try Design) and the list filters as you type. Escape or the clear button empties it.",
     (s) => (
       <>
-        <Lead>
-          <C.SearchField label="Search documents" onValueChange={s.report} />
-        </Lead>
+        <PeopleSearch report={s.report} />
         <Variants title="With a value and a hint" layout="grid">
           <C.SearchField label="Search tasks" defaultValue="quarterly review" />
           <C.SearchField
-            label="Search people"
-            placeholder="Name or team"
-            hint="Try a team such as Design."
+            label="Search documents"
+            placeholder="Title or author"
+            hint="Matches titles and authors."
           />
         </Variants>
         <Variants title="States" layout="grid">
