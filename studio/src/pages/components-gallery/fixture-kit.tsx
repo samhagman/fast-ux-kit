@@ -36,15 +36,56 @@ export function example(
     const report = (value: unknown) =>
       setStatus(Array.isArray(value) ? value.join(", ") : String(value ?? "Cleared"));
     return (
-      <div className="component-fixture">
+      <div className="component-fixture flex flex-col gap-8">
         {render({ report, open, setOpen, page, setPage })}
-        <output className="fixture-status" aria-live="polite">
+        <output
+          className="fixture-status min-h-5 font-mono text-xs text-muted-foreground empty:hidden"
+          aria-live="polite"
+        >
           {status}
         </output>
       </div>
     );
   }
   return { Component, selector, instructions, actions };
+}
+
+/**
+ * A labelled group of variants under a demo's main example: "Sizes", "States", "With icons".
+ * The main, interactive example comes first in a demo (the catalog test drives the first
+ * match of its selector); variants follow it.
+ *
+ *   <Variants title="Sizes">…</Variants>            a wrapping row
+ *   <Variants title="States" layout="stack">…</Variants>   one per line
+ *   <Variants title="Density" layout="grid">…</Variants>   a two-column grid on wide screens
+ */
+export function Variants({
+  title,
+  layout = "row",
+  children,
+}: {
+  readonly title: string;
+  readonly layout?: "row" | "stack" | "grid";
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3" aria-label={title}>
+      <h4 className="font-mono text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+        {title}
+      </h4>
+      <div
+        className={
+          layout === "stack"
+            ? "flex flex-col items-start gap-3"
+            : layout === "grid"
+              ? "grid gap-4 sm:grid-cols-2"
+              : "flex flex-wrap items-center gap-3"
+        }
+      >
+        {children}
+      </div>
+    </section>
+  );
 }
 export const click = (
   target: string,
