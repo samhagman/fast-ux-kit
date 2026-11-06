@@ -354,7 +354,7 @@
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: var(--fux-input-font-size, 1rem);
+  font-size: var(--fux-control-font-size, 1rem);
   font-variant-numeric: tabular-nums;
   text-align: center;
   appearance: textfield;
@@ -388,7 +388,7 @@
 .fux-date-sep {
   margin-inline: 0;
   color: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
-  font-size: var(--fux-input-font-size, 1rem);
+  font-size: var(--fux-control-font-size, 1rem);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
   user-select: none;
@@ -407,7 +407,7 @@
   background: transparent;
   color: var(--muted-foreground);
   font: inherit;
-  font-size: var(--fux-input-font-size, 1rem);
+  font-size: var(--fux-control-font-size, 1rem);
   text-align: center;
   text-align-last: center;
   appearance: none;
@@ -776,7 +776,7 @@
   font-weight: 500;
 }
 .fux-color-picker input:not([type="hidden"]) {
-  font-size: var(--fux-input-font-size, 1rem);
+  font-size: var(--fux-control-font-size, 1rem);
 }
 /* Inside a popover the popover is the panel. */
 [data-slot="popover-content"] .fux-color-picker {

@@ -47,7 +47,7 @@ const fieldsetClass = "m-0 flex min-w-0 flex-col border-0 p-0";
 const legendClass = "mb-1.5 flex w-fit items-center gap-1 p-0 text-ui leading-5 font-medium";
 const inputExtras = "read-only:bg-muted/50 read-only:text-muted-foreground";
 const shellClass =
-  "h-8 items-center [&_[data-slot=input-group-addon]]:py-0 [&_[data-slot=input-group-control]]:h-auto [&_[data-slot=input-group-control]]:self-stretch has-[input:read-only]:bg-muted/50 has-[input:read-only]:text-muted-foreground [&_[data-slot=input-group-addon]]:text-[length:var(--fux-input-font-size,1rem)] [&_[data-slot=input-group-addon]:has(>button)]:me-0";
+  "h-8 items-center [&_[data-slot=input-group-addon]]:py-0 [&_[data-slot=input-group-control]]:h-auto [&_[data-slot=input-group-control]]:self-stretch has-[input:read-only]:bg-muted/50 has-[input:read-only]:text-muted-foreground [&_[data-slot=input-group-addon]]:text-[length:var(--fux-control-font-size,1rem)] [&_[data-slot=input-group-addon]:has(>button)]:me-0";
 
 function componentClasses<State>(
   base: string,

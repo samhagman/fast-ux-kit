@@ -63,7 +63,14 @@ test("the button scale is distinct, from xs to xl", () => {
 test("shared controls preserve focus, logical sizing and readable fields", () => {
   const css = read("components/catalog.css");
   assert.match(css, /:focus-visible/);
-  assert.match(css, /font-size: var\(--fux-input-font-size, 1rem\)/);
+  // Fields read at 16px where a phone would zoom into smaller text, and match the UI (14px) on desktop.
+  assert.match(css, /font-size: var\(--fux-control-font-size, 1rem\)/);
+  const tokens = read("tokens.css");
+  assert.match(tokens, /--fux-control-font-size: var\(--fux-input-font-size\);/);
+  assert.match(
+    tokens,
+    /@media \(min-width: 48rem\) and \(pointer: fine\) \{\s*:root \{\s*--fux-control-font-size: 0\.875rem;/,
+  );
   assert.match(css, /\.fux-error[^}]*color: var\(--destructive\)/);
   // Reduced motion is handled where each family's motion lives: the area stylesheets.
   const areas = ["basic", "collections", "color-date", "specialized"].map((name) =>

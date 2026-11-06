@@ -162,7 +162,7 @@
 /* Controls take the size their variant gives them; there is no global minimum. */
 [data-slot="input"],
 [data-slot="textarea"] {
-  font-size: var(--fux-input-font-size, 1rem);
+  font-size: var(--fux-control-font-size, 1rem);
 }
 .fux-link,
 .fux-breadcrumbs a {
@@ -171,5 +171,5 @@
 }
 .fux-field input:not([type="hidden"]),
 .fux-field textarea {
-  font-size: var(--fux-input-font-size, 1rem);
+  font-size: var(--fux-control-font-size, 1rem);
 }
