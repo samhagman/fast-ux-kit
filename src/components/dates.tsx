@@ -3,7 +3,15 @@
 import * as React from "react";
 import { Popover } from "@base-ui/react/popover";
 import { useDirection } from "@base-ui/react/direction-provider";
+import {
+  CalendarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CircleAlertIcon,
+  ClockIcon,
+} from "lucide-react";
 import { cn } from "../lib/utils.js";
+import { Button, buttonVariants } from "./ui/button.js";
 import {
   CalendarDate,
   CalendarDateTime,
@@ -13,6 +21,7 @@ import {
   endOfMonth,
   endOfWeek,
   getDayOfWeek,
+  getLocalTimeZone,
   startOfWeek,
   today,
   toCalendarDate,
@@ -52,6 +61,8 @@ interface CalendarOptions<T extends DateValue> extends Flags {
   maxValue?: DateValue;
   isDateUnavailable?: (date: T) => boolean;
   visibleDuration?: DateDuration;
+  /** Marks this date as "today". Defaults to the current local date, resolved after mount. */
+  todayValue?: DateValue;
   className?: string;
   style?: React.CSSProperties;
   id?: string;
@@ -147,6 +158,7 @@ function CalendarSurface<T extends DateValue>({
     timeZone: "UTC",
   });
   const dayFormatter = new DateFormatter(locale, { weekday: "short", timeZone: "UTC" });
+  const dayLongFormatter = new DateFormatter(locale, { weekday: "long", timeZone: "UTC" });
   const heading = shortPeriod
     ? `${dateFormatter.format(start.toDate("UTC"))} – ${dateFormatter.format(end.toDate("UTC"))}`
     : months.length === 1
@@ -204,6 +216,11 @@ function CalendarSurface<T extends DateValue>({
     start.add(step).compare(start) <= 0 ||
     Boolean(props.maxValue && end.compare(toCalendarDate(props.maxValue)) >= 0);
   const monthHeading = React.useId();
+  const [clientToday, setClientToday] = React.useState<CalendarDate | null>(null);
+  React.useEffect(() => {
+    if (!props.todayValue) setClientToday(today(getLocalTimeZone()));
+  }, [props.todayValue?.toString()]);
+  const todayDate = props.todayValue ? toCalendarDate(props.todayValue) : clientToday;
   return (
     <div
       ref={props.ref}
@@ -218,9 +235,11 @@ function CalendarSurface<T extends DateValue>({
       style={props.style}
     >
       <header className="fux-calendar__header">
-        <button
+        <Button
           type="button"
-          className="fux-control"
+          variant="ghost"
+          size="icon"
+          className="fux-calendar__nav"
           aria-label={
             props.previousLabel ??
             (shortPeriod || months.length > 1 ? "Previous period" : "Previous month")
@@ -228,22 +247,24 @@ function CalendarSurface<T extends DateValue>({
           disabled={previousDisabled}
           onClick={() => page(true)}
         >
-          ‹
-        </button>
-        <h2 id={monthHeading} className="fux-heading" aria-live="polite">
+          <ChevronLeftIcon aria-hidden="true" className="rtl:rotate-180" />
+        </Button>
+        <h2 id={monthHeading} className="fux-heading fux-calendar__title" aria-live="polite">
           {heading}
         </h2>
-        <button
+        <Button
           type="button"
-          className="fux-control"
+          variant="ghost"
+          size="icon"
+          className="fux-calendar__nav"
           aria-label={
             props.nextLabel ?? (shortPeriod || months.length > 1 ? "Next period" : "Next month")
           }
           disabled={nextDisabled}
           onClick={() => page(false)}
         >
-          ›
-        </button>
+          <ChevronRightIcon aria-hidden="true" className="rtl:rotate-180" />
+        </Button>
       </header>
       <div className="fux-calendar__months">
         {months.map((month) => {
@@ -269,7 +290,12 @@ function CalendarSurface<T extends DateValue>({
               <thead>
                 <tr>
                   {Array.from({ length: 7 }, (_, day) => (
-                    <th key={day} scope="col" className="fux-calendar__header-cell">
+                    <th
+                      key={day}
+                      scope="col"
+                      className="fux-calendar__header-cell"
+                      abbr={dayLongFormatter.format(gridStart.add({ days: day }).toDate("UTC"))}
+                    >
                       {dayFormatter.format(gridStart.add({ days: day }).toDate("UTC"))}
                     </th>
                   ))}
@@ -289,7 +315,17 @@ function CalendarSurface<T extends DateValue>({
                       const isSelected = range === undefined ? sameDate(date, selected) : inRange;
                       const isUnavailable = unavailable(date);
                       return (
-                        <td key={date.toString()}>
+                        <td
+                          key={date.toString()}
+                          className="fux-calendar__day"
+                          data-in-range={inRange && !hidden ? "" : undefined}
+                          data-range-start={
+                            range && !hidden && sameDate(date, range.start) ? "" : undefined
+                          }
+                          data-range-end={
+                            range && !hidden && sameDate(date, range.end) ? "" : undefined
+                          }
+                        >
                           {hidden ? null : (
                             <button
                               type="button"
@@ -305,6 +341,8 @@ function CalendarSurface<T extends DateValue>({
                               aria-pressed={isSelected}
                               data-selected={isSelected ? "" : undefined}
                               data-outside-month={outside ? "" : undefined}
+                              data-today={sameDate(date, todayDate) ? "" : undefined}
+                              aria-current={sameDate(date, todayDate) ? "date" : undefined}
                               data-unavailable={isUnavailable ? "" : undefined}
                               data-selection-start={
                                 range && sameDate(date, range.start) ? "" : undefined
@@ -498,8 +536,16 @@ function Segments<T extends DateValue | TimeValue>({
     const next = source.set({ [key]: nextNumber }) as T;
     commit(next);
   };
+  const placeholders: Record<SegmentKey, string> = {
+    year: "yyyy",
+    month: "mm",
+    day: "dd",
+    hour: "hh",
+    minute: "mm",
+    second: "ss",
+  };
   return (
-    <div className="fux-date-input" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <div className="fux-date-segments">
       {keys.map((key, index) => {
         const date = source as DateValue;
         const max =
@@ -518,18 +564,25 @@ function Segments<T extends DateValue | TimeValue>({
           ["year", "month", "day"].includes(key) || (key === "hour" && twelveHour) ? 1 : 0;
         const raw =
           value && key in value ? (value as unknown as Record<SegmentKey, number>)[key] : "";
-        const number =
+        const twelve =
           key === "hour" && twelveHour && typeof raw === "number" ? raw % 12 || 12 : raw;
+        // Minutes and seconds read as clock digits ("05"); everything else keeps its natural form.
+        const number =
+          (key === "minute" || key === "second") && typeof twelve === "number"
+            ? String(twelve).padStart(2, "0")
+            : twelve;
         return (
           <React.Fragment key={key}>
             {index > 0 && (
-              <span aria-hidden="true">
-                {key === "minute" || key === "second" ? ":" : index === dateKeys.length ? " " : "/"}
+              <span className="fux-date-sep" aria-hidden="true">
+                {key === "minute" || key === "second" ? ":" : index === dateKeys.length ? "" : "/"}
               </span>
             )}
             <input
               type="number"
               className="fux-date-segment"
+              data-placeholder={number === "" ? "" : undefined}
+              placeholder={placeholders[key]}
               aria-label={`${key}, ${label}`}
               aria-required={props.isRequired || undefined}
               required={props.isRequired}
@@ -539,7 +592,7 @@ function Segments<T extends DateValue | TimeValue>({
               value={number}
               disabled={disabled}
               readOnly={readOnly}
-              style={{ width: key === "year" ? "5ch" : "3ch", minHeight: 44 }}
+              style={{ width: key === "year" ? "5ch" : "3ch" }}
               onChange={(event) => change(key, event.target.value)}
               onKeyDown={(event) => {
                 if (disabled || readOnly) return;
@@ -552,7 +605,9 @@ function Segments<T extends DateValue | TimeValue>({
                 }
                 if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
                   const fields = Array.from(
-                    event.currentTarget.parentElement!.querySelectorAll("input"),
+                    event.currentTarget
+                      .closest(".fux-date-input")!
+                      .querySelectorAll<HTMLInputElement>("input.fux-date-segment"),
                   );
                   const position = fields.indexOf(event.currentTarget);
                   fields[position + (event.key === "ArrowRight" ? 1 : -1)]?.focus();
@@ -564,7 +619,7 @@ function Segments<T extends DateValue | TimeValue>({
       })}
       {keys.includes("hour") && twelveHour && (
         <select
-          className="fux-input"
+          className="fux-date-period"
           aria-label={`day period, ${label}`}
           disabled={disabled || readOnly}
           value={"hour" in source && source.hour >= 12 ? "pm" : "am"}
@@ -593,6 +648,25 @@ function Segments<T extends DateValue | TimeValue>({
   );
 }
 
+/** The bordered, input-height box that segments (and a picker's calendar button) sit in. */
+function DateFrame({
+  children,
+  className,
+  ...flags
+}: Flags & { className?: string; children: React.ReactNode }) {
+  const invalid = Boolean(flags.isInvalid);
+  return (
+    <div
+      className={cn("fux-date-input", className)}
+      data-invalid={invalid ? "" : undefined}
+      data-disabled={(flags.disabled ?? flags.isDisabled) ? "" : undefined}
+      data-readonly={(flags.readOnly ?? flags.isReadOnly) ? "" : undefined}
+    >
+      {children}
+    </div>
+  );
+}
+
 function FieldFrame({ children, ...props }: FieldDetails & { children: React.ReactNode }) {
   const generatedId = React.useId();
   const id = props.id ?? generatedId;
@@ -600,18 +674,28 @@ function FieldFrame({ children, ...props }: FieldDetails & { children: React.Rea
     <div
       ref={props.ref}
       id={id}
-      className={cn("fux-field", props.className)}
+      className={cn("fux-field fux-date-field", props.className)}
       role="group"
       aria-labelledby={`${id}-label`}
       aria-describedby={props.hint || props.error ? `${id}-details` : undefined}
     >
       <div className="fux-label" id={`${id}-label`}>
         {props.label}
+        {props.isRequired && (
+          <span className="fux-label__required" aria-hidden="true">
+            {" "}
+            *
+          </span>
+        )}
       </div>
       {children}
       {(props.hint || props.error) && (
-        <div id={`${id}-details`} className={props.error ? "fux-error" : "fux-hint"}>
-          {props.error ?? props.hint}
+        <div
+          id={`${id}-details`}
+          className={cn("fux-field-message", props.error ? "fux-error" : "fux-hint")}
+        >
+          {props.error && <CircleAlertIcon aria-hidden="true" />}
+          <span>{props.error ?? props.hint}</span>
         </div>
       )}
     </div>
@@ -622,7 +706,9 @@ export function DateField<T extends DateValue = CalendarDate>(props: DateFieldPr
   const [value, update] = useValue(props);
   return (
     <FieldFrame {...props}>
-      <Segments {...props} value={value} onValue={update} />
+      <DateFrame {...props} isInvalid={props.isInvalid || Boolean(props.error)}>
+        <Segments {...props} value={value} onValue={update} />
+      </DateFrame>
     </FieldFrame>
   );
 }
@@ -631,10 +717,20 @@ export function TimeField<T extends TimeValue = Time>(props: TimeFieldProps<T>) 
   const [value, update] = useValue(props);
   return (
     <FieldFrame {...props}>
-      <Segments {...props} value={value} onValue={update} timeOnly />
+      <DateFrame {...props} isInvalid={props.isInvalid || Boolean(props.error)}>
+        <ClockIcon className="fux-date-icon" aria-hidden="true" />
+        <Segments {...props} value={value} onValue={update} timeOnly />
+      </DateFrame>
     </FieldFrame>
   );
 }
+
+/** The day that holds the calendar's roving tab stop: where focus belongs when a popup opens. */
+const focusedDay = (popup: HTMLElement | null) =>
+  popup?.querySelector<HTMLElement>('.fux-calendar__cell[tabindex="0"]') ?? true;
+
+const POPUP_CLASS =
+  "fux-popover fux-popover--calendar origin-(--transform-origin) rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 motion-reduce:animate-none";
 
 export interface DatePickerProps<T extends DateValue = CalendarDate>
   extends DateFieldProps<T>, CalendarOptions<T> {
@@ -651,26 +747,39 @@ export function DatePicker<T extends DateValue = CalendarDate>(props: DatePicker
     if (props.isOpen === undefined) setLocalOpen(next);
     props.onOpenChange?.(next);
   };
+  const popupRef = React.useRef<HTMLDivElement>(null);
   const label = typeof props.label === "string" ? props.label : "Date";
   const disabled = Boolean(props.disabled ?? props.isDisabled);
   const readOnly = Boolean(props.readOnly ?? props.isReadOnly);
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <FieldFrame {...props}>
-        <div className="fux-date-group" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <DateFrame
+          {...props}
+          className="fux-date-group"
+          isInvalid={props.isInvalid || Boolean(props.error)}
+        >
           <Segments {...props} value={value} onValue={update} />
           <Popover.Trigger
-            className="fux-control"
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon-sm" }),
+              "fux-date-trigger",
+            )}
             disabled={disabled || readOnly}
             aria-label={`${props.openLabel ?? "Choose date"} ${label}`}
           >
-            ▦
+            <CalendarIcon aria-hidden="true" />
           </Popover.Trigger>
-        </div>
+        </DateFrame>
       </FieldFrame>
       <Popover.Portal>
-        <Popover.Positioner sideOffset={8} align="start">
-          <Popover.Popup className="fux-popover fux-popover--calendar" aria-label={label}>
+        <Popover.Positioner sideOffset={6} align="start" className="isolate z-50">
+          <Popover.Popup
+            ref={popupRef}
+            className={POPUP_CLASS}
+            aria-label={label}
+            initialFocus={() => focusedDay(popupRef.current)}
+          >
             <Calendar
               {...props}
               ref={undefined}
@@ -719,15 +828,17 @@ export function DateRangePicker<T extends DateValue = CalendarDate>(
     if (props.isOpen === undefined) setLocalOpen(next);
     props.onOpenChange?.(next);
   };
+  const popupRef = React.useRef<HTMLDivElement>(null);
   const label = typeof props.label === "string" ? props.label : "Date range";
   const disabled = Boolean(props.disabled ?? props.isDisabled);
   const readOnly = Boolean(props.readOnly ?? props.isReadOnly);
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <FieldFrame {...props}>
-        <div
+        <DateFrame
+          {...props}
           className="fux-date-group fux-date-range"
-          style={{ display: "flex", alignItems: "center", gap: 8 }}
+          isInvalid={props.isInvalid || Boolean(props.error)}
         >
           <Segments
             {...props}
@@ -741,7 +852,9 @@ export function DateRangePicker<T extends DateValue = CalendarDate>(
               else if (!start && value) commitRange(null);
             }}
           />
-          <span aria-hidden="true">–</span>
+          <span className="fux-date-sep fux-date-range__dash" aria-hidden="true">
+            –
+          </span>
           <Segments
             {...props}
             name={undefined}
@@ -763,17 +876,25 @@ export function DateRangePicker<T extends DateValue = CalendarDate>(
             />
           )}
           <Popover.Trigger
-            className="fux-control"
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon-sm" }),
+              "fux-date-trigger",
+            )}
             disabled={disabled || readOnly}
             aria-label={`${props.openLabel ?? "Choose date range"} ${label}`}
           >
-            ▦
+            <CalendarIcon aria-hidden="true" />
           </Popover.Trigger>
-        </div>
+        </DateFrame>
       </FieldFrame>
       <Popover.Portal>
-        <Popover.Positioner sideOffset={8} align="start">
-          <Popover.Popup className="fux-popover fux-popover--calendar" aria-label={label}>
+        <Popover.Positioner sideOffset={6} align="start" className="isolate z-50">
+          <Popover.Popup
+            ref={popupRef}
+            className={POPUP_CLASS}
+            aria-label={label}
+            initialFocus={() => focusedDay(popupRef.current)}
+          >
             <RangeCalendar
               {...props}
               ref={undefined}

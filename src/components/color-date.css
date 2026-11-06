@@ -1,167 +1,75 @@
-.fux-color-picker {
-  display: grid;
-  gap: 1rem;
-  inline-size: min(100%, 22rem);
-  min-inline-size: 0;
-  margin: 0;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--background);
-  color: var(--foreground);
-}
-.fux-color-picker legend {
-  padding-inline: 0.375rem;
-}
-.fux-color-area {
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.75);
-  cursor: crosshair;
-  forced-color-adjust: none;
-}
-.fux-color-area:focus-visible,
-.fux-color-wheel:focus-visible,
-.fux-color-swatches button:focus-visible,
-.fux-color-slider input:focus-visible,
-.fux-date-segment:focus-visible,
-.fux-calendar__cell:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
-}
-.fux-color-area[aria-disabled="true"],
-.fux-color-wheel[aria-disabled="true"],
-.fux-color-picker:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.fux-color-slider {
-  display: grid;
+/*
+ * Date, time and color components (dates.tsx, colors.tsx).
+ *
+ * Shared pieces first, then calendars, then date/time fields, then colors. Rules here are
+ * unlayered, so they win over the Tailwind utilities in the markup: anything this file sets
+ * on an element, the markup's utilities do not.
+ */
+
+/* ---- Shared ---------------------------------------------------------------------------- */
+
+.fux-field-message {
+  display: flex;
+  align-items: flex-start;
   gap: 0.375rem;
-  min-inline-size: 0;
+  line-height: 1.25;
+  text-wrap: pretty;
 }
-.fux-field__heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
+.fux-field-message > svg {
+  flex: none;
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+  margin-block-start: 0.0625rem;
 }
-.fux-field__heading output {
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
+.fux-label__required {
+  color: var(--destructive);
 }
-.fux-slider__track {
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  forced-color-adjust: none;
+
+/* A transparent-color backdrop: a two-tone checkerboard from the --fux-checker-* tokens. */
+.fux-checker {
+  background-color: var(--fux-checker-light, #fff);
+  background-image: conic-gradient(
+    var(--fux-checker-dark, #bfc4cc) 25%,
+    transparent 0 50%,
+    var(--fux-checker-dark, #bfc4cc) 0 75%,
+    transparent 0
+  );
+  background-size: 8px 8px;
 }
-.fux-color-thumb {
-  box-sizing: border-box;
-  forced-color-adjust: none;
+/* Paints --fux-fill over the checkerboard, so alpha below 1 shows through. */
+.fux-color-fill {
+  background-color: var(--fux-checker-light, #fff);
+  background-image:
+    linear-gradient(var(--fux-fill, transparent), var(--fux-fill, transparent)),
+    conic-gradient(
+      var(--fux-checker-dark, #bfc4cc) 25%,
+      transparent 0 50%,
+      var(--fux-checker-dark, #bfc4cc) 0 75%,
+      transparent 0
+    );
+  background-size:
+    100% 100%,
+    8px 8px;
 }
-.fux-color-slider[data-orientation="vertical"] {
-  inline-size: 44px;
-}
-.fux-color-slider[data-orientation="vertical"] .fux-slider__control {
-  min-block-size: 160px;
-}
-.fux-color-slider .fux-color-thumb::after {
-  content: "";
-  position: absolute;
-  inset: -12px;
-}
-.fux-color-picker__value {
-  display: flex;
-  align-items: end;
-  gap: 0.75rem;
-  min-inline-size: 0;
-}
-.fux-color-picker__value .fux-field {
-  flex: 1;
-}
-.fux-color-swatch {
-  box-sizing: border-box;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.75);
-  forced-color-adjust: none;
-}
-.fux-color-swatches button {
-  cursor: pointer;
-}
-.fux-color-swatches button[aria-selected="true"] {
-  outline: 2px solid var(--foreground);
-  outline-offset: 2px;
-}
-.fux-color-swatches button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.fux-color-wheel {
-  max-inline-size: 100%;
-  border-radius: 50%;
-}
-.fux-color-wheel__track {
-  forced-color-adjust: none;
-}
-.fux-date-input {
-  box-sizing: border-box;
-  min-inline-size: 0;
-  padding-inline: 0.5rem;
-  border: 1px solid var(--input);
-  border-radius: var(--radius);
-  background: var(--background);
-  color: var(--foreground);
-}
-.fux-date-input:focus-within {
-  border-color: var(--ring);
-}
-.fux-date-input > span {
-  color: var(--muted-foreground);
-}
-.fux-date-segment {
-  box-sizing: content-box;
-  padding: 0;
-  border: 0;
-  border-radius: 0.25rem;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  appearance: textfield;
-}
-.fux-date-segment::-webkit-inner-spin-button,
-.fux-date-segment::-webkit-outer-spin-button {
-  appearance: none;
-  margin: 0;
-}
-.fux-date-segment:disabled {
-  color: var(--muted-foreground);
-}
-.fux-date-input:has([aria-invalid="true"]) {
-  border-color: var(--destructive);
-}
-.fux-date-group {
-  min-inline-size: 0;
-  flex-wrap: wrap;
-}
-.fux-date-group .fux-date-input {
-  flex: 1;
-}
-.fux-popover--calendar {
-  box-sizing: border-box;
-  max-inline-size: calc(100vw - 1.5rem);
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 8px 24px #0001;
-}
+
+/* ---- Calendar -------------------------------------------------------------------------- */
+
 .fux-calendar {
-  inline-size: fit-content;
+  --fux-cell: 2.25rem;
+  --fux-cell-radius: calc(var(--radius) * 0.8);
+  --fux-band: color-mix(in oklab, var(--foreground) 8%, transparent);
+  box-sizing: border-box;
+  inline-size: max-content;
   max-inline-size: 100%;
+  /* The months row keeps 3px of its own so focus rings are not clipped. */
+  padding: calc(0.5rem - 3px);
   color: var(--foreground);
+  font-size: 0.875rem;
+}
+@media (pointer: coarse) {
+  .fux-calendar {
+    --fux-cell: 2.75rem;
+  }
 }
 .fux-calendar__header {
   display: flex;
@@ -169,95 +77,721 @@
   justify-content: space-between;
   gap: 0.5rem;
   margin-block-end: 0.5rem;
+  padding-inline: 3px;
 }
-.fux-calendar__header .fux-heading {
+.fux-calendar__header .fux-calendar__title {
   margin: 0;
   min-inline-size: 0;
   font-size: 0.875rem;
-  font-weight: 550;
-  line-height: 1.4;
+  font-weight: 500;
+  line-height: 1.25;
   text-align: center;
-  overflow-wrap: anywhere;
+  text-wrap: balance;
+  font-variant-numeric: tabular-nums;
 }
-.fux-calendar__header .fux-control {
-  flex-shrink: 0;
-  padding: 0.25rem;
+.fux-calendar__nav {
+  flex: none;
+  color: var(--muted-foreground);
+}
+.fux-calendar__nav:hover:not(:disabled) {
+  color: var(--foreground);
 }
 .fux-calendar__months {
   display: flex;
   flex-wrap: wrap;
   align-items: start;
-  gap: 1rem;
+  gap: 1.25rem 1.5rem;
   max-inline-size: 100%;
   padding: 3px;
-  overflow: auto;
+  overflow-x: auto;
 }
 .fux-calendar__grid {
   border-collapse: collapse;
-  font-size: 0.875rem;
+  table-layout: fixed;
 }
 .fux-calendar__grid td,
 .fux-calendar__grid th {
   padding: 0;
   border: 0;
+  text-align: center;
 }
 .fux-calendar__header-cell {
-  block-size: 2rem;
-  min-inline-size: 44px;
+  inline-size: var(--fux-cell);
+  block-size: 1.75rem;
   color: var(--muted-foreground);
   font-size: 0.75rem;
   font-weight: 450;
+  user-select: none;
+}
+.fux-calendar__day {
+  position: relative;
+  padding-block: 1px;
+}
+/* The range band sits behind the cells, so the end caps can be rounded on their own. */
+.fux-calendar__day[data-in-range]::before {
+  content: "";
+  position: absolute;
+  inset-block: 1px;
+  inset-inline: 0;
+  background: var(--fux-band);
+}
+.fux-calendar__day[data-range-start]::before,
+.fux-calendar__day[data-in-range]:first-child::before,
+.fux-calendar__day:empty + .fux-calendar__day[data-in-range]::before {
+  border-start-start-radius: var(--fux-cell-radius);
+  border-end-start-radius: var(--fux-cell-radius);
+}
+.fux-calendar__day[data-range-end]::before,
+.fux-calendar__day[data-in-range]:last-child::before,
+.fux-calendar__day[data-in-range]:has(+ .fux-calendar__day:empty)::before {
+  border-start-end-radius: var(--fux-cell-radius);
+  border-end-end-radius: var(--fux-cell-radius);
 }
 .fux-calendar__cell {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
-  inline-size: 44px;
-  block-size: 44px;
+  box-sizing: border-box;
+  inline-size: var(--fux-cell);
+  block-size: calc(var(--fux-cell) - 2px);
+  margin: 0;
   padding: 0;
   border: 0;
-  border-radius: calc(var(--radius) * 0.7);
+  border-radius: var(--fux-cell-radius);
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   cursor: pointer;
+  outline: none;
+  user-select: none;
+  transition:
+    background-color var(--fux-motion-duration, 140ms) var(--ease-standard, ease),
+    color var(--fux-motion-duration, 140ms) var(--ease-standard, ease),
+    box-shadow var(--fux-motion-duration, 140ms) var(--ease-standard, ease),
+    transform var(--fux-motion-duration, 140ms) var(--ease-standard, ease);
 }
-.fux-calendar__cell:hover:not(:disabled) {
-  background: var(--accent);
+.fux-calendar__cell:hover:not(:disabled, [data-selected], [data-unavailable]) {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fux-calendar__cell:active:not(:disabled, [data-unavailable]) {
+    transform: scale(0.94);
+  }
+}
+.fux-calendar__cell:focus-visible {
+  z-index: 2;
+  box-shadow:
+    0 0 0 1px var(--ring),
+    0 0 0 4px color-mix(in oklab, var(--ring) 40%, transparent);
+}
+.fux-calendar__cell[data-outside-month] {
+  color: color-mix(in oklab, var(--muted-foreground) 65%, transparent);
+}
+.fux-calendar__cell[data-unavailable] {
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+}
+.fux-calendar__cell[data-unavailable]:not(:disabled) {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  opacity: 0.6;
 }
 .fux-calendar__cell:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: not-allowed;
 }
-.fux-calendar__cell[data-outside-month] {
-  color: var(--muted-foreground);
+/* Today: a quiet dot under the number. */
+.fux-calendar__cell[data-today]::after {
+  content: "";
+  position: absolute;
+  inset-block-end: 0.3125rem;
+  inset-inline: 0;
+  margin-inline: auto;
+  inline-size: 0.25rem;
+  block-size: 0.25rem;
+  border-radius: 50%;
+  background: var(--signal, var(--ring));
 }
+.fux-calendar__cell[data-today] {
+  font-weight: 600;
+}
+/* Selected: the full-contrast pill. In a range only the two ends are filled. */
 .fux-calendar__cell[data-selected] {
   background: var(--primary);
   color: var(--primary-foreground);
+  font-weight: 500;
+}
+.fux-calendar__cell[data-selected]:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 88%, transparent);
+}
+.fux-calendar__cell[data-selected][data-today]::after {
+  background: currentColor;
 }
 .fux-calendar--range .fux-calendar__cell[data-selected] {
-  border-radius: 0;
-  background: var(--accent);
-  color: var(--accent-foreground);
+  background: transparent;
+  color: var(--foreground);
+  font-weight: 400;
 }
-.fux-calendar--range .fux-calendar__cell[data-selection-start] {
-  border-start-start-radius: var(--radius);
-  border-end-start-radius: var(--radius);
-}
-.fux-calendar--range .fux-calendar__cell[data-selection-end] {
-  border-start-end-radius: var(--radius);
-  border-end-end-radius: var(--radius);
+.fux-calendar--range .fux-calendar__cell[data-selected]:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 .fux-calendar--range .fux-calendar__cell:is([data-selection-start], [data-selection-end]) {
   background: var(--primary);
   color: var(--primary-foreground);
+  font-weight: 500;
 }
-.fux-calendar__cell[data-invalid],
-.fux-calendar--range .fux-calendar__cell[data-invalid] {
+.fux-calendar--range
+  .fux-calendar__cell:is([data-selection-start], [data-selection-end]):hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 88%, transparent);
+}
+.fux-calendar--range
+  .fux-calendar__cell[data-selected][data-today]:not(
+    [data-selection-start],
+    [data-selection-end]
+  )::after {
+  background: var(--signal, var(--ring));
+}
+.fux-calendar__cell[data-selected][data-invalid],
+.fux-calendar--range
+  .fux-calendar__cell:is([data-selection-start], [data-selection-end])[data-invalid] {
   background: var(--destructive);
   color: var(--primary-foreground);
 }
+/* A calendar inside a date picker's popover has no chrome of its own. */
+.fux-popover--calendar {
+  box-sizing: border-box;
+  max-inline-size: calc(100vw - 1rem);
+  overflow: auto;
+}
+
+/* ---- Date and time fields -------------------------------------------------------------- */
+
+.fux-date-field {
+  gap: 0.375rem;
+}
+.fux-date-input {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.125rem;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 2rem;
+  padding-inline: 0.25rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--foreground);
+  transition:
+    border-color var(--fux-motion-duration, 140ms) var(--ease-standard, ease),
+    box-shadow var(--fux-motion-duration, 140ms) var(--ease-standard, ease),
+    background-color var(--fux-motion-duration, 140ms) var(--ease-standard, ease);
+}
+.dark .fux-date-input {
+  background: color-mix(in oklab, var(--input) 30%, transparent);
+}
+@media (pointer: coarse) {
+  .fux-date-input {
+    min-block-size: 2.75rem;
+  }
+}
+.fux-date-input:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+.fux-date-input[data-invalid],
+.fux-date-input:has([aria-invalid="true"]) {
+  border-color: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent);
+}
+.fux-date-input[data-invalid]:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 35%, transparent);
+}
+.dark .fux-date-input[data-invalid],
+.dark .fux-date-input:has([aria-invalid="true"]) {
+  border-color: color-mix(in oklab, var(--destructive) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 40%, transparent);
+}
+.fux-date-input[data-readonly] {
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+.fux-date-input[data-disabled] {
+  background: color-mix(in oklab, var(--input) 50%, transparent);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fux-date-input[data-disabled] * {
+  pointer-events: none;
+}
+.fux-date-icon {
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin-inline: 0.375rem 0.125rem;
+  color: var(--muted-foreground);
+}
+.fux-date-segments {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-inline-size: 0;
+}
+.fux-date-segment {
+  box-sizing: border-box;
+  min-inline-size: 44px;
+  flex: none;
+  align-self: stretch;
+  margin-block: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.6);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fux-input-font-size, 1rem);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  appearance: textfield;
+  outline: none;
+  transition: background-color var(--fux-motion-duration, 140ms) var(--ease-standard, ease);
+}
+.fux-date-segment::-webkit-inner-spin-button,
+.fux-date-segment::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+/* Empty segments show their format hint, muted. */
+.fux-date-segment::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.75;
+}
+.fux-date-segment:hover:not(:focus, :disabled, [readonly]) {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.fux-date-segment:focus {
+  background: var(--signal-muted, color-mix(in oklab, var(--ring) 18%, transparent));
+  color: var(--foreground);
+}
+.fux-date-segment:disabled {
+  color: var(--muted-foreground);
+}
+.fux-date-segment[readonly] {
+  cursor: default;
+}
+/* Separators hug their neighbours: the segments keep 44px targets, the text does not need the room. */
+.fux-date-sep {
+  margin-inline: -0.375rem;
+  color: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
+  font-size: var(--fux-input-font-size, 1rem);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+}
+.fux-date-range__dash {
+  margin-inline: 0.25rem;
+}
+.fux-date-period {
+  align-self: stretch;
+  margin-block: 2px;
+  margin-inline-start: 0.125rem;
+  min-inline-size: 2.75rem;
+  padding-inline: 0.5rem;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.6);
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: var(--fux-input-font-size, 1rem);
+  text-align: center;
+  text-align-last: center;
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+}
+.fux-date-period:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+.fux-date-period:focus-visible {
+  background: var(--signal-muted, color-mix(in oklab, var(--ring) 18%, transparent));
+  color: var(--foreground);
+}
+.fux-date-trigger {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--muted-foreground);
+}
+.fux-date-trigger:hover:not(:disabled),
+.fux-date-trigger[aria-expanded="true"] {
+  color: var(--foreground);
+}
+.fux-date-group {
+  padding-inline-end: 0.1875rem;
+}
+/* On narrow screens the 44px segments cannot share a line: each endpoint takes its own. */
+@media (max-width: 30rem) {
+  .fux-date-range .fux-date-segments {
+    flex: 1 1 170px;
+  }
+  .fux-date-range__dash {
+    display: none;
+  }
+}
+
+/* ---- Colors: shared thumb -------------------------------------------------------------- */
+
+.fux-color-thumb {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.35),
+    0 1px 3px 1px rgb(0 0 0 / 0.3);
+  forced-color-adjust: none;
+  transition: box-shadow var(--fux-motion-duration, 140ms) var(--ease-standard, ease);
+}
+.fux-color-thumb[data-dragging],
+.fux-color-area:active .fux-color-thumb,
+.fux-color-wheel:active .fux-color-thumb {
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.35),
+    0 0 0 5px rgb(255 255 255 / 0.4),
+    0 2px 6px 1px rgb(0 0 0 / 0.35);
+}
+.fux-color-thumb:has(:focus-visible),
+.fux-color-area:focus-visible .fux-color-thumb,
+.fux-color-wheel:focus-visible .fux-color-thumb {
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.35),
+    0 0 0 5px color-mix(in oklab, var(--ring) 60%, transparent),
+    0 1px 3px 1px rgb(0 0 0 / 0.3);
+}
+
+/* ---- Color area ------------------------------------------------------------------------ */
+
+.fux-color-area {
+  position: relative;
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 22rem;
+  block-size: 11rem;
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent);
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+  forced-color-adjust: none;
+}
+.fux-color-area[aria-disabled="true"],
+.fux-color-wheel[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fux-color-area[aria-readonly="true"],
+.fux-color-wheel[aria-readonly="true"] {
+  cursor: default;
+}
+
+/* ---- Color slider ---------------------------------------------------------------------- */
+
+.fux-color-slider {
+  display: grid;
+  gap: 0.125rem;
+  inline-size: 100%;
+  max-inline-size: 22rem;
+  min-inline-size: 0;
+}
+.fux-color-slider[data-disabled] {
+  opacity: 0.5;
+}
+.fux-field__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.fux-color-slider .fux-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.fux-field__heading output {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.fux-slider__control {
+  /* The control's 12px of padding keeps the end thumbs inside it; the margin gives that
+     room back so the track lines up with its neighbours. */
+  margin-inline: -12px;
+  display: flex;
+  align-items: center;
+  min-block-size: 1.75rem;
+  touch-action: none;
+}
+@media (pointer: coarse) {
+  .fux-slider__control {
+    min-block-size: 44px;
+  }
+}
+.fux-slider__track {
+  position: relative;
+  inline-size: 100%;
+  block-size: 0.75rem;
+  border-radius: 999px;
+  forced-color-adjust: none;
+}
+.fux-slider__track.fux-checker {
+  background-size: 6px 6px;
+}
+/* The channel gradient sits over the checkerboard, so an alpha ramp fades into it. */
+.fux-slider__track::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--fux-gradient);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.fux-color-slider[data-orientation="vertical"] {
+  inline-size: 3.5rem;
+  justify-items: center;
+}
+.fux-color-slider[data-orientation="vertical"] .fux-field__heading {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+}
+.fux-color-slider[data-orientation="vertical"] .fux-slider__control {
+  margin-inline: 0;
+  justify-content: center;
+  min-block-size: 160px;
+}
+.fux-color-slider[data-orientation="vertical"] .fux-slider__track {
+  inline-size: 0.75rem;
+  block-size: 10rem;
+}
+.fux-color-slider .fux-color-thumb::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+/* ---- Color field ----------------------------------------------------------------------- */
+
+.fux-color-field {
+  max-inline-size: 22rem;
+}
+.fux-color-field__control {
+  position: relative;
+}
+.fux-color-field__chip {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0.5rem;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin-block: auto;
+  border-radius: 0.3125rem;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 18%, transparent);
+  pointer-events: none;
+}
+.fux-color-field__input {
+  padding-inline-start: 2rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Swatch and swatch picker ---------------------------------------------------------- */
+
+.fux-color-swatch {
+  --fux-swatch-size: 2rem;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  inline-size: var(--fux-swatch-size);
+  block-size: var(--fux-swatch-size);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.75);
+  overflow: hidden;
+  color: inherit;
+  forced-color-adjust: none;
+}
+.fux-color-swatch[data-size="sm"] {
+  --fux-swatch-size: 1.25rem;
+  border-radius: calc(var(--radius) * 0.55);
+}
+.fux-color-swatch[data-size="lg"] {
+  --fux-swatch-size: 2.75rem;
+  border-radius: var(--radius);
+}
+.fux-color-swatch__fill {
+  position: absolute;
+  inset: 0;
+}
+.fux-color-swatch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 16%, transparent);
+  pointer-events: none;
+}
+.fux-color-swatch__check {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: auto;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.25));
+}
+.fux-color-swatches[data-size="sm"] .fux-color-swatch__check {
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+}
+.fux-color-swatches[data-size="lg"] .fux-color-swatch__check {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+.fux-color-swatches {
+  --fux-ring-gap: var(--background);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.fux-color-swatches .fux-color-swatch {
+  cursor: pointer;
+  overflow: visible;
+  outline: none;
+  transition:
+    box-shadow var(--fux-motion-duration, 140ms) var(--ease-standard, ease),
+    transform var(--fux-motion-duration, 140ms) var(--ease-standard, ease);
+}
+.fux-color-swatches .fux-color-swatch__fill,
+.fux-color-swatches .fux-color-swatch::after {
+  border-radius: inherit;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fux-color-swatches .fux-color-swatch:hover:not(:disabled) {
+    transform: scale(1.08);
+  }
+}
+.fux-color-swatches .fux-color-swatch[aria-selected="true"] {
+  box-shadow:
+    0 0 0 2px var(--fux-ring-gap),
+    0 0 0 4px var(--foreground);
+}
+.fux-color-swatches .fux-color-swatch:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--fux-ring-gap),
+    0 0 0 4px var(--ring);
+}
+.fux-color-swatches .fux-color-swatch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+@media (pointer: coarse) {
+  .fux-color-swatches .fux-color-swatch {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+  }
+}
+
+/* ---- Color wheel ----------------------------------------------------------------------- */
+
+.fux-color-wheel {
+  position: relative;
+  flex: none;
+  max-inline-size: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+.fux-color-wheel__track {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  forced-color-adjust: none;
+}
+.fux-color-wheel__preview {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 14%, transparent);
+  pointer-events: none;
+  forced-color-adjust: none;
+}
+
+/* ---- Color picker ---------------------------------------------------------------------- */
+
+.fux-color-picker {
+  --fux-ring-gap: var(--popover);
+  display: grid;
+  gap: 0.875rem;
+  inline-size: min(100%, 20rem);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.4);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.fux-color-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.fux-color-picker__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.fux-color-picker .fux-color-area,
+.fux-color-picker .fux-color-slider,
+.fux-color-picker .fux-color-field {
+  max-inline-size: none;
+}
+.fux-color-picker .fux-color-swatches {
+  --fux-ring-gap: var(--popover);
+}
+.fux-color-picker .fux-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.fux-color-picker input:not([type="hidden"]) {
+  font-size: var(--fux-input-font-size, 1rem);
+}
+/* Inside a popover the popover is the panel. */
+[data-slot="popover-content"] .fux-color-picker {
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 @media (forced-colors: active) {
   .fux-calendar__cell[data-selected] {
     outline: 1px solid Highlight;
@@ -271,19 +805,4 @@
   .fux-popover--calendar {
     border-color: ButtonText;
   }
-}
-
-.fux-date-segment {
-  min-inline-size: 44px;
-  flex: none;
-  font-size: var(--fux-input-font-size, 1rem);
-}
-.fux-date-input {
-  flex-wrap: wrap;
-}
-.fux-date-group .fux-date-input {
-  flex: 1 1 170px;
-}
-.fux-color-picker input:not([type="hidden"]) {
-  font-size: var(--fux-input-font-size, 1rem);
 }
