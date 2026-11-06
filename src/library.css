@@ -4,6 +4,10 @@
 @import "./styles.css";
 @import "./components/theme.css";
 @import "./components/catalog.css";
+@import "./components/basic.css";
+@import "./components/collections.css";
+@import "./components/overlays-media.css";
+@import "./components/specialized.css";
 @import "./components/color-date.css";
 @import "@xyflow/react/dist/style.css";
 @import "katex/dist/katex.min.css";
