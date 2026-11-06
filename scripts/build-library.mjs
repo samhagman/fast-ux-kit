@@ -22,6 +22,10 @@ run("node_modules/@tailwindcss/cli/dist/index.mjs", [
   "--minify",
 ]);
 await cp(join(root, "src/tokens.css"), join(root, "dist/tokens.css"));
+await cp(
+  join(root, "src/machine-view/layout-worker-entry.js"),
+  join(root, "dist/machine-view/layout-worker-entry.js"),
+);
 await cp(join(root, "node_modules/katex/dist/fonts"), join(root, "dist/fonts"), {
   recursive: true,
 });

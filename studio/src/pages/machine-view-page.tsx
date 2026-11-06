@@ -1,6 +1,7 @@
 import * as React from "react";
 import type { MachineDocument } from "@samhagman/fast-ux-kit/core";
 import { machineLabCases } from "@/demo/machine-lab-data";
+import { MachineObservationDemo } from "@/demo/machine-observation-demo";
 import {
   MachineView,
   type DistributiveOmit,
@@ -56,6 +57,9 @@ export function MachineViewPage() {
     dir,
     className: "h-full max-sm:rounded-none max-sm:border-x-0",
   } as const;
+  const [inspectDemo, setInspectDemo] = React.useState(
+    () => new URLSearchParams(window.location.search).get("inspect") === "1",
+  );
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-background/60 px-4">
@@ -85,23 +89,37 @@ export function MachineViewPage() {
           </>
         )}
         <div className="ms-auto flex items-center gap-2">
-          <span className="text-ui text-muted-foreground max-sm:hidden">Example</span>
-          <Select value={caseId} onValueChange={setCaseId}>
-            <SelectTrigger size="sm" className="w-48 text-ui max-sm:w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {machineLabCases.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="text-ui">
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Button
+            size="sm"
+            variant={inspectDemo ? "secondary" : "outline"}
+            aria-pressed={inspectDemo}
+            onClick={() => setInspectDemo((value) => !value)}
+          >
+            Inspect sample run
+          </Button>
+          {!inspectDemo && (
+            <>
+              <span className="text-ui text-muted-foreground max-sm:hidden">Example</span>
+              <Select value={caseId} onValueChange={setCaseId}>
+                <SelectTrigger size="sm" className="w-48 text-ui max-sm:w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {machineLabCases.map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="text-ui">
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
         </div>
       </div>
       <div className="min-h-0 flex-1 p-0 sm:p-4">
-        {viewer ? (
+        {inspectDemo ? (
+          <MachineObservationDemo dir={dir} />
+        ) : viewer ? (
           <MachineView key={caseId} document={served} {...shared} readOnly />
         ) : host === "clone" || host === "late" || host === "reject" ? (
           <ControlledMachineView key={caseId} mode={host} initial={lab.document} {...shared} />

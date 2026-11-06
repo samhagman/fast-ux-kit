@@ -131,7 +131,7 @@ export const viewportDuration = (ms: number) => (reducedMotion() ? 0 : ms);
 /**
  * Phones never shrink text below a readable size: at 0.72 a 13px name renders at ~9.4px and
  * a 9.5px tag at ~6.8px, the smallest that still reads. A machine that does not fit at the
- * floor is start-aligned (the initial state is at the start in both directions) and the user
+ * floor anchors a supplied state (or start-aligns when none is supplied) and the user
  * pans; the overflow hint is a button that does exactly that.
  */
 export const PHONE_READABLE = 0.72;
@@ -144,7 +144,8 @@ export function fitToBand(
     compact,
     sheetInset = 0,
     animate = false,
-  }: { compact: boolean; sheetInset?: number; animate?: boolean },
+    anchorId,
+  }: { compact: boolean; sheetInset?: number; animate?: boolean; anchorId?: string },
 ) {
   const nodes = flow.getNodes();
   if (!nodes.length || !dom.clientWidth) return;
@@ -156,11 +157,19 @@ export function fitToBand(
   if (W < 40 || H < 40) return;
   let z = Math.min(1.1, W / b.width, H / b.height);
   if (compact) z = Math.max(z, PHONE_READABLE);
-  z = Math.max(0.2, z);
-  const x = b.width * z <= W ? band.x0 + (W - b.width * z) / 2 - b.x * z : band.x0 - b.x * z;
+  z = Math.max(0.001, z);
+  let x = b.width * z <= W ? band.x0 + (W - b.width * z) / 2 - b.x * z : band.x0 - b.x * z;
   // Phones top-align: the free height sits below the machine, where the peek bar and sheet live.
-  const y =
+  let y =
     b.height * z <= H && !compact ? band.y0 + (H - b.height * z) / 2 - b.y * z : band.y0 - b.y * z;
+  // Large layered graphs need not put their initial state at the bounds' top-left corner.
+  // Keep a real state in view when the readable phone floor prevents an overview.
+  const anchor = compact && anchorId ? nodes.find((n) => n.id === anchorId) : undefined;
+  if (anchor) {
+    const a = flow.getNodesBounds([anchor]);
+    if (b.width * z > W) x = band.x0 + Math.max(0, (W - a.width * z) / 2) - a.x * z;
+    if (b.height * z > H) y = band.y0 - a.y * z;
+  }
   return flow.setViewport({ x, y, zoom: z }, { duration: animate ? viewportDuration(260) : 0 });
 }
 

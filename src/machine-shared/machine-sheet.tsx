@@ -37,7 +37,7 @@ import { ScrollArea } from "../components/ui/scroll-area.js";
  * Contract:
  *  - `open` / `snap` are controlled; every change goes out through `onOpenChange` / `onSnapChange`.
  *  - `tabs` is a slot for the bar (style triggers with `sheetTabListClass` / `sheetTabClass`).
- *    If the tabs are Radix Tabs, render the `<Tabs>` root AROUND the sheet (it may be
+ *    With the shared Base UI Tabs, render the `<Tabs>` root AROUND the sheet (it may be
  *    `className="contents"`), so the bar's list and the content's panels share one root.
  *  - `onOcclusionChange(px)` reports how many px of the host the sheet covers at its TARGET
  *    snap (not its animated height), 0 when closed, so hosts keep their content clear of it.

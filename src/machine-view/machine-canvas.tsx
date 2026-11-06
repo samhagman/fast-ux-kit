@@ -38,7 +38,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/toolti
 import { HEADER, transitionLabel } from "./layout.js";
 import { useMediaQuery } from "../hooks/use-media-query.js";
 import { KEY } from "../machine-shared/machine-copy.js";
-import { KIND_LABEL, subtreeOf, useMachine, useMachineChrome } from "./machine-context.js";
+import { KIND_LABEL, subtreeOf, useCanvas, useMachineChrome } from "./machine-context.js";
 import {
   DragContext,
   buildNodes,
@@ -71,8 +71,8 @@ import {
 
 /* ───────────────────────────── Canvas ───────────────────────────── */
 
-export function MachineCanvas() {
-  const mv = useMachine();
+export const MachineCanvas = React.memo(function MachineCanvas() {
+  const mv = useCanvas();
   const dir = useDirection();
   const chrome = useMachineChrome();
   const flow = useReactFlow<FlowNode, FlowEdge>();
@@ -103,22 +103,56 @@ export function MachineCanvas() {
   const selectedEdge = mv.selection?.type === "transition" ? mv.selection.id : null;
   const nodesRef = React.useRef(nodes);
   nodesRef.current = nodes;
+  React.useEffect(() => {
+    const request = mv.revealRequest;
+    if (!request || request.machineId !== mv.machineId || !layout) return;
+    const edge = mv.graph.transitions.find((t) => t.id === request.id);
+    const id = edge?.sourceId ?? request.id;
+    if (!nodes.some((n) => n.id === id)) return;
+    const timer = requestAnimationFrame(() => {
+      const node = flow.getInternalNode(id);
+      if (!node) return;
+      // Let keyboard focus restoration finish before the explicit zoom owns the viewport.
+      dom
+        ?.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(id)}"]`)
+        ?.focus({ preventScroll: true });
+      const p = node.internals.positionAbsolute;
+      const band = dom ? clearBand(dom, chrome.panelOpen ? chrome.sheetInset : 0, 12) : null;
+      const zoom = Math.max(1, flow.getZoom());
+      void flow.setViewport(
+        {
+          x:
+            (band ? (band.x0 + band.x1) / 2 : width / 2) -
+            (p.x + (node.measured.width ?? node.width ?? 160) / 2) * zoom,
+          y:
+            (band ? (band.y0 + band.y1) / 2 : height / 2) -
+            (p.y + (node.measured.height ?? node.height ?? 60) / 2) * zoom,
+          zoom,
+        },
+        {
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200,
+        },
+      );
+    });
+    return () => cancelAnimationFrame(timer);
+  }, [mv.revealRequest, mv.machineId, layout, nodes.length, flow, dom]);
   // Per-instance ids: SVG markers and node descriptions never collide across two views on a page.
   const uid = React.useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const describedBy = React.useCallback((help: NodeHelp) => `mv-${uid}-help-${help}`, [uid]);
 
   /** Fits the machine into the clear band (between palette, controls, peek bar or sheet). */
   const fit = React.useCallback(
-    (animate: boolean) => {
+    (animate: boolean, overview = false) => {
       const el = viewportApi.getNodes().length ? (dom ?? null) : null;
       if (el)
         fitToBand(viewportApi, el, {
-          compact: chrome.compact,
+          compact: chrome.compact && !overview,
           sheetInset: chrome.panelOpen ? chrome.sheetInset : 0,
           animate,
+          anchorId: [...mv.leafIds][0] ?? mv.graph.initialId,
         });
     },
-    [viewportApi, dom, chrome.compact, chrome.panelOpen, chrome.sheetInset],
+    [viewportApi, dom, chrome.compact, chrome.panelOpen, chrome.sheetInset, mv.leafIds, mv.graph],
   );
   const fitRef = React.useRef(fit);
   fitRef.current = fit;
@@ -585,7 +619,7 @@ export function MachineCanvas() {
           nodesFocusable
           edgesFocusable
           elementsSelectable
-          minZoom={0.2}
+          minZoom={0.001}
           maxZoom={2}
           className={cn(
             "machine-flow",
@@ -614,7 +648,7 @@ export function MachineCanvas() {
             data-mv-overlays
             className="pointer-events-none absolute inset-0 z-10 [&>*]:pointer-events-auto"
           >
-            <ZoomControls onFit={() => fit(true)} />
+            <ZoomControls onFit={() => fit(true, true)} />
             <AnimatePresence>{design && <DesignPalette key="palette" />}</AnimatePresence>
           </div>
           <ZoomVar />
@@ -642,7 +676,7 @@ export function MachineCanvas() {
       </EdgeEnvContext.Provider>
     </DragContext.Provider>
   );
-}
+});
 
 /**
  * Edge help, per mode, editability and pointer: it only names keys (or, on touch, gestures and
@@ -667,7 +701,7 @@ const edgeHelp = (mode: string, editable: boolean, touch: boolean) =>
  * a read-only view never promises Delete, and a phone never promises a key it has no keyboard for.
  */
 function NodeDescriptions({ idFor }: { readonly idFor: (help: NodeHelp) => string }) {
-  const mv = useMachine();
+  const mv = useCanvas();
   const touch = useMediaQuery("(pointer: coarse)");
   const design = mv.mode === "design" && mv.editable;
   const simulate = mv.mode === "simulate";
@@ -753,7 +787,7 @@ function OverflowHint() {
   const transform = useStore((state) => state.transform);
   const width = useStore((state) => state.width);
   const height = useStore((state) => state.height);
-  const mv = useMachine();
+  const mv = useCanvas();
   const sheetOpen = chrome.compact && chrome.panelOpen;
   const [hint, setHint] = React.useState<{
     sides: string;
@@ -926,6 +960,7 @@ function ZoomControls({ onFit }: { readonly onFit: () => void }) {
   const flow = useReactFlow();
   const chrome = useMachineChrome();
   const zoom = useStore((state) => state.transform[2]);
+  const percent = zoom < 0.01 ? Math.round(zoom * 1000) / 10 : Math.round(zoom * 100);
   // Phones pinch to zoom: only Fit stays, in the corner the palette leaves free.
   if (chrome.compact)
     return (
@@ -946,7 +981,7 @@ function ZoomControls({ onFit }: { readonly onFit: () => void }) {
       <ToolButton
         label="Zoom out"
         className="coarse:size-11"
-        onClick={() => flow.zoomOut({ duration: 160 })}
+        onClick={() => flow.zoomOut({ duration: viewportDuration(160) })}
       >
         <Minus />
       </ToolButton>
@@ -954,11 +989,11 @@ function ZoomControls({ onFit }: { readonly onFit: () => void }) {
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label={`Zoom ${Math.round(zoom * 100)}%. Reset to 100%`}
-            onClick={() => flow.zoomTo(1, { duration: 200 })}
+            aria-label={`Zoom ${percent}%. Reset to 100%`}
+            onClick={() => flow.zoomTo(1, { duration: viewportDuration(200) })}
             className="h-7 w-11 rounded-md font-mono text-[11px] text-muted-foreground tabular-nums transition-colors hover:bg-muted hover:text-foreground coarse:h-11"
           >
-            {Math.round(zoom * 100)}%
+            {percent}%
           </button>
         </TooltipTrigger>
         <TooltipContent>Reset to 100%</TooltipContent>
@@ -966,7 +1001,7 @@ function ZoomControls({ onFit }: { readonly onFit: () => void }) {
       <ToolButton
         label="Zoom in"
         className="coarse:size-11"
-        onClick={() => flow.zoomIn({ duration: 160 })}
+        onClick={() => flow.zoomIn({ duration: viewportDuration(160) })}
       >
         <Plus />
       </ToolButton>
@@ -983,7 +1018,7 @@ function ZoomControls({ onFit }: { readonly onFit: () => void }) {
  * reveal keeps the selection in that sliver); a tap unfolds it.
  */
 function DesignPalette() {
-  const mv = useMachine();
+  const mv = useCanvas();
   const chrome = useMachineChrome();
   const [unfolded, setUnfolded] = React.useState(false);
   React.useEffect(() => setUnfolded(false), [chrome.panelOpen, chrome.snap]);
@@ -1149,7 +1184,7 @@ const EDGE_SAMPLE = 8;
  * camera to one. Phones dock these actions into the peek bar instead (machine-phone.tsx).
  */
 function SelectionToolbar() {
-  const mv = useMachine();
+  const mv = useCanvas();
   const chrome = useMachineChrome();
   const flow = useReactFlow();
   const store = useStoreApi();
@@ -1357,7 +1392,7 @@ function SelectionToolbar() {
  * frontier (active leaves, enabled event chips, where they lead) lands in the clear band.
  */
 function Choreographer() {
-  const mv = useMachine();
+  const mv = useCanvas();
   const chrome = useMachineChrome();
   const flow = useReactFlow();
   const dom = useStore((s) => s.domNode);
@@ -1373,7 +1408,7 @@ function Choreographer() {
     if (!dom) return [];
     const leaves = [...m.leafIds];
     const enabled = [...m.candidates.enabled];
-    const taken = [...(m.frame?.transitionIds ?? [])];
+    const taken = [...m.takenIds];
     const targets = enabled
       .map((tid) => m.graph.transitions.find((t) => t.id === tid)?.targetId)
       .filter((x): x is string => !!x);
@@ -1438,7 +1473,13 @@ function Choreographer() {
 
   // 3. A state selected from elsewhere (inspector list, issues, keyboard) that is out of view.
   const selected = mv.selection?.type === "node" ? mv.selection.id : null;
+  const lastReveal = React.useRef(mv.revealRequest);
   React.useEffect(() => {
+    const explicit = mv.revealRequest !== lastReveal.current;
+    lastReveal.current = mv.revealRequest;
+    // Explicit navigation already owns a readable zoom. Do not interrupt it with a
+    // pan calculated from an intermediate animation frame.
+    if (explicit) return;
     if (!selected || !dom) return;
     schedule(() => {
       if (dom.querySelector(".react-flow__node.dragging")) return;
@@ -1448,6 +1489,6 @@ function Choreographer() {
         sheetInset: insetRef.current,
       });
     }, 60);
-  }, [selected, dom, flow, schedule]);
+  }, [selected, mv.revealRequest, dom, flow, schedule]);
   return null;
 }

@@ -38,7 +38,7 @@ import { useShortcutLabel } from "../lib/platform.js";
 
 /** Selected path (or a quiet hint), diagnostics, find, go to, fold all, panel toggle. */
 export function MachineTreeToolbar() {
-  const { rows, topology, model } = useTreeBase();
+  const { rows, topology, model, inspection, mode, setMode } = useTreeBase();
   const layout = useTreeLayout();
   const nav = useTreeNavigation();
   const run = useTreeSimulation();
@@ -118,7 +118,13 @@ export function MachineTreeToolbar() {
                 <button
                   type="button"
                   dir="auto"
-                  onClick={() => reveal(row.id)}
+                  onClick={() =>
+                    nav.focused &&
+                    (row.kind === "machine" ||
+                      row.childIds.some((id) => rows.get(id)?.kind === "node"))
+                      ? nav.focusContainer(row.id)
+                      : reveal(row.id)
+                  }
                   aria-current={index === crumbs.length - 1 ? "location" : undefined}
                   className={cn(
                     "min-w-0 truncate rounded-[5px] px-1 py-0.5 transition-colors hover:bg-muted coarse:min-h-11 coarse:min-w-11",
@@ -151,6 +157,34 @@ export function MachineTreeToolbar() {
           </span>
         )}
       </div>
+      {nav.focused ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => nav.focusContainer(null)}
+          title="Return to full hierarchy"
+        >
+          <ArrowLeft className="rtl:rotate-180" />{" "}
+          <span className="max-sm:sr-only">Full hierarchy</span>
+        </Button>
+      ) : selected && rows.get(selected)?.childIds.some((id) => rows.get(id)?.kind === "node") ? (
+        <Button variant="ghost" size="sm" onClick={() => nav.focusContainer(selected)}>
+          Focus container
+        </Button>
+      ) : null}
+      {inspection.session && (
+        <Button
+          variant={mode === "inspect" ? "secondary" : "ghost"}
+          size="sm"
+          aria-pressed={mode === "inspect"}
+          onClick={() => {
+            setMode("inspect");
+            layout.openPanel("runtime");
+          }}
+        >
+          Inspect run
+        </Button>
+      )}
       {model.issues.length > 0 && !findTakesRow && (
         <Diagnostics
           model={model}
@@ -169,7 +203,7 @@ export function MachineTreeToolbar() {
             exit={{ opacity: 0, width: 32 }}
             transition={motionTokens.base}
             className={cn(
-              "flex h-8 items-center overflow-hidden rounded-md border bg-background focus-within:border-signal/60 focus-within:ring-3 focus-within:ring-signal/15 coarse:h-11",
+              "flex h-8 items-center overflow-hidden rounded-md border bg-background focus-within:border-signal/30 focus-within:ring-1 focus-within:ring-signal/10 coarse:h-11",
               findTakesRow && "min-w-0 flex-1",
             )}
           >

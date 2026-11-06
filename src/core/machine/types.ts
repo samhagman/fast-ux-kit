@@ -141,6 +141,10 @@ export interface MachineSnapshot {
   readonly error?: string;
 }
 export interface MachineRuntimeOptions {
+  /** Optional plain-language guard explanations. Never interpreted as executable source. */
+  readonly guardDescriptions?: Readonly<
+    Record<string, (context: Readonly<Record<string, unknown>>, event: MachineEvent) => string>
+  >;
   readonly guards?: Readonly<
     Record<string, (context: Readonly<Record<string, unknown>>, event: MachineEvent) => boolean>
   >;
@@ -174,6 +178,93 @@ export interface MachineInspectionFrame {
   readonly transitionIds?: readonly string[];
   readonly context?: Readonly<Record<string, unknown>>;
   readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly streamId?: string;
+  readonly runId?: string;
+  readonly machineVersion?: string | number;
+  readonly definitionId?: string;
+  /** These facts belong to this observation, never to whichever frame is latest. */
+  readonly work?: readonly MachinePendingWork[];
+  readonly diagnostics?: MachineInspectionDiagnostics;
+  readonly guidance?: string;
+  readonly contextReferences?: Readonly<Record<string, MachineDataReference>>;
+  readonly availableEvents?: readonly {
+    readonly type: string;
+    readonly enabled: boolean;
+    readonly reason?: string;
+  }[];
+}
+
+export interface MachineDataReference {
+  readonly label: string;
+  readonly bytes?: number;
+  readonly reference?: string;
+}
+export interface MachinePendingWork {
+  readonly id: string;
+  readonly kind: "timer" | "task" | "effect" | "invoke" | "subscription" | "agent" | "other";
+  readonly label: string;
+  readonly status: string;
+  readonly stateId?: string;
+  readonly dueAt?: number;
+  readonly since?: number;
+  readonly attempts?: number;
+  readonly details?: Readonly<Record<string, unknown>>;
+}
+/** A journal entry is not a snapshot. A commit can contain many entries or no transition. */
+export interface MachineJournalRecord {
+  readonly id: string;
+  readonly actorId: string;
+  readonly machineId: string;
+  readonly streamId?: string;
+  readonly runId?: string;
+  readonly machineVersion?: string | number;
+  readonly frameId?: string;
+  readonly sequence?: number;
+  readonly timestamp?: number;
+  readonly kind:
+    "accepted" | "rejected" | "ignored" | "task" | "timer" | "effect" | "lifecycle" | "other";
+  readonly label: string;
+  readonly outcome?: string;
+  readonly nodeIds?: readonly string[];
+  readonly transitionIds?: readonly string[];
+  readonly event?: MachineEvent;
+  readonly details?: Readonly<Record<string, unknown>>;
+}
+/** Optional display data; never changes topology, runtime semantics or document version. */
+export interface MachinePresentation {
+  readonly machineVersions?: Readonly<Record<string, string | number>>;
+  readonly nodes?: Readonly<
+    Record<
+      string,
+      {
+        readonly kindLabel?: string;
+        /** Targetless handlers and periodic work remain activities, not invented self edges. */
+        readonly activities?: readonly {
+          readonly id: string;
+          readonly label: string;
+          readonly description?: string;
+        }[];
+        readonly details?: Readonly<Record<string, unknown>>;
+      }
+    >
+  >;
+  readonly transitions?: Readonly<
+    Record<string, { readonly trigger?: string; readonly description?: string }>
+  >;
+}
+export interface MachineInspectionUpdate {
+  readonly id: string;
+  readonly streamId: string;
+  /** Transport order, independent of a machine's state/journal sequence. */
+  readonly ordinal?: number;
+  readonly sequence?: number;
+  readonly cursor?: string;
+  readonly previousCursor?: string;
+  readonly committed?: boolean;
+  readonly frames?: readonly MachineInspectionFrame[];
+  readonly records?: readonly MachineJournalRecord[];
+  readonly continuity?: "unknown" | "contiguous" | "gap";
+  readonly connection?: MachineInspectionSession["connection"];
 }
 /** Diagnostic payloads are optional; views must default to topology-only display. */
 export interface MachineInspectionDiagnostics {
@@ -205,6 +296,8 @@ export interface MachineInspectionDiagnostics {
   }[];
 }
 export interface MachineInspectionSession {
+  /** Change identity when loading a different run/feed. */
+  readonly id?: string;
   readonly source: "committed" | "live" | "simulation";
   readonly connection: "connected" | "stale" | "disconnected" | "gap";
   readonly cursor?: string;
@@ -219,6 +312,23 @@ export interface MachineInspectionSession {
   };
   readonly frames: readonly MachineInspectionFrame[];
   readonly diagnostics?: MachineInspectionDiagnostics;
+  readonly records?: readonly MachineJournalRecord[];
+  readonly streams?: Readonly<
+    Record<
+      string,
+      { readonly ordinal?: number; readonly cursor?: string; readonly sequence?: number }
+    >
+  >;
+  readonly acceptedUpdateIds?: readonly string[];
+  /** Recent identities survive display retention, so overlapping deliveries cannot resurrect evicted facts. */
+  readonly acceptedFrameIds?: readonly string[];
+  readonly acceptedRecordIds?: readonly string[];
+  readonly omittedFrames?: number;
+  readonly omittedRecords?: number;
+  readonly lastUpdateRejection?: {
+    readonly updateId: string;
+    readonly reason: "uncommitted" | "late" | "invalid-order" | "duplicate-identity";
+  };
 }
 /** Adapters are explicitly versioned and supplied by the host. No runtime is bundled. */
 export interface MachineInspectionAdapter<T = unknown> {

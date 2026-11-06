@@ -35,9 +35,10 @@ import {
   type ChipFit,
   type LaidOutEdge,
 } from "./layout.js";
-import { useMachine } from "./machine-context.js";
+import { MachineValue } from "../machine-shared/machine-inspection-panel.js";
+import { useMachine, useDiagram } from "./machine-context.js";
 import { DragContext } from "./machine-nodes.js";
-import { describeBlocked, guardIsFalse, KEY } from "../machine-shared/machine-copy.js";
+import { describeBlocked, KEY } from "../machine-shared/machine-copy.js";
 
 export type TransitionData = {
   readonly transition?: MachineTransition;
@@ -165,7 +166,7 @@ export function TransitionEdge({
   source,
   target,
 }: EdgeProps<FlowEdge>) {
-  const mv = useMachine();
+  const mv = useDiagram();
   const env = React.useContext(EdgeEnvContext);
   const { moving } = React.useContext(DragContext);
   const [reconnecting, setReconnecting] = React.useState(false);
@@ -286,10 +287,10 @@ export function TransitionEdge({
       </>
     );
 
-  const simulating = !!mv.snapshot;
+  const simulating = mv.mode === "simulate" && mv.simulating;
   const enabled = !!transition && mv.candidates.enabled.has(transition.id);
   const blocked = !!transition && mv.candidates.blocked.has(transition.id);
-  const taken = !!transition && (mv.frame?.transitionIds.includes(transition.id) ?? false);
+  const taken = !!transition && mv.takenIds.includes(transition.id);
   const stroke =
     taken || enabled ? "var(--signal)" : selected ? "var(--foreground)" : "var(--mv-edge)";
   const anchors = env.reconnectable && !!transition && !simulating && (
@@ -324,7 +325,7 @@ export function TransitionEdge({
       />
       {taken && (
         <path
-          key={mv.snapshot?.sequence}
+          key={mv.pingSequence}
           d={path}
           fill="none"
           stroke="var(--signal)"
@@ -619,7 +620,7 @@ function EdgeChip({
   readonly blocked: boolean;
   readonly taken: boolean;
 }) {
-  const mv = useMachine();
+  const mv = useDiagram();
   const chipRef = React.useRef<HTMLButtonElement>(null);
   // The popover belongs to the transition, not to the chip's current variant: it stays open
   // while the payload flips the guard (blocked ↔ enabled) and closes only on send or dismiss.
@@ -650,7 +651,7 @@ function EdgeChip({
     ? enabled
       ? `Send ${transitionLabel(transition)}`
       : guardedBlock
-        ? `${describeBlocked(transition.event!, guardIsFalse(transition.guard!))}. Opens the payload editor`
+        ? `${transition.event} is blocked. Opens the payload editor`
         : `${transitionLabel(transition)}, not available now`
     : `Select transition ${transitionLabel(transition)}`;
   return (
@@ -660,6 +661,10 @@ function EdgeChip({
           ref={chipRef}
           type="button"
           data-mv-chip={id}
+          onPointerEnter={() => mv.previewEvent(transition.event ?? null)}
+          onPointerLeave={() => mv.previewEvent(null)}
+          onFocus={() => mv.previewEvent(transition.event ?? null)}
+          onBlur={() => mv.previewEvent(null)}
           data-enabled={enabled || undefined}
           data-sim={
             simulating && !enabled && !taken && !guardedBlock && !selected ? "inactive" : undefined
@@ -769,7 +774,6 @@ function PayloadPopover({
   const sequence = mv.snapshot?.trace.at(-1)?.sequence;
   const lastBlocked = mv.blocked.at(-1);
   const refused = lastBlocked && lastBlocked.event === event && lastBlocked.after === sequence;
-  const context = JSON.stringify(mv.snapshot?.context ?? {});
   const send = () => {
     const result = mv.sendEvent(event);
     if (result?.changed) onSent();
@@ -805,15 +809,10 @@ function PayloadPopover({
           {/* The shared sentences (machine-copy): the same words as the toast, live region and tree. */}
           {passes
             ? `${event} can fire — guard ${guard} passes now.`
-            : `${describeBlocked(event, guardIsFalse(guard))}. It depends on the context or payload.${refused ? " The last send was refused." : ""}`}
+            : `${describeBlocked(event, mv.explainEvent(event))}.${refused ? " The last send was refused." : ""}`}
         </span>
       </p>
-      <div className="grid gap-1">
-        <span className="text-[11px] text-muted-foreground">Context</span>
-        <code className="max-h-14 overflow-auto rounded-md border bg-muted/40 px-2 py-1 font-mono text-[10.5px] leading-4 break-all">
-          {context}
-        </code>
-      </div>
+      <MachineValue value={mv.snapshot?.context} label="Context" />
       <label htmlFor={id} className="text-[11px] text-muted-foreground">
         Event payload (JSON, optional)
       </label>

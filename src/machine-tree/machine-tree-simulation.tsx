@@ -35,12 +35,14 @@ import {
 import { IconButton } from "./machine-tree-primitives.js";
 import { useTreeSimulation } from "./machine-tree-run.js";
 import { useTree, useView } from "./machine-tree-store.js";
+import { MachineValue, inspectionTime } from "../machine-shared/machine-inspection-panel.js";
+import { compareMachineInspectionContexts } from "../core/index.js";
 import { useModKey, useShortcutLabel } from "../lib/platform.js";
 
 /** Run controls + status line. Built on the public `MachineTreeApi` plus the footer notice. */
 export function MachineTreeFooter() {
   const api = useMachineTree();
-  const { rootGraph } = useTreeBase();
+  const { rootGraph, inspection, mode } = useTreeBase();
   const { notice, applyFix, view } = useTreeSimulation();
   const { simulation } = api;
   // The dry run of the event under the pointer or focus, said in one line where the notice goes.
@@ -93,7 +95,11 @@ export function MachineTreeFooter() {
           )}
         />
         {!running ? (
-          <span className="truncate">Not running</span>
+          <span className="truncate">
+            {mode === "inspect"
+              ? `${inspection.historical ? "History" : "Observing"} · ${inspection.session?.connection ?? "disconnected"}`
+              : "Not running"}
+          </span>
         ) : simulation.status === "error" ? (
           <span className="truncate text-destructive">Stopped — {simulation.error}</span>
         ) : (
@@ -223,7 +229,8 @@ export function SimulationTab({
 }) {
   const { model } = useTreeBase();
   const { setDiagnosticsOpen } = useTreeLayout();
-  const { sim, playScenario, reports, runAllScenarios, payloads } = useTreeSimulation();
+  const { sim, playScenario, reports, runAllScenarios, payloads, timestamps, inspectScenario } =
+    useTreeSimulation();
   const snapshot = sim.snapshot;
   const trace = snapshot?.trace ?? [];
   const steps = Math.max(0, trace.length - 1);
@@ -528,11 +535,14 @@ export function SimulationTab({
             <h3 className="mb-1.5 text-2xs font-medium tracking-wide text-muted-foreground uppercase">
               Context{sim.cursor !== null && ` after step ${sim.cursor}`}
             </h3>
-            <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-2.5 font-mono text-[11px] leading-4">
-              {shownContext
-                ? JSON.stringify(shownContext, null, 2)
-                : "— (automatic microstep; no separate snapshot)"}
-            </pre>
+            {shownContext ? (
+              <MachineValue value={shownContext} label="Retained local context" />
+            ) : (
+              <p className="text-muted-foreground">
+                Context unavailable for this automatic microstep.
+              </p>
+            )}
+            <LocalContextChanges contexts={contexts} sequence={trace[current]?.sequence} />
           </section>
           <section>
             <div className="mb-1.5 flex items-center justify-between">
@@ -594,6 +604,14 @@ export function SimulationTab({
                         >
                           {traceEventLabel(entry.event)}
                         </span>
+                        {timestamps.has(entry.sequence) && (
+                          <time
+                            dateTime={inspectionTime(timestamps.get(entry.sequence))}
+                            className="ms-auto text-[10px] text-muted-foreground"
+                          >
+                            {inspectionTime(timestamps.get(entry.sequence)).slice(11, 19)}
+                          </time>
+                        )}
                         <ArrowRight
                           aria-hidden
                           className="size-3 shrink-0 text-muted-foreground rtl:rotate-180"
@@ -657,7 +675,7 @@ export function SimulationTab({
                 <li key={scenario.id}>
                   <button
                     type="button"
-                    onClick={() => (playing ? sim.stop() : void playScenario(scenario))}
+                    onClick={() => (playing ? onStop() : void playScenario(scenario))}
                     className={cn(
                       "flex h-8 w-full items-center gap-2 rounded-md border px-2.5 text-start transition-colors hover:bg-muted/60 coarse:h-11",
                       playing && "border-signal/50",
@@ -714,6 +732,16 @@ export function SimulationTab({
                       </span>
                     )}
                   </button>
+                  {report?.result && (
+                    <details className="mt-1 px-2.5 text-[11px] text-muted-foreground">
+                      <summary className="cursor-pointer py-1">Scenario result</summary>
+                      <p>Expected: {report.expectedActiveIds?.join(", ") ?? "No expectation"}</p>
+                      <p>Actual: {report.result.activeIds.join(", ")}</p>
+                      <Button variant="ghost" size="sm" onClick={() => inspectScenario(report)}>
+                        Inspect {report.passed === false ? "failure" : "result"}
+                      </Button>
+                    </details>
+                  )}
                   {report && report.blocked.length > 0 && (
                     <ul
                       className={cn(
@@ -739,4 +767,29 @@ export function SimulationTab({
       )}
     </div>
   );
+}
+
+function LocalContextChanges({
+  contexts,
+  sequence,
+}: {
+  readonly contexts: ReadonlyMap<number, Readonly<Record<string, unknown>>>;
+  readonly sequence: number | undefined;
+}) {
+  if (sequence === undefined) return null;
+  const previousSequence = [...contexts.keys()]
+    .filter((n) => n < sequence)
+    .sort((a, b) => b - a)[0];
+  if (previousSequence === undefined || !contexts.has(sequence)) return null;
+  const frame = (n: number) => ({
+    id: String(n),
+    actorId: "local",
+    machineId: "local",
+    sequence: n,
+    timestamp: 0,
+    activeIds: [],
+    context: contexts.get(n),
+  });
+  const changes = compareMachineInspectionContexts(frame(previousSequence), frame(sequence));
+  return <MachineValue value={changes} label="Context changes between retained steps" />;
 }

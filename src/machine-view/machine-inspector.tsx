@@ -9,6 +9,10 @@ import { InspectPanel } from "./inspect-panel.js";
 import { RunPanel } from "./run-panel.js";
 import { TracePanel } from "./trace-panel.js";
 import { IssuesPanel } from "./issues-panel.js";
+import {
+  MachineInspectionPanel,
+  MachinePresentationDetails,
+} from "../machine-shared/machine-inspection-panel.js";
 
 /**
  * The inspector: four tabs (Inspect, Run, Trace, Issues). One component, two shells:
@@ -29,6 +33,9 @@ function useInspectorTab() {
   React.useEffect(() => {
     if (mv.selection && mv.mode === "design") setTab("inspect");
   }, [mv.selection, mv.mode]);
+  React.useEffect(() => {
+    if (mv.traceRequest) setTab("trace");
+  }, [mv.traceRequest]);
   // A new subject starts at the top: the scroll offset belongs to what was shown before.
   const subject = `${tab}:${mv.selection?.type ?? ""}:${mv.selection?.id ?? ""}:${mv.machineId}`;
   return { tab, setTab, subject };
@@ -92,8 +99,22 @@ function Panels() {
       className="m-0 p-3 duration-200 ease-[var(--ease-standard)] data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:slide-in-from-bottom-1 max-md:pt-2"
     >
       {value === "inspect" ? (
-        <div key={mv.selection?.id ?? "machine"} className="animate-in fade-in-0 duration-200">
-          <InspectPanel />
+        <div
+          key={mv.mode === "inspect" ? "inspection" : (mv.selection?.id ?? "machine")}
+          className="animate-in fade-in-0 duration-200"
+        >
+          {mv.mode === "inspect" ? (
+            <>
+              <MachinePresentationDetails
+                presentation={mv.presentation}
+                id={mv.selection?.id}
+                kind={mv.selection?.type}
+              />
+              <MachineInspectionPanel inspection={mv.inspection} onReveal={mv.reveal} />
+            </>
+          ) : (
+            <InspectPanel />
+          )}
         </div>
       ) : value === "simulate" ? (
         <RunPanel />

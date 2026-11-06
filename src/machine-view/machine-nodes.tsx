@@ -14,7 +14,7 @@ import { cn } from "../lib/utils.js";
 import { simStateOf, type SimState } from "../machine-shared/machine-sim.js";
 import { focusNextFrame } from "../machine-shared/machine-focus.js";
 import { HEADER, type MachineGraphLayout } from "./layout.js";
-import { KIND_LABEL, kindTag, useMachine } from "./machine-context.js";
+import { KIND_LABEL, kindTag, useMachine, useDiagram } from "./machine-context.js";
 
 /* ───────────────────────────── Flow node model ───────────────────────────── */
 
@@ -173,10 +173,10 @@ function handles(direction: "LR" | "TB") {
 /** Simulation emphasis for a node: see machine-shared/machine-sim.css (shared with Machine Tree). */
 export type { SimState };
 function useNodeState(id: string) {
-  const mv = useMachine();
+  const mv = useDiagram();
   const active = mv.activeSet.has(id);
   const leaf = mv.leafIds.has(id);
-  const simulating = !!mv.snapshot;
+  const simulating = mv.simulating;
   const sim: SimState = simStateOf({ leaf, ancestor: active && !leaf, simulating });
   return { mv, active, leaf, simulating, sim };
 }
@@ -244,7 +244,7 @@ function InlineName({
         }
       }}
       className={cn(
-        "nodrag nopan min-w-0 flex-1 rounded-[4px] bg-muted px-1 -mx-1 outline-none ring-1 ring-signal/60",
+        "nodrag nopan min-w-0 flex-1 rounded-[4px] bg-muted/30 px-1 -mx-1 outline-none ring-1 ring-foreground/10 focus-visible:ring-foreground/50",
         className,
       )}
     />
@@ -267,17 +267,24 @@ export function StateNode({ id, data, selected }: NodeProps<Node<StateData, "sta
   return (
     <div
       data-sim={sim}
+      data-preview={
+        mv.preview?.entered.includes(id)
+          ? "enter"
+          : mv.preview?.exited.includes(id)
+            ? "exit"
+            : undefined
+      }
       data-sim-recessed={recessed || undefined}
       className={cn(
         // Simulation dims by colour tokens (≥ 4.5:1), never by opacity.
         "group/state relative w-full rounded-[10px] border border-[color:var(--sim-border,var(--mv-node-border))] bg-[var(--sim-surface,var(--card))] text-card-foreground transition-[border-color,box-shadow,background-color] duration-200",
         final && "outline-1 outline-offset-[3px] outline-border",
-        leaf && "shadow-[0_0_0_4px_color-mix(in_oklab,var(--signal)_14%,transparent)]",
+        leaf && "shadow-[0_0_0_2px_color-mix(in_oklab,var(--signal)_8%,transparent)]",
         leaf && final && "outline-signal/60",
         selected &&
           !leaf &&
           "border-foreground/60 shadow-[0_0_0_3px_color-mix(in_oklab,var(--foreground)_8%,transparent)]",
-        selected && leaf && "shadow-[0_0_0_4px_color-mix(in_oklab,var(--signal)_24%,transparent)]",
+        selected && leaf && "shadow-[0_0_0_2px_color-mix(in_oklab,var(--signal)_14%,transparent)]",
         !leaf && !selected && "hover:border-foreground/25",
       )}
     >
@@ -303,7 +310,7 @@ export function StateNode({ id, data, selected }: NodeProps<Node<StateData, "sta
           >
             {leaf && (
               <span
-                key={mv.snapshot?.sequence}
+                key={mv.pingSequence}
                 className="absolute inset-0 animate-ping rounded-full bg-signal/60 [animation-iteration-count:2] motion-reduce:hidden"
               />
             )}
@@ -335,10 +342,20 @@ export function StateNode({ id, data, selected }: NodeProps<Node<StateData, "sta
           </button>
         ) : (
           <span className="shrink-0 font-mono text-[9.5px] tracking-wider text-[color:var(--sim-tag,var(--muted-foreground))] uppercase">
-            {KIND_LABEL[node.kind]}
+            {mv.presentation?.nodes?.[id]?.kindLabel ?? KIND_LABEL[node.kind]}
           </span>
         )}
       </div>
+      {!!mv.presentation?.nodes?.[id]?.activities?.length && (
+        <ul className="flex flex-col gap-1 border-t border-hairline px-3 py-2 text-[11px] text-muted-foreground">
+          {mv.presentation.nodes[id]!.activities!.slice(0, 4).map((a) => (
+            <li key={a.id} title={a.description}>
+              {a.label}
+            </li>
+          ))}
+          {mv.presentation.nodes[id]!.activities!.length > 4 && <li>More activities in details</li>}
+        </ul>
+      )}
       {(node.description || actions.length > 0 || node.tags?.length) && (
         <div className="space-y-1.5 border-t border-hairline px-3 pt-1.5 pb-2">
           {node.description && (
@@ -430,7 +447,7 @@ export function GroupNode({ id, data, selected }: NodeProps<Node<StateData, "gro
 }
 
 export function NoteNode({ id, data, selected }: NodeProps<Node<StateData, "note">>) {
-  const mv = useMachine();
+  const mv = useDiagram();
   return (
     <div
       className={cn(
@@ -456,13 +473,13 @@ export function NoteNode({ id, data, selected }: NodeProps<Node<StateData, "note
 
 /** The filled initial dot: synthetic markers and explicit `initial` pseudo-states alike. */
 export function InitialNode({ data, selected }: NodeProps<FlowNode>) {
-  const mv = useMachine();
+  const mv = useDiagram();
   const node = (data as Partial<StateData>).node;
   // While simulating, a start dot reads like the region it starts: full strength while its owner
   // is live (the machine root always is), dimmed with the same `data-sim` tokens when it is not.
   // So two regions in the same state always show the same dot.
   const owner = node ? node.parentId : (data as { owner: string | null }).owner;
-  const dimmed = !!mv.snapshot && !!owner && !mv.activeSet.has(owner);
+  const dimmed = mv.simulating && !!owner && !mv.activeSet.has(owner);
   return (
     <div
       className="relative grid h-full w-full place-items-center"

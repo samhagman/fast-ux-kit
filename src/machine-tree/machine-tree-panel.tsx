@@ -37,6 +37,10 @@ import { useTree } from "./machine-tree-store.js";
 import { useShortcutLabel } from "../lib/platform.js";
 import { SimulationTab } from "./machine-tree-simulation.js";
 import type { MachineTreePanelTab } from "./machine-tree.js";
+import {
+  MachineInspectionPanel,
+  MachinePresentationDetails,
+} from "../machine-shared/machine-inspection-panel.js";
 
 /**
  * Details / Simulation / Code. A side panel on desktop; on phones the shared non-modal
@@ -124,11 +128,16 @@ export function MachineTreePanel() {
 
 /** The three tab triggers: segmented on desktop, the shared sheet's 44px underline tabs on phones. */
 function PanelTabs({ sheet }: { readonly sheet: boolean }) {
+  const { inspection } = useTreeBase();
   const trigger = sheet ? sheetTabClass : "text-ui";
   return (
     <TabsList
       variant={sheet ? "line" : "default"}
-      className={sheet ? sheetTabListClass : "grid h-8 flex-1 grid-cols-3 coarse:h-11"}
+      className={
+        sheet
+          ? sheetTabListClass
+          : cn("grid h-8 flex-1 coarse:h-11", inspection.session ? "grid-cols-4" : "grid-cols-3")
+      }
     >
       <TabsTrigger value="details" className={trigger}>
         Details
@@ -136,6 +145,11 @@ function PanelTabs({ sheet }: { readonly sheet: boolean }) {
       <TabsTrigger value="simulation" className={trigger}>
         Simulation
       </TabsTrigger>
+      {inspection.session && (
+        <TabsTrigger value="runtime" className={trigger}>
+          Run
+        </TabsTrigger>
+      )}
       <TabsTrigger value="code" className={trigger}>
         Code
       </TabsTrigger>
@@ -168,11 +182,42 @@ export const PanelBody = React.memo(function PanelBody({
   readonly touch: boolean;
 }) {
   const { rows, links } = useTree();
+  const { inspection, mode, setMode } = useTreeBase();
   const shortcut = useShortcutLabel();
   const row = selected ? rows.get(selected) : undefined;
   const code = React.useMemo(() => JSON.stringify(document, null, 2), [document]);
   return (
     <>
+      <TabsContent value="runtime" className="m-0 p-3">
+        {mode === "inspect" ? (
+          <MachineInspectionPanel
+            inspection={inspection}
+            onReveal={(machineId, id, type) => {
+              const target = topology.rows.find(
+                (row) =>
+                  row.machineId === machineId &&
+                  row.elementId === id &&
+                  row.kind === (type === "transition" ? "transition" : "node"),
+              );
+              if (target) onReveal(target.id);
+            }}
+          />
+        ) : (
+          <div className="grid gap-2 text-ui text-muted-foreground">
+            <p>Local simulation is separate from supplied observations.</p>
+            <Button variant="outline" size="sm" onClick={() => setMode("inspect")}>
+              Inspect supplied run
+            </Button>
+          </div>
+        )}
+        {row && (
+          <MachinePresentationDetails
+            presentation={inspection.props.presentation}
+            id={row.elementId}
+            kind={row.kind === "transition" ? "transition" : "node"}
+          />
+        )}
+      </TabsContent>
       <TabsContent
         value="details"
         className="m-0 p-3 duration-200 data-[state=active]:animate-in data-[state=active]:fade-in-0 max-sm:pt-2"

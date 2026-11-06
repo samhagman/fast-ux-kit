@@ -5,7 +5,8 @@
  */
 import {
   getEnabledMachineTransitions,
-  sendMachineEvent,
+  explainMachineTransition,
+  previewMachineEvent,
   type MachineDocument,
   type MachineEvent,
   type MachineGraph,
@@ -20,8 +21,9 @@ import {
   machineEvent,
   runMachineScenario,
   type ScenarioStep,
+  type ScenarioResult,
 } from "../machine-shared/use-machine-simulation.js";
-import { describeBlocked, guardIsFalse, plural } from "../machine-shared/machine-copy.js";
+import { describeBlocked, plural } from "../machine-shared/machine-copy.js";
 
 /** The shared vocabulary (one `plural`, one `modCombo` for both machine components). */
 export { modCombo, plural } from "../machine-shared/machine-copy.js";
@@ -71,21 +73,10 @@ export function explainBlocked(
 ): string {
   const name = t.event || "Automatic transition";
   if (!t.guard) return `${name} — another ${name} transition takes priority`;
-  const guards = runtime?.guards;
-  const guard = guards && Object.hasOwn(guards, t.guard) ? guards[t.guard] : undefined;
-  if (!guard) return describeBlocked(name, `guard ${t.guard} isn’t provided by the host`);
-  try {
-    const result: unknown = guard(context, event);
-    if (result && typeof (result as { then?: unknown }).then === "function")
-      return describeBlocked(
-        name,
-        `guard ${t.guard} returned a promise; guards must be synchronous`,
-      );
-    if (result !== true) return describeBlocked(name, guardIsFalse(t.guard));
-  } catch {
-    return describeBlocked(name, `guard ${t.guard} threw`);
-  }
-  return `${name} — another ${name} transition takes priority`;
+  const explanation = explainMachineTransition(t, context, event, runtime);
+  return explanation === "another transition takes priority"
+    ? `${name} — another ${name} transition takes priority`
+    : describeBlocked(name, explanation);
 }
 
 /** Why a scripted scenario step changed nothing, explained against the snapshot it was sent to. */
@@ -109,6 +100,8 @@ export function explainStep(
 }
 
 export interface MachineTreeScenarioReport {
+  readonly expectedActiveIds?: readonly string[];
+  readonly result?: ScenarioResult;
   /** `undefined` when the scenario declares no `expectedActiveIds` (or it was stopped). */
   readonly passed: boolean | undefined;
   /** One sentence per refused step ("Step 2: DECIDE blocked — …"). */
@@ -136,6 +129,8 @@ export function scenarioReport(
 ): MachineTreeScenarioReport {
   const result = runMachineScenario(document, graph.id, scenario, runtime ?? {});
   return {
+    expectedActiveIds: scenario.expectedActiveIds,
+    result,
     passed: result.passed,
     blocked: result.blocked.map((step) => stepSentence(step, graph, runtime)),
   };
@@ -238,23 +233,19 @@ export function previewEvent(
   stateRowIds: ReadonlyMap<string, string>,
   runtime: MachineRuntimeOptions | undefined,
 ): MachineTreePreview | undefined {
-  let next: MachineSnapshot;
+  let next: ReturnType<typeof previewMachineEvent>;
   try {
-    next = sendMachineEvent(document, snapshot, event, runtime ?? {});
+    next = previewMachineEvent(document, snapshot, event, runtime);
   } catch {
     return undefined;
   }
-  if (next.sequence === snapshot.sequence) return undefined;
+  if (!next) return undefined;
   const before = deepestIds(graph, snapshot.activeIds);
   const after = deepestIds(graph, next.activeIds);
   const toRows = (ids: Iterable<string>) =>
     new Set([...ids].map((id) => stateRowIds.get(id)).filter((id): id is string => !!id));
   // Re-entered states (self-transitions) count as both left and entered.
-  const entered = new Set(
-    next.trace
-      .filter((entry) => entry.sequence > snapshot.sequence)
-      .flatMap((entry) => entry.entered ?? []),
-  );
+  const entered = new Set(next.entered);
   return {
     event: event.type,
     enter: toRows(after.filter((id) => entered.has(id) || !before.includes(id))),

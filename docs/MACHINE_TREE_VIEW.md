@@ -1,4 +1,65 @@
-# Machine Tree View
+# Machine Tree
+
+The polished hierarchy view is `MachineTree` from
+`@samhagman/fast-ux-kit/machine-tree`. It uses wrapping nested blocks, shared
+shadcn-style controls and Base UI. It does not import the canvas or ELK.
+
+```tsx
+import { MachineTree } from "@samhagman/fast-ux-kit/machine-tree";
+import { machineTreeRowId } from "@samhagman/fast-ux-kit/machine";
+import "@samhagman/fast-ux-kit/tokens.css";
+import "@samhagman/fast-ux-kit/machine-tree.css";
+
+<MachineTree
+  document={document}
+  inspectionSession={session}
+  defaultFocusedRowId={machineTreeRowId("node", document.rootId, "packing")}
+/>;
+```
+
+Use the same [inspection session and controls](MACHINE_INSPECTION.md) as the
+polished canvas. The Run panel includes the shared timeline, observation-specific
+pending work, optional diagnostics and app actions. Exact active leaves have a
+rail and dot; ancestors communicate activity within, including hidden active
+leaves when folded. Inspect run never sends a local simulation event.
+
+`mode`, `defaultMode` and `onModeChange` use `view | simulate | inspect`. Without
+an explicit default, supplying an inspection session starts in inspect. Local
+simulation and supplied observations stay separate. Passing the existing
+`simulation` prop still shares a local run with another view; inspecting a host
+run hides that local run without stopping the host-owned simulation. When mode is
+controlled, the app must accept a requested simulation mode before execution can
+start. A refused mode proposal does not start the interpreter.
+
+Selection uses `selectedId` / `defaultSelectedId` / `onSelectedChange`; folding
+uses `collapsedIds` / `defaultCollapsedIds` / `onCollapsedChange`; search uses
+`query` / `defaultQuery` / `onQueryChange`. These use core row IDs, not state IDs.
+`activeStates` still presents host activity outside inspection when no local run
+is displayed. Existing simulation, panel, search and composition APIs remain.
+
+Focus container shows one container in place. `focusedRowId`,
+`defaultFocusedRowId` and `onFocusedRowChange` coordinate that view externally.
+It preserves saved folds and selection, normalizes the visible root's ARIA level,
+and keeps search global. Full hierarchy restores the full view; breadcrumb
+containers navigate the focus. Reveal can request leaving a focused container to
+show a target elsewhere, respecting controlled refusal. None of these operations
+edits the document or executes a workflow.
+
+The Simulation panel retains the existing dry-run previews, payload editor,
+verified scenario payload suggestions, and shared run controls. Reports include
+expected/actual active states and Inspect failure; inspecting a stored report
+does not rerun actions. Local history includes captured timestamps and bounded
+comparisons only between actually retained contexts.
+
+Composition remains `MachineTreeRoot`, `MachineTreeToolbar`, `MachineTreeCanvas`,
+`MachineTreePanel`, `MachineTreeFooter` and `useMachineTree()`. The public controller
+also exposes `mode`, `setMode`, `focusedRowId` and `focusContainer`.
+
+## Legacy `/react` API
+
+The following reference describes `MachineTreeView` exported from `/react`,
+which is a different, older component. Its `value`, expanded-ID controls and
+render hooks are not the polished `MachineTree` interface. Both remain supported.
 
 `MachineTreeView` is a read-only hierarchy-first React presentation of a
 `MachineDocument`. It is separate from the spatial `MachineView`, not a mode,

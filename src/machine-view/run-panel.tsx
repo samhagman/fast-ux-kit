@@ -20,6 +20,7 @@ import { Textarea } from "../components/ui/textarea.js";
 import { Label } from "../components/ui/label.js";
 import { plural, useMachine } from "./machine-context.js";
 import { Section } from "./inspector-fields.js";
+import { MachineValue } from "../machine-shared/machine-inspection-panel.js";
 
 /** Run tab: start, the current configuration, events to send, payload, context, scenarios. */
 export function RunPanel() {
@@ -237,9 +238,7 @@ export function RunPanel() {
         )}
       </Section>
       <Section title="Context">
-        <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-2.5 font-mono text-[11px] leading-4">
-          {JSON.stringify(mv.snapshot.context, null, 2)}
-        </pre>
+        <MachineValue value={mv.snapshot.context} label="Local context" />
       </Section>
       <Scenarios />
     </>
@@ -306,7 +305,7 @@ function Scenarios() {
                 className="grid min-h-8 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 rounded-md border px-2.5 py-1 text-start transition-colors hover:bg-muted/60 aria-disabled:cursor-default aria-disabled:opacity-60 coarse:min-h-11"
               >
                 {mv.playing === scenario.id ? (
-                  <Sparkles className="size-3.5 animate-pulse text-signal" />
+                  <Sparkles className="size-3.5 text-signal" />
                 ) : (
                   <ListVideo className="size-3.5 text-muted-foreground" />
                 )}
@@ -320,6 +319,25 @@ function Scenarios() {
                 </span>
                 <ScenarioVerdict outcome={outcome} />
               </button>
+              {outcome && (
+                <details className="px-2 py-1 text-2xs text-muted-foreground">
+                  <summary className="cursor-pointer">
+                    {outcome.cancelled ? "Cancelled" : "Scenario result"}
+                  </summary>
+                  <p>
+                    Expected: {outcome.expectedActiveIds?.join(", ") ?? "No expectation supplied"}
+                  </p>
+                  <p>Actual: {outcome.activeIds.join(", ") || "Unavailable"}</p>
+                  {outcome.blockedReasons?.map((reason, index) => (
+                    <p key={index}>{reason}</p>
+                  ))}
+                  {outcome.result && (
+                    <Button size="sm" variant="ghost" onClick={() => mv.inspectScenario(outcome)}>
+                      Inspect {outcome.passed === false ? "failure" : "result"}
+                    </Button>
+                  )}
+                </details>
+              )}
             </li>
           );
         })}
