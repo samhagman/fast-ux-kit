@@ -43,18 +43,24 @@ const ROUTES: readonly { id: Route; label: string; icon: typeof ListTree; hint: 
 ];
 
 function useRoute(): Route {
-  const read = (): Route => {
+  /** The route a hash names, or null for an in-page anchor (`#component-details`). */
+  const named = (): Route | null => {
     const hash = window.location.hash.replace(/^#\/?/, "");
+    if (!hash) return "overview";
     if (["machine-tree-view"].includes(hash)) return "machine-tree";
     if (
       ["outline", "editor", "outliner-lab", "outline-search-lab", "outline-note-lab"].includes(hash)
     )
       return "outliner";
-    return ROUTES.find((route) => route.id === hash)?.id ?? "overview";
+    // `#/components/DatePicker` is the components page, scrolled to that family.
+    const page = window.location.hash.startsWith("#/") ? hash.split("/")[0] : hash;
+    return ROUTES.find((route) => route.id === page)?.id ?? null;
   };
+  const read = (): Route => named() ?? "overview";
   const [route, setRoute] = React.useState<Route>(read);
   React.useEffect(() => {
-    const on = () => setRoute(read());
+    // An anchor inside a page keeps the page it is on.
+    const on = () => setRoute((was) => named() ?? was);
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);
