@@ -2,6 +2,10 @@
 
 The implementation is native React and independently authored. It has no runtime bridge to another UI framework. Portable state transitions are exported separately from React components.
 
+## Extensible note pages
+
+Use the additive `NotePageView` and portable page registry to host outlines alongside trusted custom editors. See [Note page extensions](NOTE_PAGE_EXTENSIONS.md) for typed definitions, versioned JSON, explicit migrations and unknown-type preservation.
+
 ## Workspace bookmarks
 
 `OutlinerWorkspace` from `@samhagman/fast-ux-kit/outliner` accepts

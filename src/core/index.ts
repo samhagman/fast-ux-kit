@@ -494,3 +494,5 @@ export * from "./outliner/mirrors.js";
 export * from "./outliner/search-filters.js";
 export * from "./outliner/workspace.js";
 export * from "./outliner/library.js";
+
+export * from "./note-pages.js";
