@@ -1,4 +1,40 @@
-# 0.2.0 verification
+# 0.3.0 verification
+
+This release finishes the 86 component families to the standard of the outliner
+and rebuilds the Studio gallery as one scrolling page. Component anatomy, states,
+size and density variants, motion and light/dark themes were reworked per family;
+no export, compound part or prop was removed or renamed. New props are optional.
+
+Behavior changes to note when upgrading:
+
+- There is no global minimum control size. Components take the size their variant
+  gives them (`xs` 24px, `sm` 28px, default 32px, `lg` 36px, new `xl` 44px), so
+  most controls are smaller on desktop than in 0.2.0. Touch layouts choose a
+  larger size. The outliner and machine views keep their own 44px touch targets.
+- Field text is 14px with a mouse or trackpad and 16px on touch devices
+  (`--fux-control-font-size`).
+- Focus rings are thinner and lighter (2px at 20% instead of 3px at 50%).
+- `Row` centres its items by default. Some undocumented `fux-*` class names that
+  no markup uses any more are gone (Avatar, Tabs, Disclosure, Tag and others).
+- `PasswordInput` names its reveal button "Show password" / "Hide password"
+  instead of using `aria-pressed`.
+- `TokenField` with suggestions is a combobox with a suggestion list; pass
+  `autocomplete={false}` for the plain field. Without suggestions it is a textbox.
+
+Fixed along the way: shared separators and scroll bars had no size (orientation
+variants Base UI never set); `cn()` dropped the theme's `text-ui` and `text-2xs`;
+forced-colors fills for slider, progress, meter and radio indicators.
+
+The release gate is the same as 0.2.0: a clean install, `npm run check`,
+independent packed consumer installation, and Studio typecheck, tests and
+production build, with exact results in the release pull request. In the browser,
+all 86 demos render without errors or horizontal overflow at desktop width; each
+area's families were checked at 375px with light and dark spot checks; and the
+pagination strip, token autocomplete, live search and scroll-synced navigation were
+driven with real key presses. Physical iOS/Android devices, native IMEs, VoiceOver and TalkBack
+have not been verified for this release.
+
+# 0.2.0 verification (previous release)
 
 This release adds shared supplied-observation inspection to the polished canvas
 and hierarchy views, then improves their existing local simulation and navigation.

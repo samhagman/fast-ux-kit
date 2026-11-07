@@ -1,0 +1,200 @@
+/* basic components: styles the Tailwind classes in the markup cannot express. */
+
+/* Links ---------------------------------------------------------------------------------- */
+.fux-link {
+  gap: 0.25rem;
+  color: var(--foreground);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklch, currentColor 30%, transparent);
+  text-underline-offset: 0.25em;
+  border-radius: 0.25rem;
+  transition:
+    color 0.15s var(--ease-standard),
+    text-decoration-color 0.15s var(--ease-standard);
+}
+.fux-link:hover {
+  color: var(--signal);
+  text-decoration-color: currentColor;
+}
+.fux-link:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 2px;
+}
+.fux-link[aria-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.fux-link.fux-link-inline {
+  display: inline;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+.fux-link-inline > svg {
+  display: inline;
+  margin-inline-start: 0.25rem;
+  vertical-align: -0.125em;
+}
+
+/* Toolbar -------------------------------------------------------------------------------- */
+.fux-toolbar {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--card);
+  box-shadow: 0 1px 2px color-mix(in oklch, black 5%, transparent);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.fux-toolbar-group {
+  gap: 0.125rem;
+}
+/* Toolbar items share one compact height (28px, the scale's sm step): buttons and inputs line up. */
+.fux-toolbar-button {
+  min-block-size: 1.75rem;
+  min-inline-size: 2rem;
+  padding: 0 0.75rem;
+  border-color: transparent;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s var(--ease-standard),
+    color 0.15s var(--ease-standard),
+    box-shadow 0.15s var(--ease-standard);
+}
+.fux-toolbar-button svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+  flex-shrink: 0;
+}
+.fux-toolbar-button.fux-control:hover:not(:disabled):not([data-disabled]) {
+  background: var(--muted);
+}
+.fux-toolbar-button[aria-pressed="true"],
+.fux-toolbar-button[data-pressed] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.fux-toolbar-button:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 20%, transparent);
+}
+.fux-toolbar-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.fux-toolbar-link {
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+/* Panel ---------------------------------------------------------------------------------- */
+.fux-panel.fux-surface {
+  --fux-panel-pad: 1.25rem;
+  padding: var(--fux-panel-pad);
+  border-color: var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 1px 2px color-mix(in oklch, black 5%, transparent);
+}
+.fux-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-block: calc(var(--fux-panel-pad, 1.25rem) * -1) var(--fux-panel-pad, 1.25rem);
+  margin-inline: calc(var(--fux-panel-pad, 1.25rem) * -1);
+  padding: 1rem var(--fux-panel-pad, 1.25rem) 0.875rem;
+  border-block-end: 1px solid var(--hairline);
+}
+.fux-panel-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+}
+.fux-panel-description {
+  margin: 0.125rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+.fux-panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-block: var(--fux-panel-pad, 1.25rem) calc(var(--fux-panel-pad, 1.25rem) * -1);
+  margin-inline: calc(var(--fux-panel-pad, 1.25rem) * -1);
+  padding: 0.75rem var(--fux-panel-pad, 1.25rem);
+  border-block-start: 1px solid var(--hairline);
+  border-end-start-radius: inherit;
+  border-end-end-radius: inherit;
+  background: color-mix(in oklch, var(--muted) 55%, transparent);
+}
+
+/* Form ----------------------------------------------------------------------------------- */
+.fux-field.fux-form {
+  gap: 1.25rem;
+}
+
+/* Progress ------------------------------------------------------------------------------- */
+@keyframes fux-progress-sweep {
+  from {
+    inset-inline-start: -40%;
+  }
+  to {
+    inset-inline-start: 100%;
+  }
+}
+.fux-progress-indicator[data-indeterminate] {
+  position: absolute;
+  inline-size: 40%;
+  animation: fux-progress-sweep 1.4s var(--ease-standard) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fux-toolbar-button,
+  .fux-link {
+    transition: none;
+  }
+  .fux-toolbar-button:active:not(:disabled) {
+    transform: none;
+  }
+  .fux-progress-indicator[data-indeterminate] {
+    animation: none;
+    inset-inline-start: 0;
+    inline-size: 100%;
+    opacity: 0.4;
+  }
+}
+
+@media (forced-colors: active) {
+  .fux-toolbar,
+  .fux-panel.fux-surface {
+    border-color: ButtonText;
+  }
+  .fux-toolbar-button[aria-pressed="true"],
+  .fux-toolbar-button[data-pressed] {
+    border-color: Highlight;
+  }
+  /* Fills drawn as backgrounds vanish in forced colours; draw them in the system highlight. */
+  .fux-slider-indicator,
+  .fux-progress-indicator,
+  .fux-meter-indicator,
+  .fux-radio-indicator {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+}

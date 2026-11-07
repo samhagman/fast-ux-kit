@@ -24,7 +24,7 @@ The final release snapshot also needs a browser review of the gallery and the
 three tools. Check these behaviors at desktop and narrow mobile widths.
 
 - Keyboard entry, roving focus, visible focus and return from dismissed overlays.
-- Pointer and touch interaction, 44px targets and responsive overflow.
+- Pointer and touch interaction, distinct size variants (`xs` to `xl`) and responsive overflow.
 - Light and dark themes, RTL layout, reduced motion and forced colors.
 - Canvas drawing, cropping, downloads and native clipboard behavior.
 - Long content, empty state, disabled controls, errors and controlled updates.

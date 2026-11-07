@@ -137,8 +137,9 @@ accept their documented value types. The catalog also contains native controls
 where a browser element provides the required behavior.
 
 Use the shared CSS variables for theme customization and one focus or overlay
-manager for each interactive element. Support keyboard access, 44px targets,
-logical direction and reduced motion when composing components.
+manager for each interactive element. Support keyboard access, logical direction
+and reduced motion when composing components. Sizes come from each variant
+(`xs` to `xl`); pick the one that fits the layout.
 
 Rich renderers are trusted application code. Enforce storage authorization on the
 server and validate imported data before use.

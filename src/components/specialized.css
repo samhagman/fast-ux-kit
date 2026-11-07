@@ -1,0 +1,146 @@
+/* specialized components: styles the Tailwind classes in the markup cannot express. */
+
+/* JsonTreeView: type colours come from tokens, mixed toward the foreground so they hold contrast
+   on both themes. Indentation guides and the selection bar are the Tree's own. */
+.fux-json {
+  --fux-json-string: color-mix(in oklch, var(--success) 72%, var(--foreground));
+  --fux-json-number: color-mix(in oklch, var(--signal) 78%, var(--foreground));
+  --fux-json-boolean: color-mix(in oklch, var(--warning) 68%, var(--foreground));
+  --fux-json-null: var(--muted-foreground);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8125rem;
+}
+.fux-json [role="treeitem"] {
+  position: relative;
+}
+.fux-json [data-json-part="key"] {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.fux-json [data-json-part="key"][data-index] {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.fux-json [data-json-part="colon"] {
+  margin-inline-start: -0.375rem;
+  color: var(--muted-foreground);
+}
+.fux-json [data-json-part="count"] {
+  color: var(--muted-foreground);
+}
+.fux-json [data-json-kind="string"] {
+  color: var(--fux-json-string);
+}
+.fux-json [data-json-kind="number"],
+.fux-json [data-json-kind="bigint"] {
+  color: var(--fux-json-number);
+}
+.fux-json [data-json-kind="boolean"] {
+  color: var(--fux-json-boolean);
+}
+.fux-json [data-json-kind="null"],
+.fux-json [data-json-kind="undefined"],
+.fux-json [data-json-kind="note"] {
+  color: var(--fux-json-null);
+  font-style: italic;
+}
+/* A JSON view is dense: rows are 1.75rem and the disclosure its 1.5rem glyph box. Long values
+   truncate instead of overflowing. */
+.fux-json [role="treeitem"] {
+  min-block-size: 1.75rem;
+}
+.fux-json [role="treeitem"] > span:last-child {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+/* Marquee: two equal copies slide by half the track, so the loop is seamless. Edges fade out. */
+.fux-marquee-viewport {
+  container-type: inline-size;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 2rem,
+    #000 calc(100% - 2rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 2rem,
+    #000 calc(100% - 2rem),
+    transparent
+  );
+}
+.fux-marquee-track {
+  display: flex;
+  inline-size: max-content;
+  animation: fux-marquee-scroll var(--marquee-duration, 20s) linear infinite;
+}
+.fux-marquee-copy {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-around;
+  gap: 2rem;
+  min-inline-size: 100cqw;
+  padding-inline-end: 2rem;
+}
+.fux-marquee-viewport:hover .fux-marquee-track,
+.fux-marquee-viewport:focus-within .fux-marquee-track,
+[data-slot="marquee"][data-paused] .fux-marquee-track {
+  animation-play-state: paused;
+}
+@keyframes fux-marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.fux-marquee-viewport:dir(rtl) .fux-marquee-track {
+  animation-name: fux-marquee-scroll-rtl;
+}
+@keyframes fux-marquee-scroll-rtl {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fux-marquee-viewport {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .fux-marquee-track {
+    animation: none;
+    inline-size: auto;
+  }
+  .fux-marquee-copy {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding-inline-end: 0;
+  }
+  .fux-marquee-copy[aria-hidden] {
+    display: none;
+  }
+}
+
+/* Carousel: the arrows and dots drive it, so the scrollbar stays out of the way. */
+.fux-carousel-viewport {
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+.fux-carousel-viewport::-webkit-scrollbar {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fux-carousel-viewport {
+    scroll-behavior: auto;
+  }
+}

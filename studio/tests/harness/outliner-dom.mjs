@@ -11,6 +11,8 @@ export const media = {};
 export async function startVite() {
   vite ??= await createServer({
     root,
+    // Its own dependency cache: a test run never invalidates a running dev server's.
+    cacheDir: "node_modules/.vite-test",
     logLevel: "error",
     server: { middlewareMode: true, hmr: false, ws: false, watch: null },
     appType: "custom",

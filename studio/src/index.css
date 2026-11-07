@@ -9,6 +9,9 @@
 /* Coarse pointers (phones, tablets) get larger hit areas; fine pointers stay condensed. */
 @custom-variant coarse (@media (pointer: coarse));
 @custom-variant fine (@media (pointer: fine));
+/* Base UI marks orientation with data-orientation; the shared primitives style data-horizontal: and data-vertical:. */
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
 
 /*
  * Fast UX "frontier" theme: shadcn structure, flat Material-style state layers,

@@ -3,7 +3,9 @@
 import * as React from "react";
 import { Slider } from "@base-ui/react/slider";
 import { DirectionProvider, useDirection } from "@base-ui/react/direction-provider";
+import { CheckIcon, CircleAlertIcon } from "lucide-react";
 import { cn } from "../lib/utils.js";
+import { Input } from "./ui/input.js";
 import { useResolvedDirection } from "../lib/direction.js";
 import {
   converter,
@@ -23,6 +25,18 @@ const rgb = converter("rgb");
 const hsl = converter("hsl");
 const hsv = converter("hsv");
 const bounded = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+/** Feeds a color into the `--fux-fill` hook that `.fux-color-fill` paints over a checkerboard. */
+const fill = (value: ColorValue | string): React.CSSProperties =>
+  ({ "--fux-fill": typeof value === "string" ? value : value.toString() }) as React.CSSProperties;
+/** Black or white, whichever stays readable on top of the color. */
+function readableOn(value: ColorValue) {
+  const lightness =
+    (0.2126 * value.getChannelValue("red") +
+      0.7152 * value.getChannelValue("green") +
+      0.0722 * value.getChannelValue("blue")) /
+    255;
+  return value.getChannelValue("alpha") < 0.45 || lightness > 0.62 ? "#111" : "#fff";
+}
 
 /** A portable color value whose channels use familiar CSS units. */
 export class ColorValue {
@@ -233,10 +247,6 @@ export function ColorArea({
       aria-valuenow={Math.round(value.getChannelValue(xChannel))}
       aria-valuetext={`${xChannel} ${Math.round(x * 100)}%, ${yChannel} ${Math.round(y * 100)}%`}
       style={{
-        position: "relative",
-        width: "100%",
-        height: 176,
-        touchAction: "none",
         background:
           colorSpace === "hsl" && xChannel === "saturation" && yChannel === "lightness"
             ? `linear-gradient(to top, transparent 50%, white), linear-gradient(to bottom, transparent 50%, black), linear-gradient(to ${direction === "rtl" ? "left" : "right"}, hsl(${value.getChannelValue("hue")} 0% 50%), hsl(${value.getChannelValue("hue")} 100% 50%))`
@@ -286,18 +296,13 @@ export function ColorArea({
     >
       <span
         aria-hidden="true"
-        className="fux-color-thumb"
+        className="fux-color-thumb fux-color-fill"
         style={{
+          ...fill(value),
           position: "absolute",
           insetInlineStart: `${x * 100}%`,
           top: `${(1 - y) * 100}%`,
           transform: `translate(${direction === "rtl" ? "50%" : "-50%"}, -50%)`,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          border: "2px solid white",
-          boxShadow: "0 0 0 1px #0008",
-          background: value.toString(),
         }}
       />
     </div>
@@ -347,6 +352,7 @@ export function ColorSlider({
         dir={props.dir ?? explicitDirection}
         id={props.id}
         className={cn("fux-color-slider", "fux-slider", props.className)}
+        data-channel={channel}
         style={props.style}
         orientation={orientation}
         value={value.getChannelValue(channel)}
@@ -370,34 +376,17 @@ export function ColorSlider({
         </div>
         <Slider.Control
           className="fux-slider__control"
-          style={{
-            minHeight: 44,
-            display: "flex",
-            alignItems: "center",
-            paddingInline: orientation === "horizontal" ? 12 : 0,
-          }}
+          style={{ paddingInline: orientation === "horizontal" ? 12 : 0 }}
         >
           <Slider.Track
-            className="fux-slider__track"
-            style={{
-              position: "relative",
-              width: "100%",
-              height: orientation === "vertical" ? 160 : 12,
-              background: gradient,
-            }}
+            className="fux-slider__track fux-checker"
+            style={{ "--fux-gradient": gradient } as React.CSSProperties}
           >
             <Slider.Thumb
-              className="fux-color-thumb"
+              className="fux-color-thumb fux-color-fill"
               aria-labelledby={label == null ? props["aria-labelledby"] : labelId}
               aria-label={label == null ? (props["aria-label"] ?? channel) : undefined}
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: "50%",
-                border: "2px solid white",
-                boxShadow: "0 0 0 1px #0008",
-                background: value.toString(),
-              }}
+              style={fill(value)}
             />
           </Slider.Track>
         </Slider.Control>
@@ -433,6 +422,7 @@ export function ColorField({ label, hint, error, isInvalid, name, ...props }: Co
       setDraft(current);
     }
   };
+  const invalid = Boolean(error) || isInvalid;
   return (
     <div
       ref={props.ref}
@@ -443,41 +433,56 @@ export function ColorField({ label, hint, error, isInvalid, name, ...props }: Co
       <label className="fux-label" htmlFor={id}>
         {label}
       </label>
-      <input
-        id={id}
-        name={name}
-        className="fux-input"
-        value={draft}
-        disabled={state.disabled}
-        readOnly={state.readOnly}
-        aria-invalid={Boolean(error) || isInvalid || undefined}
-        aria-describedby={hint || error ? `${id}-details` : undefined}
-        onChange={(event) => {
-          if (!state.disabled && !state.readOnly) setDraft(event.target.value);
-        }}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commit();
-          }
-          if (event.key === "Escape") setDraft(current);
-        }}
-      />
+      <div className="fux-color-field__control">
+        <span
+          aria-hidden="true"
+          className="fux-color-field__chip fux-color-fill fux-checker"
+          style={fill(state.color)}
+        />
+        <Input
+          id={id}
+          name={name}
+          className="fux-color-field__input"
+          value={draft}
+          disabled={state.disabled}
+          readOnly={state.readOnly}
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={invalid || undefined}
+          aria-describedby={hint || error ? `${id}-details` : undefined}
+          onChange={(event) => {
+            if (!state.disabled && !state.readOnly) setDraft(event.target.value);
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commit();
+            }
+            if (event.key === "Escape") setDraft(current);
+          }}
+        />
+      </div>
       {(hint || error) && (
-        <span id={`${id}-details`} className={error ? "fux-error" : "fux-hint"}>
-          {error ?? hint}
+        <span
+          id={`${id}-details`}
+          className={cn("fux-field-message", error ? "fux-error" : "fux-hint")}
+        >
+          {error && <CircleAlertIcon aria-hidden="true" />}
+          <span>{error ?? hint}</span>
         </span>
       )}
     </div>
   );
 }
 
+export type ColorSwatchSize = "sm" | "md" | "lg";
 export interface ColorSwatchProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "color"> {
   color?: ColorInput;
+  size?: ColorSwatchSize;
   ref?: React.Ref<HTMLDivElement>;
 }
-export function ColorSwatch({ color, style, className, ...props }: ColorSwatchProps) {
+export function ColorSwatch({ color, size = "md", style, className, ...props }: ColorSwatchProps) {
   const parent = React.useContext(ColorContext);
   const value = color ? parseColor(color) : (parent?.color ?? parseColor("#000000"));
   return (
@@ -485,9 +490,12 @@ export function ColorSwatch({ color, style, className, ...props }: ColorSwatchPr
       {...props}
       role="img"
       aria-label={props["aria-label"] ?? value.toString("hex")}
-      className={cn("fux-color-swatch", className)}
-      style={{ minWidth: 28, minHeight: 28, backgroundColor: value.toString(), ...style }}
-    />
+      data-size={size}
+      className={cn("fux-color-swatch fux-checker", className)}
+      style={style}
+    >
+      <span className="fux-color-swatch__fill" style={{ backgroundColor: value.toString() }} />
+    </div>
   );
 }
 
@@ -499,9 +507,15 @@ export interface ColorSwatchOption {
 }
 export interface ColorSwatchPickerProps extends ColorRootProps {
   label: string;
+  size?: ColorSwatchSize;
   colors: readonly (string | ColorSwatchOption)[];
 }
-export function ColorSwatchPicker({ label, colors, ...props }: ColorSwatchPickerProps) {
+export function ColorSwatchPicker({
+  label,
+  colors,
+  size = "md",
+  ...props
+}: ColorSwatchPickerProps) {
   const state = useColorState(props);
   const direction = useDirection();
   return (
@@ -510,29 +524,25 @@ export function ColorSwatchPicker({ label, colors, ...props }: ColorSwatchPicker
       className={cn("fux-color-swatches", props.className)}
       role="listbox"
       aria-label={label}
-      style={{ display: "flex", gap: 8, flexWrap: "wrap", ...props.style }}
+      data-size={size}
+      style={props.style}
     >
       {colors.map((entry, index) => {
         const item = typeof entry === "string" ? { color: entry } : entry;
         const value = parseColor(item.color);
         const disabled = state.disabled || item.isDisabled || item.disabled;
+        const selected = state.color.toString("hexa") === value.toString("hexa");
         return (
           <button
             key={index}
             type="button"
             role="option"
             aria-label={item.label ?? value.toString("hex")}
-            aria-selected={state.color.toString("hexa") === value.toString("hexa")}
+            aria-selected={selected}
             aria-disabled={disabled || undefined}
             disabled={disabled}
-            className="fux-color-swatch"
-            style={{
-              width: 44,
-              height: 44,
-              backgroundColor: value.toString(),
-              border: "1px solid currentColor",
-              borderRadius: 6,
-            }}
+            data-size={size}
+            className="fux-color-swatch fux-checker"
             onClick={() => {
               state.setColor(value);
               state.commit(value);
@@ -573,7 +583,19 @@ export function ColorSwatchPicker({ label, colors, ...props }: ColorSwatchPicker
                     : (current + increment + buttons.length) % buttons.length;
               buttons[next]?.focus();
             }}
-          />
+          >
+            <span
+              className="fux-color-swatch__fill"
+              style={{ backgroundColor: value.toString() }}
+            />
+            {selected && (
+              <CheckIcon
+                aria-hidden="true"
+                className="fux-color-swatch__check"
+                style={{ color: readableOn(value) }}
+              />
+            )}
+          </button>
         );
       })}
     </div>
@@ -622,13 +644,7 @@ export function ColorWheel({
       aria-valuetext={`${Math.round(hue)} degrees`}
       aria-disabled={state.disabled || undefined}
       className={cn("fux-color-wheel", props.className)}
-      style={{
-        position: "relative",
-        width: outerRadius * 2,
-        height: outerRadius * 2,
-        touchAction: "none",
-        ...props.style,
-      }}
+      style={{ width: outerRadius * 2, height: outerRadius * 2, ...props.style }}
       onKeyDown={(event) => {
         if (state.disabled || state.readOnly) return;
         const delta =
@@ -669,26 +685,27 @@ export function ColorWheel({
         className="fux-color-wheel__track"
         aria-hidden="true"
         style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: "50%",
           background: "conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red)",
           mask: `radial-gradient(transparent ${innerRadius}px, #000 ${innerRadius + 1}px)`,
         }}
       />
       <span
         aria-hidden="true"
-        className="fux-color-thumb"
+        className="fux-color-wheel__preview fux-color-fill fux-checker"
         style={{
-          position: "absolute",
+          ...fill(state.color),
+          width: innerRadius * 1.1,
+          height: innerRadius * 1.1,
+        }}
+      />
+      <span
+        aria-hidden="true"
+        className="fux-color-thumb fux-color-fill"
+        style={{
+          ...fill(`hsl(${hue} 100% 50%)`),
           left: outerRadius + Math.cos((hue * Math.PI) / 180) * radius,
           top: outerRadius + Math.sin((hue * Math.PI) / 180) * radius,
           transform: "translate(-50%, -50%)",
-          width: 20,
-          height: 20,
-          borderRadius: "50%",
-          border: "2px solid white",
-          boxShadow: "0 0 0 1px #0008",
         }}
       />
     </div>
@@ -714,14 +731,14 @@ export function ColorPicker({
   return (
     <ColorContext.Provider value={state}>
       <fieldset className="fux-color-picker" disabled={state.disabled}>
-        <legend className="fux-label">{label}</legend>
+        <legend className="sr-only">{label}</legend>
+        <div className="fux-color-picker__header" aria-hidden="true">
+          <span className="fux-color-picker__title">{label}</span>
+        </div>
         <ColorArea label={labels?.area ?? `${label} saturation and brightness`} colorSpace="hsb" />
         <ColorSlider channel="hue" colorSpace="hsb" label={labels?.hue ?? "Hue"} />
         {showAlpha && <ColorSlider channel="alpha" label={labels?.alpha ?? "Opacity"} />}
-        <div className="fux-color-picker__value">
-          <ColorSwatch />
-          <ColorField label={labels?.value ?? "Color value"} />
-        </div>
+        <ColorField label={labels?.value ?? "Color value"} />
         {colors && <ColorSwatchPicker label={labels?.presets ?? "Preset colors"} colors={colors} />}
         {children}
       </fieldset>

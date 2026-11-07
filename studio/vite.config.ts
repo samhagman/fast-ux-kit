@@ -5,6 +5,16 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Libraries the kit loads lazily (on first use) are pre-bundled up front: discovered mid-session,
+  // the dev server re-optimises and rejects the in-flight import ("Outdated Optimize Dep").
+  optimizeDeps: {
+    include: [
+      "signature_pad",
+      "elkjs/lib/elk.bundled.js",
+      "micromark",
+      "micromark-extension-gfm-strikethrough",
+    ],
+  },
   resolve: {
     dedupe: [
       "react",

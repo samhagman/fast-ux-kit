@@ -1,2 +1,6 @@
 @import "./tokens.css";
 @import "./components/catalog.css";
+@import "./components/basic.css";
+@import "./components/collections.css";
+@import "./components/overlays-media.css";
+@import "./components/specialized.css";

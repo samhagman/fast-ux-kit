@@ -402,7 +402,8 @@ test("token creation skips empty text and associates rejected values with its in
       }}
     />,
   );
-  const input = view.getByRole("combobox", { name: "People" });
+  // No suggestions: a plain text field (it offers no list to choose from).
+  const input = view.getByRole("textbox", { name: "People" });
   fireEvent.keyDown(input, { key: "Enter" });
   assert.deepEqual(created, []);
   fireEvent.change(input, { target: { value: "Unknown" } });

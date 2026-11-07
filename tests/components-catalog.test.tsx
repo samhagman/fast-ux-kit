@@ -167,17 +167,33 @@ for (const entry of catalog) {
   });
 }
 
-test("gallery filtering and navigation keep the selected family usable", async () => {
+test("the gallery is one scrolling page: every family's card, filtered by search, reached from the index", async () => {
   const view = render(createElement(ComponentsPage));
   assert.ok(view.getByRole("heading", { name: "Component library" }));
-  assert.equal(view.container.querySelectorAll("[data-family]").length, 86);
+  assert.equal(
+    view.container.querySelectorAll("[data-family]").length,
+    86,
+    "the index lists every family",
+  );
+  assert.equal(
+    view.container.querySelectorAll("article[id^=family-]").length,
+    86,
+    "one card per family",
+  );
+  assert.equal(view.getAllByRole("tab").length, 14, "one tab per category");
   await act(async () => {
     fireEvent.change(view.getByRole("searchbox"), { target: { value: "ColorWheel" } });
   });
   assert.equal(view.container.querySelectorAll("[data-family]").length, 1);
+  assert.equal(view.container.querySelectorAll("article[id^=family-]").length, 1);
   await act(async () => {
     fireEvent.click(view.container.querySelector('[data-family="ColorWheel"]')!);
   });
+  assert.equal(
+    view.container.querySelector('[data-family="ColorWheel"]')?.getAttribute("aria-current"),
+    "location",
+  );
+  assert.equal(window.location.hash, "#/components/ColorWheel", "the address names the family");
   assert.ok(view.getByRole("heading", { name: "ColorWheel" }));
   assert.ok(view.getByRole("slider", { name: "Hue wheel" }));
 });
