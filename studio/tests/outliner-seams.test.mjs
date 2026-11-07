@@ -210,3 +210,73 @@ test("integrations: host item commands appear in the item menu / phone sheet and
   assert.match(ui.handle.current.exportAs("markdown"), /Clipped from the web/);
   await ui.unmount();
 });
+
+async function pasteImage(ui) {
+  await ui.act(() => {
+    const event = new window.Event("paste", { bubbles: true, cancelable: true });
+    event.clipboardData = {
+      getData: () => "",
+      types: ["Files"],
+      files: [new window.File(["synthetic"], "test.png", { type: "image/png" })],
+    };
+    ui.field().dispatchEvent(event);
+  });
+}
+
+test("image row: empty text retains its ID; delayed attachment respects current read-only", async () => {
+  const nodes = [{ id: "empty", text: "" }];
+  let finish;
+  const onAttach = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  const ui = await mountOutliner({ defaultValue: nodes, onAttach });
+  await ui.edit("empty");
+  await pasteImage(ui);
+  await waitFor(() => !!finish);
+  await ui.rerender({ defaultValue: nodes, onAttach, readOnly: true });
+  await ui.act(() => finish([{ name: "image", href: "/image.png", kind: "image" }]));
+  assert.equal(find(ui.value(), "empty").data?.note, undefined);
+  assert.equal(find(ui.value(), "empty").text, "");
+  await ui.unmount();
+});
+
+test("image row: rejection leaves content unchanged and announces failure", async () => {
+  const ui = await mountOutliner({
+    defaultValue: [{ id: "empty", text: "" }],
+    onAttach: async () => {
+      throw Error("offline");
+    },
+  });
+  await ui.edit("empty");
+  await pasteImage(ui);
+  await waitFor(() => document.body.textContent.includes("could not be attached"));
+  assert.equal(find(ui.value(), "empty").data?.note, undefined);
+  await ui.unmount();
+});
+
+test("composition lifecycle is observable and reports completion after local commit", async () => {
+  const events = [];
+  const collaboration = {
+    canUndo: false,
+    canRedo: false,
+    undo() {},
+    redo() {},
+    onFieldEvent: (event) => events.push(event),
+  };
+  const ui = await mountOutliner({ defaultValue: [{ id: "a", text: "Alpha" }], collaboration });
+  await ui.edit("a");
+  await ui.act(() =>
+    ui.field().dispatchEvent(new window.Event("compositionstart", { bubbles: true })),
+  );
+  await waitFor(() => events.some((e) => e.kind === "composition-start"));
+  await ui.act(() =>
+    ui.field().dispatchEvent(new window.Event("compositionend", { bubbles: true })),
+  );
+  await waitFor(() => events.some((e) => e.kind === "composition-end"));
+  const end = events.find((e) => e.kind === "composition-end");
+  assert.equal(end.itemId, "a");
+  assert.equal(end.field, "title");
+  assert.equal(end.text, "Alpha");
+  await ui.unmount();
+});

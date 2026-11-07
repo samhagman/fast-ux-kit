@@ -2760,6 +2760,7 @@ function ZoomTitle() {
   const ref = React.useRef<HTMLTextAreaElement>(null);
   const liveModule = useLiveField();
   const host = useFieldHost(ol);
+
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -2806,6 +2807,19 @@ function ZoomTitle() {
           findOutlineNode(ol.state.nodes, id)?.node.text ?? ol.external?.resolve(id) ?? null
         }
         hooks={{
+          typed: (el) => reportCollaborationField(ol, hoisted.id, "title", "selection", el),
+          caretMoved: (el) => {
+            reportCollaborationField(ol, hoisted.id, "title", "selection", el);
+            return false;
+          },
+          composition: (active, el) =>
+            reportCollaborationField(
+              ol,
+              hoisted.id,
+              "title",
+              active ? "composition-start" : "composition-end",
+              el,
+            ),
           key: (event) => {
             const mod = event.metaKey || event.ctrlKey;
             const lower = event.key.toLowerCase();
@@ -2858,6 +2872,25 @@ function ZoomTitle() {
         autoFocus
         rows={1}
         aria-label="Zoomed item title"
+        onSelect={(event) =>
+          reportCollaborationField(ol, hoisted.id, "title", "selection", event.currentTarget)
+        }
+        onCompositionStart={(event) =>
+          reportCollaborationField(
+            ol,
+            hoisted.id,
+            "title",
+            "composition-start",
+            event.currentTarget,
+          )
+        }
+        onCompositionEnd={(event) => {
+          const el = event.currentTarget;
+          setTimeout(
+            () => reportCollaborationField(ol, hoisted.id, "title", "composition-end", el),
+            0,
+          );
+        }}
         value={hoisted.text}
         onChange={(event) =>
           ol.dispatch({ type: "text", id: hoisted.id, text: event.target.value, time: Date.now() })
@@ -4431,6 +4464,24 @@ function noticeText(ui: OutlinerUi, notice: FieldNotice): string {
   }
 }
 
+function reportCollaborationField(
+  ol: OutlinerController,
+  itemId: string,
+  field: "title" | "note",
+  kind: "selection" | "composition-start" | "composition-end",
+  el: CaretField,
+) {
+  const backward = el.selectionDirection === "backward";
+  ol.reportField({
+    kind,
+    itemId,
+    field,
+    text: el.value,
+    anchor: backward ? el.selectionEnd : el.selectionStart,
+    head: backward ? el.selectionStart : el.selectionEnd,
+  });
+}
+
 export function RowField({
   row,
   field,
@@ -4446,6 +4497,15 @@ export function RowField({
   const liveModule = useLiveField();
   const LiveField = liveModule?.LiveField;
   const host = useFieldHost(ol);
+  const attachmentOwner = React.useRef({ ol, ui, active: true });
+  attachmentOwner.current.ol = ol;
+  attachmentOwner.current.ui = ui;
+  React.useEffect(() => {
+    attachmentOwner.current.active = true;
+    return () => {
+      attachmentOwner.current.active = false;
+    };
+  }, []);
   const ref = React.useRef<CaretField | null>(null);
   const textareaRef = React.useCallback((el: HTMLTextAreaElement | null) => {
     if (el || ref.current instanceof HTMLTextAreaElement) ref.current = el;
@@ -4453,6 +4513,11 @@ export function RowField({
   /** Set when a handled key moves the caret elsewhere; React's synthetic select for the same
    *  keydown would otherwise report this field's stale selection and undo that move. */
   const suppressSelect = React.useRef(false);
+  const reportField = (
+    kind: "selection" | "composition-start" | "composition-end",
+    el: CaretField,
+  ) => reportCollaborationField(ol, row.id, field, kind, el);
+
   const committed = field === "title" ? row.node.text : (row.details.note ?? "");
   /*
    * a keystroke paints from this local draft; the document update (and every part of the
@@ -4757,18 +4822,33 @@ export function RowField({
   const attachFiles = (files: readonly File[]) => {
     const handler = ui.host.onAttach;
     if (!handler || ol.readOnly || row.locked) return;
-    void Promise.resolve(handler(files, { itemId: row.id, field })).then((attachments) => {
-      const markup = attachmentMarkup(attachments);
-      if (!markup) return;
-      const node = findOutlineNode(ol.latestNodes(), row.id)?.node as OutlineItem | undefined;
-      if (!node) return;
-      const note = node.data?.note ? `${node.data.note}\n${markup}` : markup;
-      ol.dispatch({
-        type: "transaction",
-        commands: [{ type: "update", id: row.id, changes: { data: { ...node.data, note } } }],
+    void Promise.resolve()
+      .then(() => handler(files, { itemId: row.id, field }))
+      .then((attachments) => {
+        const current = attachmentOwner.current;
+        if (
+          !current.active ||
+          current.ol.readOnly ||
+          current.ol.isItemLocked(row.id) ||
+          current.ui.host.onAttach !== handler
+        )
+          return;
+        const markup = attachmentMarkup(attachments);
+        if (!markup) return;
+        const node = findOutlineNode(current.ol.latestNodes(), row.id)?.node as
+          OutlineItem | undefined;
+        if (!node) return;
+        const note = node.data?.note ? `${node.data.note}\n${markup}` : markup;
+        ol.dispatch({
+          type: "transaction",
+          commands: [{ type: "update", id: row.id, changes: { data: { ...node.data, note } } }],
+        });
+        current.ui.announce(current.ui.labels.attached(attachments.length));
+      })
+      .catch(() => {
+        if (attachmentOwner.current.active)
+          attachmentOwner.current.ui.announce(attachmentOwner.current.ui.labels.attachFailed);
       });
-      ui.announce(ui.labels.attached(attachments.length));
-    });
   };
   /** `https://…?zoom=<id>` of this page (or `?doc=…` of this workspace): insert `[[title|id]]`. */
   const pasteItemLink = (text: string, el: CaretField): boolean => {
@@ -4898,9 +4978,15 @@ export function RowField({
           hooks={{
             menuKey: onMenuKey,
             key: onFieldKey,
-            typed: (el) => ac.sync(el, true),
+            typed: (el) => {
+              ac.sync(el, true);
+              reportField("selection", el);
+            },
+            composition: (active, el) =>
+              reportField(active ? "composition-start" : "composition-end", el),
             hold: (el) => slash.onChange(el),
             caretMoved: (el) => {
+              reportField("selection", el);
               if (slash.onSelect(el)) return true;
               ac.sync(el);
               return false;
@@ -4961,6 +5047,11 @@ export function RowField({
         data-field={field}
         {...aria}
         spellCheck
+        onCompositionStart={(event) => reportField("composition-start", event.currentTarget)}
+        onCompositionEnd={(event) => {
+          const el = event.currentTarget;
+          setTimeout(() => reportField("composition-end", el), 0);
+        }}
         onMouseDown={() => (suppressSelect.current = false)}
         onChange={(event) => {
           // Typing the `/query` itself: shown, never stored (the menu filters on it).
@@ -4976,6 +5067,7 @@ export function RowField({
           });
           setDraft({ text, seq: ol.currentSeq() });
           ac.sync(event.target, true);
+          reportField("selection", event.target);
         }}
         onSelect={(event) => {
           const el = event.currentTarget;
@@ -4984,6 +5076,7 @@ export function RowField({
           if (suppressSelect.current || !el.isConnected || document.activeElement !== el) return;
           if (slash.onSelect(el)) return;
           ac.sync(el);
+          reportField("selection", el);
           ol.dispatch({
             type: "caret",
             id: row.id,

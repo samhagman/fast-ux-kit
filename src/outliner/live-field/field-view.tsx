@@ -94,6 +94,7 @@ export interface ChipRequest {
 
 /** What the outliner does for the field. Read through a ref: always the newest. */
 export interface LiveFieldHooks {
+  composition?(active: boolean, el: LiveFieldElement): void;
   /** Keys a popup of this field owns (the item menu, suggestions). First. */
   menuKey?(event: FieldKeyEvent): boolean;
   /** The row's keys (split, merge, indent, undo, shortcuts, arrows at the edges). */
@@ -605,7 +606,10 @@ function mountField(
     if (!session.composing) return;
     session.compositionEnd();
     sync();
-    if (!destroyed) props().hooks.typed?.(el);
+    if (!destroyed) {
+      props().hooks.typed?.(el);
+      props().hooks.composition?.(false, el);
+    }
   };
 
   const openChip = (pos: number) => {
@@ -717,6 +721,7 @@ function mountField(
         compositionstart() {
           if (compositionTimer) finishComposition();
           session.compositionStart();
+          props().hooks.composition?.(true, el);
           return false;
         },
         compositionend() {

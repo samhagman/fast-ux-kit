@@ -15,3 +15,5 @@ export { syncMirrors } from "./mirrors.js";
 
 export * from "../core/note-pages.js";
 export * from "./note-page-view.js";
+
+export type { OutlineCollaboration, OutlineFieldEvent } from "./collaboration.js";

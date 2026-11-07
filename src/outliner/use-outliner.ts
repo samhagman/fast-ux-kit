@@ -1,3 +1,4 @@
+import type { OutlineCollaboration, OutlineFieldEvent } from "./collaboration.js";
 import * as React from "react";
 import {
   createOutlineEditorState,
@@ -117,6 +118,8 @@ export interface UseOutlinerOptions {
   /** Uncontrolled: the initial document. The outliner owns it and its undo history. */
   readonly defaultValue?: readonly OutlineItem[];
   readonly onValueChange?: OutlineValueChangeHandler;
+  /** Controlled collaboration: remote values bypass snapshot history; host owns undo and cursors. */
+  readonly collaboration?: OutlineCollaboration;
   readonly readOnly?: boolean;
   readonly isLocked?: (node: OutlineItem) => boolean;
   readonly defaultExpandedIds?: Iterable<string>;
@@ -698,9 +701,12 @@ export function useOutliner(options: UseOutlinerOptions) {
     () =>
       incoming === undefined
         ? null
-        : reconcileOutline(store.current, incoming, editorOptions.current),
+        : reconcileOutline(store.current, incoming, {
+            ...editorOptions.current,
+            collaboration: options.collaboration,
+          }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [incoming, version],
+    [incoming, version, options.collaboration],
   );
   // What renders: the newest pending proposal (optimistic, the default) or only what the host
   // echoed. Uncontrolled there is nothing pending, so both are the editor itself.
@@ -780,6 +786,21 @@ export function useOutliner(options: UseOutlinerOptions) {
           : travel === "redo"
             ? history.future.at(-1)
             : undefined;
+      const binding = optionsRef.current.collaboration;
+      if (travel && binding) {
+        if (optionsRef.current.readOnly) return base;
+        const allowed = travel === "undo" ? binding.canUndo : binding.canRedo;
+        if (
+          allowed &&
+          optionsRef.current.onBeforeHistoryTravel?.({
+            direction: travel,
+            from,
+            nodes: base.nodes,
+          }) !== false
+        )
+          binding[travel]();
+        return base;
+      }
       let starting = store.current;
       if (travel && from) {
         const wanted = optionsRef.current.onBeforeHistoryTravel?.({
@@ -1742,8 +1763,10 @@ export function useOutliner(options: UseOutlinerOptions) {
         locked: lockedPath(id, state.nodes),
       });
     },
-    canUndo: state.history.past.length > 0,
-    canRedo: state.history.future.length > 0,
+    canUndo: options.collaboration?.canUndo ?? state.history.past.length > 0,
+    canRedo: options.collaboration?.canRedo ?? state.history.future.length > 0,
+    reportField: (event: OutlineFieldEvent) =>
+      optionsRef.current.collaboration?.onFieldEvent?.(event),
     /** Rows a filter would hide that stay because they are still the target (target.ts). */
     linger: linger.current,
     /** A board or mind map registers how its cursor travels while it is on screen (null: back to the list). */
