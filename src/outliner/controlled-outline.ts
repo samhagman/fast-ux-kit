@@ -6,6 +6,7 @@ import {
   type OutlineEditorOptions,
   type OutlineEditorState,
 } from "../core/index.js";
+import type { OutlineCollaboration } from "./collaboration.js";
 import type { OutlineItem, OutlineItemData } from "./types.js";
 
 /**
@@ -39,6 +40,11 @@ export interface OutlineChangeMeta {
   readonly reason: OutlineChangeReason;
   /** The editor action that produced the change, e.g. "text", "split", "drop". */
   readonly action: OutlineAction<OutlineItemData>["type"];
+  /** Exact local operation and its originating snapshot, before any later remote update. */
+  readonly operation: OutlineAction<OutlineItemData>;
+  readonly base: readonly OutlineItem[];
+  readonly beforeCaret: OutlineEditor["caret"];
+  readonly afterCaret: OutlineEditor["caret"];
 }
 export interface OutlineProposal {
   /** Monotonic, so a late `reject()` finds its proposal. */
@@ -106,7 +112,18 @@ export function stepOutline(
   if (result === base) return { state, result };
   const changed = result.nodes !== base.nodes;
   const proposal = changed
-    ? { id, target: result, meta: { reason: reasonOf(action), action: action.type } }
+    ? {
+        id,
+        target: result,
+        meta: {
+          reason: reasonOf(action),
+          action: action.type,
+          operation: action,
+          base: base.nodes,
+          beforeCaret: base.caret,
+          afterCaret: result.caret,
+        },
+      }
     : undefined;
   if (controlled && proposal)
     return { state: { ...state, pending: [...state.pending, proposal] }, proposal, result };
@@ -144,7 +161,9 @@ const withNodes = (editor: OutlineEditor, nodes: readonly OutlineItem[]): Outlin
 export function reconcileOutline(
   state: ControlledOutlineState,
   incoming: readonly OutlineItem[],
-  options: Pick<OutlineEditorOptions<OutlineItemData>, "noteAdapter" | "historyLimit"> = {},
+  options: Pick<OutlineEditorOptions<OutlineItemData>, "noteAdapter" | "historyLimit"> & {
+    readonly collaboration?: OutlineCollaboration;
+  } = {},
 ): OutlineReconcileResult {
   const none = { accepted: [], dropped: [] };
   if (incoming === state.prop) return { state, outcome: "none", ...none };
@@ -171,7 +190,16 @@ export function reconcileOutline(
     };
   let next: OutlineEditor;
   try {
-    next = reconcileOutlineEditorState(state.editor, incoming, options);
+    const caret = options.collaboration?.mapCaret?.(
+      state.editor.caret,
+      state.editor.nodes,
+      incoming,
+    );
+    next = reconcileOutlineEditorState(
+      caret === undefined ? state.editor : { ...state.editor, caret },
+      incoming,
+      options,
+    );
   } catch {
     // An invalid document from the host never replaces a valid one; keep showing what we have.
     return { state: { ...state, prop: incoming }, outcome: "invalid", ...none };
@@ -188,7 +216,9 @@ export function reconcileOutline(
     state: {
       editor: {
         ...next,
-        history: { past: [...editor.history.past, entry].slice(-limit), future: [], group: null },
+        history: options.collaboration
+          ? { past: [], future: [], group: null }
+          : { past: [...editor.history.past, entry].slice(-limit), future: [], group: null },
       },
       pending: [],
       prop: incoming,
