@@ -80,7 +80,8 @@
     "format:check": "prettier --check src tests scripts docs studio/src studio/tests studio/*.json studio/*.ts studio/*.md *.json *.md",
     "test:browser": "node scripts/test-browser.mjs",
     "docs:build": "npm run build && npm --prefix studio run build",
-    "dev": "npm --prefix studio run dev"
+    "dev": "npm --prefix studio run dev",
+    "test:note-pages:browser": "npm run docs:build && node scripts/test-note-pages-browser.mjs"
   },
   "peerDependencies": {
     "react": "^19.2.0",
@@ -97,6 +98,7 @@
     "@types/react-dom": "19.2.3",
     "esbuild": "0.25.12",
     "jsdom": "26.1.0",
+    "playwright-core": "1.65.0",
     "prettier": "3.9.10",
     "react": "19.2.6",
     "react-dom": "19.2.6",
