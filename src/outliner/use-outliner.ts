@@ -713,10 +713,19 @@ export function useOutliner(options: UseOutlinerOptions) {
   const optimistic = options.optimistic !== false;
   const current = reconciled?.state ?? store.current;
   const state = optimistic ? latestEditor(current) : current.editor;
-  const renderedSeq = seq.current;
+  // An external value can be text this field emitted earlier (for example a
+  // delegated undo before its deferred typing render). Mark it newer than that
+  // local draft; otherwise FieldSession mistakes the undo for an older echo and
+  // keeps showing the removed text. Derive for this render, commit the clock in
+  // the layout effect, and never tick again for an already-reconciled value.
+  const externalChange = reconciled?.outcome === "external" && reconciled.state !== store.current;
+  const renderedSeq = seq.current + (externalChange ? 1 : 0);
   React.useLayoutEffect(() => {
     // The render above already shows the answer; only the store catches up (no second render).
-    if (reconciled && reconciled.state !== store.current) store.current = reconciled.state;
+    if (reconciled && reconciled.state !== store.current) {
+      store.current = reconciled.state;
+      seq.current = Math.max(seq.current, renderedSeq);
+    }
     if (reconciled?.outcome === "invalid")
       warn("invalid", "`value` is not a valid outline (duplicate or missing ids); it was ignored.");
   });
