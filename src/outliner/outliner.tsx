@@ -1030,6 +1030,22 @@ export function Outliner({
       document.removeEventListener("keydown", onKey);
     };
   }, [focusView]);
+  // A remote replacement can remove the last editing target (or a collaboration binding
+  // can explicitly clear it). The outgoing row may still own focus while it animates out;
+  // end that editing session now, without taking focus from another control or workspace.
+  React.useLayoutEffect(() => {
+    if (!editing || ol.state.caret) return;
+    setEditing(false);
+    const root = rootRef.current;
+    if (!lastActive.current || restoring.current || root?.closest("[inert]")) return;
+    const active = document.activeElement;
+    const row = active?.closest<HTMLElement>("[data-row]")?.dataset.row;
+    const outgoing =
+      !!root?.contains(active) && row !== undefined && !findOutlineNode(ol.state.nodes, row);
+    if (active && active !== document.body && active.isConnected && !outgoing) return;
+    if (coarsePointer()) focusTrigger(null);
+    else focusView();
+  }, [editing, ol.state.caret, ol.state.nodes, focusTrigger, focusView]);
   /*
    * Zooming into a board or a mind map (or "View as" switching the view) unmounts the tree that
    * had focus, and the browser drops it on <body>: the new view's surface takes it. A view that
