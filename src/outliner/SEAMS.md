@@ -86,6 +86,21 @@ of other file types can come from a trusted `renderers` entry.
 | Dates                                                        | `!(2026-11-03 10:00 every week)` tokens    | A calendar sync reads due dates with `parseInline` from `inline.tsx` (its `date` segments). The search operators `due:`, `before:` and `after:` select what to sync.                                                                                                                                                                                                 |
 | `renderers`                                                  | `OutlineRenderers`                         | Trusted embeds in notes (` ```embed:<key> `), drawn by the host's own React components.                                                                                                                                                                                                                                                                              |
 
+## Synchronous item updates
+
+`ref.updateItem(id, changes)` updates only `text`, `checked` and/or `data` on an existing
+item. It uses one ordinary editor transaction, preserves the current caret and selection,
+and returns `false` when unchanged, missing, read-only, locked or synchronously vetoed.
+It cannot replace identity or children. It does not focus, reveal or navigate to the item.
+
+This lets an asynchronous file-storage host perform its final insertion synchronously
+inside its own cancellation/storage guard. Read the latest item with `ref.getValue()`
+immediately before building a `data` patch; do not carry an old document across an upload.
+When a host performs the update itself inside `onAttach`, return an empty attachment list
+so the default attachment path does not append it again. Durability, deduplication and
+cross-client conflict handling remain the host's responsibility. `ref.replace` remains
+appropriate for complete version restoration and retains its existing interaction reset.
+
 ## Keys a host keeps for itself
 
 `reservedShortcuts: ReservedShortcut[]` names the keys the host's own UI answers to.

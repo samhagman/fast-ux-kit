@@ -267,6 +267,9 @@ export interface OutlinerHandle {
    * here is kept (a move between documents keeps its links). Returns the ids it inserted.
    */
   insertItems(nodes: readonly OutlineItem[]): readonly string[];
+  /** Update existing item fields synchronously as one undo step, preserving the
+   * current caret/selection. False when refused, vetoed or unchanged. */
+  updateItem(id: string, changes: Partial<Pick<OutlineItem, "text" | "checked" | "data">>): boolean;
   /** Remove items and their subtrees as one undo step. False when refused (locked, read-only). */
   removeItems(ids: readonly string[]): boolean;
   /**
@@ -912,6 +915,21 @@ export function Outliner({
           .latestNodes()
           .filter((node) => !before.has(node.id))
           .map((node) => node.id);
+      },
+      updateItem: (id, changes) => {
+        const { ol } = live.current;
+        if (
+          !changes ||
+          Object.keys(changes).some((key) => !["text", "checked", "data"].includes(key))
+        )
+          return false;
+        const before = ol.latestNodes();
+        const next = ol.dispatch({
+          type: "transaction",
+          focus: false,
+          commands: [{ type: "update", id, changes }],
+        });
+        return !next.refusal && ol.latestNodes() !== before;
       },
       removeItems: (ids) => {
         const { ol } = live.current;
@@ -4855,11 +4873,19 @@ export function RowField({
           OutlineItem | undefined;
         if (!node) return;
         const note = node.data?.note ? `${node.data.note}\n${markup}` : markup;
-        ol.dispatch({
+        const before = current.ol.latestNodes();
+        const next = current.ol.dispatch({
           type: "transaction",
+          focus: false,
           commands: [{ type: "update", id: row.id, changes: { data: { ...node.data, note } } }],
         });
-        current.ui.announce(current.ui.labels.attached(attachments.length));
+        // A controlled host can veto synchronously: the proposed result alone
+        // does not mean the current editor accepted the attachment.
+        current.ui.announce(
+          next.refusal || current.ol.latestNodes() === before
+            ? current.ui.labels.attachFailed
+            : current.ui.labels.attached(attachments.length),
+        );
       })
       .catch(() => {
         if (attachmentOwner.current.active)

@@ -833,3 +833,23 @@ test("malformed split halves and merge carets are refused before anything runs",
     { id: "a", start: 4, end: 4 },
   ]);
 });
+
+test("background transactions preserve interaction without a focus request; undo still requests focus", () => {
+  const state = run(createOutlineEditorState(tree()), { type: "focus", id: "a", start: 2, end: 4 });
+  const commands = [
+    { type: "update" as const, id: "a", changes: { data: { note: "Stored attachment" } } },
+  ];
+  const next = run(state, { type: "transaction", commands, focus: false });
+  assert.equal(next.refusal, null);
+  assert.deepEqual(next.caret, state.caret);
+  assert.deepEqual(next.selection, state.selection);
+  assert.equal(next.focusVersion, state.focusVersion);
+  assert.equal(next.history.past.length, state.history.past.length + 1);
+  const undone = run(next, { type: "undo" });
+  assert.deepEqual(undone.nodes, state.nodes);
+  assert.equal(undone.focusVersion, next.focusVersion + 1);
+  assert.equal(run(state, { type: "transaction", commands }).focusVersion, state.focusVersion + 1);
+  const invalid = run(state, { type: "transaction", commands, focus: "no" } as never);
+  assert.equal(invalid.refusal, "invalid-command");
+  assert.equal(invalid.nodes, state.nodes);
+});
