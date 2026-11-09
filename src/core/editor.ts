@@ -80,6 +80,8 @@ export type OutlineAction<T = unknown> =
   | {
       readonly type: "transaction";
       readonly commands: readonly OutlineCommand<T>[];
+      /** False for background edits: update interaction state without requesting DOM focus. */
+      readonly focus?: boolean;
       readonly caret?: OutlineCaret;
     }
   | {
@@ -553,6 +555,7 @@ function validAction<T>(action: OutlineAction<T>): boolean {
     case "transaction":
       return (
         Array.isArray(value.commands) &&
+        optionalBoolean("focus") &&
         (action.caret === undefined ||
           (!!action.caret &&
             typeof action.caret.id === "string" &&
@@ -808,7 +811,10 @@ export function reduceOutlineEditor<T>(
         selectionAnchor,
         history: { past, future: [], group },
         revision: state.revision + 1,
-        focusVersion: state.focusVersion + 1,
+        focusVersion:
+          action.type === "transaction" && action.focus === false
+            ? state.focusVersion
+            : state.focusVersion + 1,
         refusal: null,
       },
       options,
