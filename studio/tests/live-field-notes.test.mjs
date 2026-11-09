@@ -116,6 +116,45 @@ test("blank lines: the caret on one has a line to stand on; right under a paragr
   assert.deepEqual(kinds(bridge.noteToDoc("a\n\n")), ["para"]);
 });
 
+test("moving off a blank line into styled math-like text does not invent a format toggle", () => {
+  for (const prefix of ["a", "#tag", ""]) {
+    for (const style of ["**", "*", "~~", "=="]) {
+      const text = `${prefix}\n\n\n$${style}b$$${style}`;
+      const initial = fieldState("note", text, prefix.length + 1);
+      const offset = text.indexOf("$$") + 1;
+      const pos = bridge.sourceToPos(bridge.serialize(initial.doc), offset);
+      const moved = select(initial, pos);
+      assert.ok(moved);
+      assert.equal(source(moved), text, "moving the caret preserves the exact source");
+      assert.equal(caretOf(moved), offset);
+      assert.equal(moved.storedMarks, null, "no explicit formatting command occurred");
+      const next = type(moved, "#");
+      const expected = text.slice(0, offset) + "#" + text.slice(offset);
+      assert.equal(source(next), expected, "typing must not split/reopen a style container");
+      assert.doesNotThrow(() => next.doc.check());
+    }
+  }
+});
+
+test("source adoption still distinguishes inside/outside closing styles and keeps explicit format intent", () => {
+  for (const [caret, expected] of [
+    [3, "**bx**"],
+    [5, "**b**x"],
+  ]) {
+    const initial = fieldState("note", "");
+    const tr = live.adoptTr(initial, { field: "note" }, "**b**", { anchor: caret, head: caret });
+    assert.ok(tr);
+    assert.equal(source(type(initial.apply(tr), "x")), expected);
+  }
+  let explicit = fieldState("note", "**abc**", 3);
+  explicit = explicit.apply(explicit.tr.setStoredMarks([]));
+  const tr = live.adoptTr(explicit, { field: "note" }, "**abcd**", { anchor: 3, head: 3 });
+  assert.ok(tr);
+  const adopted = explicit.apply(tr);
+  assert.deepEqual(adopted.storedMarks, [], "a deliberate collapsed format command survives");
+  assert.equal(source(type(adopted, "x")), "**a**x**bcd**");
+});
+
 /* ───────────── Block rules come from the grammar ───────────── */
 
 test("block rules: headings 1–6, bullets, ordered lists keep their start, tasks, quotes, as typed", () => {
