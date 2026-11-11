@@ -56,6 +56,8 @@ export interface InlineSegment {
   readonly contentStart: number;
   readonly contentEnd: number;
   readonly display: string;
+  /** Source offsets for each displayed UTF-16 code unit and its end, when escapes shorten a label. */
+  readonly displayOffsets?: readonly number[];
   readonly href?: string;
   /** Internal link target id, from `[[label|id]]`. */
   readonly refId?: string;
@@ -98,8 +100,9 @@ const LEAF = {
   escape: "(\\\\[\\\\`*_~=\\[\\]!#@()$])",
   code: "(`[^`\\n]+`)",
   ref: "(\\[\\[[^\\]\\n]+\\]\\])",
-  // md link: the target may hold balanced parentheses (Wikipedia's Foo_(bar)), as in GFM
-  link: "(\\[[^\\]\\n]+\\]\\((?:https?:\\/\\/|mailto:)(?:[^()\\s]|\\([^()\\s]*\\))+\\))",
+  // Markdown links may hold balanced parentheses. Root-relative links stay on the host:
+  // exclude network paths, backslashes and controls that a URL parser could normalize.
+  link: String.raw`(\[(?:\\[^\n]|[^\]\\\n])+\]\((?:(?:https?:\/\/|mailto:)(?:[^()\s]|\([^()\s]*\))+|\/(?![/\\])(?:[^()\\\s\x00-\x1f\x7f]|\([^()\\\s\x00-\x1f\x7f]*\))*)\))`,
   // a date, a range, or a recurring date
   date: "(!\\(\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?(?: ?(?:→|->) ?(?:\\d{4}-\\d{2}-\\d{2}(?: \\d{2}:\\d{2})?|\\d{2}:\\d{2}))?(?: every [a-z0-9 ]{1,24})?\\))",
   // bare url: may end in ")" here; an unbalanced closing paren is trimmed off when it is read
@@ -506,14 +509,30 @@ function leafOf(match: RegExpExecArray, token: string, start: number): InlineSeg
       : wrap("ref", 2);
   }
   if (match[GROUP.link]) {
-    const close = token.indexOf("](");
+    let close = 1;
+    while (close < token.length) {
+      if (token[close] === "\\") close += 2;
+      else if (token[close] === "]" && token[close + 1] === "(") break;
+      else close++;
+    }
+    const label = token.slice(1, close);
+    let display = "";
+    const displayOffsets: number[] = [];
+    for (let i = 0; i < label.length; i++) {
+      // CommonMark backslash escapes only ASCII punctuation, not ordinary letters.
+      if (label[i] === "\\" && /[!-/:-@\[-`{-~]/.test(label[i + 1] ?? "")) i++;
+      displayOffsets.push(start + 1 + i);
+      display += label[i];
+    }
+    displayOffsets.push(start + close);
     return {
       kind: "link",
       start,
       end,
       contentStart: start + 1,
       contentEnd: start + close,
-      display: token.slice(1, close),
+      display,
+      ...(display === label ? {} : { displayOffsets }),
       href: token.slice(close + 2, -1),
     };
   }

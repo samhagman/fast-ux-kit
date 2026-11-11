@@ -1,6 +1,8 @@
 // The inline grammar with nested styles: one linear scanner, styles as containers around the
 // segments inside them, today's priority between constructs. Static render, HTML copy and plain
 // text stay byte-identical for every fixture string but the one that asks for `*emphasis*`.
+// Eight root-relative link fixtures were intentionally refreshed when those links became live;
+// their portable HTML still retains literal Markdown so a paste cannot change its origin.
 //
 //   cd studio && node --test tests/live-field-grammar.test.mjs
 //
