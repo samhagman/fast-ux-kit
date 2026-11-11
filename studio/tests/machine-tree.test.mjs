@@ -270,10 +270,10 @@ test("flow outline: states are drawn in the order the machine runs, an alternati
   }
 });
 
-test("steps: a state says what kind of step it is; the card shows the start of its set-up and the panel all of it", async () => {
+test("meta: a state says what it does; the card shows the start of its set-up and the panel all of it", async () => {
   const { machineLabCases } = await load("/src/demo/machine-lab-data.ts");
   const release = machineLabCases.find((c) => c.id === "release");
-  const step = {
+  const meta = {
     kind: "Ask",
     icon: "person",
     summary: "a release manager answers",
@@ -287,15 +287,15 @@ test("steps: a state says what kind of step it is; the card shows the start of i
     ...release.document,
     machines: release.document.machines.map((graph) => ({
       ...graph,
-      nodes: graph.nodes.map((node) => (node.id === "release-review" ? { ...node, step } : node)),
+      nodes: graph.nodes.map((node) => (node.id === "release-review" ? { ...node, meta } : node)),
     })),
   };
   // The panel's scroll area asks for running animations, which jsdom does not have. There are none.
   window.Element.prototype.getAnimations ??= () => [];
   const view = await mount(document_, { runtime: release.options, defaultPanelOpen: true });
   try {
-    const brief = view.face("Review").querySelector("[data-mt-step]");
-    assert.equal(brief.dataset.mtStep, "person");
+    const brief = view.face("Review").querySelector("[data-mt-meta]");
+    assert.equal(brief.dataset.mtMeta, "person");
     assert.match(brief.textContent, /Ask\s*a release manager answers/);
     assert.match(brief.textContent, /question\s*Approve this release\?/);
     assert.doesNotMatch(brief.textContent, /every 4 hours/, "the card shows only the start");
@@ -305,11 +305,11 @@ test("steps: a state says what kind of step it is; the card shows the start of i
       view.item("Review").getAttribute("aria-description"),
       /^Ask: a release manager answers/,
     );
-    assert.equal(view.face("Draft").querySelector("[data-mt-step]"), null, "only where declared");
+    assert.equal(view.face("Draft").querySelector("[data-mt-meta]"), null, "only where declared");
     // Selecting the state shows every detail, in full.
     await view.click(view.face("Review"));
-    const full = view.container.querySelector("[data-mt-step-full]");
-    assert.ok(full, "the panel says what the step is");
+    const full = view.container.querySelector("[data-mt-meta-full]");
+    assert.ok(full, "the panel shows the metadata");
     assert.match(full.textContent, /Ask · a release manager answers/);
     assert.match(full.parentElement.textContent, /remind\s*every 4 hours/);
   } finally {

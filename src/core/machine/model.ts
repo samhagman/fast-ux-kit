@@ -1,5 +1,5 @@
 import {
-  MACHINE_STEP_ICONS,
+  MACHINE_META_ICONS,
   type MachineDocument,
   type MachineGraph,
   type MachineIssue,
@@ -119,27 +119,27 @@ export function validateMachineDocument(value: unknown): MachineIssue[] {
       for (const key of ["entry", "exit", "tags"] as const)
         if (n[key] !== undefined && (!Array.isArray(n[key]) || !n[key]!.every(text)))
           add("invalid-node-field", `${key} must contain nonempty names.`, loc);
-      if (n.step !== undefined) {
-        const step: unknown = n.step;
-        if (!record(step) || !text(step.kind))
-          add("invalid-node-field", "step must name its kind.", loc);
+      if (n.meta !== undefined) {
+        const meta: unknown = n.meta;
+        if (!record(meta) || !text(meta.kind))
+          add("invalid-node-field", "meta must name its kind.", loc);
         else {
           if (
-            step.icon !== undefined &&
-            !(MACHINE_STEP_ICONS as readonly unknown[]).includes(step.icon)
+            meta.icon !== undefined &&
+            !(MACHINE_META_ICONS as readonly unknown[]).includes(meta.icon)
           )
-            add("invalid-node-field", "step.icon must be a known icon or omitted.", loc);
-          if (step.summary !== undefined && typeof step.summary !== "string")
-            add("invalid-node-field", "step.summary must be text.", loc);
+            add("invalid-node-field", "meta.icon must be a known icon or omitted.", loc);
+          if (meta.summary !== undefined && typeof meta.summary !== "string")
+            add("invalid-node-field", "meta.summary must be text.", loc);
           if (
-            step.details !== undefined &&
-            (!Array.isArray(step.details) ||
-              !step.details.every(
+            meta.details !== undefined &&
+            (!Array.isArray(meta.details) ||
+              !meta.details.every(
                 (detail) =>
                   record(detail) && text(detail.label) && typeof detail.value === "string",
               ))
           )
-            add("invalid-node-field", "step.details must be label and value pairs.", loc);
+            add("invalid-node-field", "meta.details must be label and value pairs.", loc);
         }
       }
       if (

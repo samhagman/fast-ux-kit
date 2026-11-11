@@ -225,18 +225,18 @@
 }
 
 /* What a state does: the kind's icon and name take a tint; three kinds have a colour of their own. */
-[data-mt-step] {
-  --mt-step: var(--sim-text, var(--muted-foreground));
+[data-mt-meta] {
+  --mt-meta: var(--sim-text, var(--muted-foreground));
 }
-[data-mt-step="person"] {
-  --mt-step: color-mix(in oklab, var(--warning) 62%, var(--foreground));
+[data-mt-meta="person"] {
+  --mt-meta: color-mix(in oklab, var(--warning) 62%, var(--foreground));
 }
-[data-mt-step="agent"],
-[data-mt-step="decision"] {
-  --mt-step: var(--signal);
+[data-mt-meta="agent"],
+[data-mt-meta="decision"] {
+  --mt-meta: var(--signal);
 }
-[data-mt-step="command"] {
-  --mt-step: color-mix(in oklab, var(--success) 70%, var(--foreground));
+[data-mt-meta="command"] {
+  --mt-meta: color-mix(in oklab, var(--success) 70%, var(--foreground));
 }
 
 /* In the outline every route has a row of its own with room around it, and meets the spine by a

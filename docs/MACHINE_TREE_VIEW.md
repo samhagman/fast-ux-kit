@@ -165,10 +165,10 @@ row keeps the host's own `node` and `graph`. `planMachineTreeFlow` and
 `presentMachineTree` in `/machine` are the pure functions behind this. Machine Graph
 and the legacy `MachineTreeView` ignore regions.
 
-### Steps
+### State metadata
 
-A state can say what it does. `step` on a node is the host's own description: the
-kind of step, one line on who or what does the work, and its set-up as label and
+A state can say what it does. `meta` on a node is the host's own description: the
+kind of state, one line on who or what does the work, and its set-up as label and
 value pairs. It is for reading only and never changes how the machine runs.
 
 ```ts
@@ -176,7 +176,7 @@ value pairs. It is for reading only and never changes how the machine runs.
   id: "review",
   label: "Review",
   kind: "atomic",
-  step: {
+  meta: {
     kind: "Ask",
     icon: "person",
     summary: "a release manager answers",
@@ -198,7 +198,7 @@ value pairs. It is for reading only and never changes how the machine runs.
 `icon` is one of `person`, `agent`, `command`, `feed`, `decision`, `effect`,
 `collect`, `event`, `timer`, `branch` or `end`. The words are the host's: the tree
 does not work out a kind from a state's name or its routes, so a state with no
-`step` shows none. `validateMachineDocument` reports a malformed `step` as
+`meta` shows none. `validateMachineDocument` reports a malformed `meta` as
 `invalid-node-field`. Machine Graph and the legacy `MachineTreeView` ignore it.
 
 ### Simulation

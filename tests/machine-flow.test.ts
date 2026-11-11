@@ -392,11 +392,11 @@ test("region declarations are validated", () => {
   assert.equal(plan(proto).presented.rows.find((r) => r.region)!.label, "Constructor");
 });
 
-test("a step declaration is validated, and its words can be searched", () => {
+test("a state's metadata is validated, and its words can be searched", () => {
   const ok = machine(
     [
       state("ask", {
-        step: {
+        meta: {
           kind: "Ask",
           icon: "person",
           summary: "a reviewer answers",
@@ -415,17 +415,17 @@ test("a step declaration is validated, and its words can be searched", () => {
       .map((r) => r.elementId);
   assert.deepEqual(hits("reviewer"), ["ask"]);
   assert.deepEqual(hits("ship it"), ["ask"]);
-  for (const step of [
+  for (const meta of [
     { kind: "" },
     { kind: "Ask", icon: "robot" },
     { kind: "Ask", summary: 3 },
     { kind: "Ask", details: [{ label: "question" }] },
     "Ask",
   ]) {
-    const bad = machine([state("a", { step: step as never })], []);
+    const bad = machine([state("a", { meta: meta as never })], []);
     assert.ok(
       validateMachineDocument(bad).some((issue) => issue.code === "invalid-node-field"),
-      JSON.stringify(step),
+      JSON.stringify(meta),
     );
   }
 });

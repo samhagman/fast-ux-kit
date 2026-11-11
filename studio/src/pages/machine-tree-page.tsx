@@ -92,7 +92,7 @@ function largeDocument(): MachineDocument {
 
 /**
  * Release approval again, with its publish attempt declared as a region: a named box the tree draws
- * shut until it is opened. Two states also say what kind of step they are. Only the drawing
+ * shut until it is opened. Two states also carry metadata saying what they do. Only the drawing
  * differs; the machine runs exactly as the plain case does.
  */
 const release = machineLabCases.find((lab) => lab.id === "release")!;
@@ -108,7 +108,7 @@ const withRegion: MachineDocument = {
             region: "publishing",
             ...(node.id === "release-publish"
               ? {
-                  step: {
+                  meta: {
                     kind: "Command",
                     icon: "command" as const,
                     summary: "runs on the release runner",
@@ -123,7 +123,7 @@ const withRegion: MachineDocument = {
         : node.id === "release-review"
           ? {
               ...node,
-              step: {
+              meta: {
                 kind: "Ask",
                 icon: "person" as const,
                 summary: "a release manager answers",

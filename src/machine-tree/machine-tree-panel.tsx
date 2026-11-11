@@ -403,15 +403,15 @@ export function Details({
                 <dd>{row.node.id}</dd>
               </>
             )}
-            {row.node.step && (
+            {row.node.meta && (
               // What the state does, in full: the card only has room for the start of it.
               <>
-                <dt>step</dt>
-                <dd dir="auto" data-mt-step-full="">
-                  <b className="font-semibold">{row.node.step.kind}</b>
-                  {row.node.step.summary ? ` · ${row.node.step.summary}` : ""}
+                <dt>meta</dt>
+                <dd dir="auto" data-mt-meta-full="">
+                  <b className="font-semibold">{row.node.meta.kind}</b>
+                  {row.node.meta.summary ? ` · ${row.node.meta.summary}` : ""}
                 </dd>
-                {row.node.step.details?.map((detail, index) => (
+                {row.node.meta.details?.map((detail, index) => (
                   <React.Fragment key={index}>
                     <dt dir="auto" className="break-words">
                       {detail.label}

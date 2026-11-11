@@ -31,8 +31,8 @@ import {
   type MachineFlowLanding,
   type MachineFlowRoute,
   type MachineFlowStep,
-  type MachineStep,
-  type MachineStepIcon,
+  type MachineMeta,
+  type MachineMetaIcon,
   type MachineTreeRow,
   type MachineTreeVisibleRow,
 } from "../core/index.js";
@@ -321,14 +321,6 @@ export function hiddenMatch(
   if (id?.toLowerCase().includes(needle)) return `id ${id}`;
   if ((row.transition?.description ?? row.node?.description)?.toLowerCase().includes(needle))
     return "description";
-  const step = row.node?.step;
-  if (
-    step &&
-    [step.kind, step.summary, ...(step.details ?? []).flatMap((d) => [d.label, d.value])].some(
-      (text) => text?.toLowerCase().includes(needle),
-    )
-  )
-    return "step details";
   return "metadata";
 }
 
@@ -681,7 +673,7 @@ export const StateCell = React.memo(function StateCell({
   const item = useItemProps(row, flags, parts.join(", "), {
     expanded: container ? open : undefined,
     description: [
-      node.step ? [node.step.kind, node.step.summary].filter(Boolean).join(": ") : "",
+      node.meta ? [node.meta.kind, node.meta.summary].filter(Boolean).join(": ") : "",
       node.description ?? "",
       fromInside.length ? `Routes from inside: ${fromInside.join("; ")}` : "",
     ]
@@ -777,7 +769,7 @@ export function StateBlock({
       presentation?.activities?.length
     );
   // What the state does, when the host says: the card shows the kind and the first of its set-up.
-  const work = lane || pseudo ? undefined : node.step;
+  const work = lane || pseudo ? undefined : node.meta;
   const matchedVia = searching
     ? hiddenMatch(
         row,
@@ -789,7 +781,7 @@ export function StateBlock({
                 work.kind,
                 work.summary,
                 ...(work.details ?? [])
-                  .slice(0, STEP_BRIEF)
+                  .slice(0, META_BRIEF)
                   .flatMap((detail) => [detail.label, detail.value]),
               ]
             : []),
@@ -1019,7 +1011,7 @@ export function StateBlock({
         </span>
       ) : null}
       {header}
-      {work && <StepBrief step={work} under={container && open} />}
+      {work && <MetaBrief meta={work} under={container && open} />}
       {status}
       <ArrivalNotes row={row} flow={flow} />
       {hasBody && (
@@ -1096,7 +1088,7 @@ export function StateBlock({
 
 /* ───────────────────────────── what a state does ───────────────────────────── */
 
-const STEP_ICON: Record<MachineStepIcon, LucideIcon> = {
+const META_ICON: Record<MachineMetaIcon, LucideIcon> = {
   person: User,
   agent: Bot,
   command: Terminal,
@@ -1110,19 +1102,19 @@ const STEP_ICON: Record<MachineStepIcon, LucideIcon> = {
   end: CircleDot,
 };
 /** How many details a card shows; the panel shows them all. */
-const STEP_BRIEF = 2;
+const META_BRIEF = 2;
 /**
- * The kind of step a state is, who or what does the work, and the first of its set-up. Plain text
+ * A state's metadata: its kind, who or what does the work, and the first of its set-up. Plain text
  * inside the state's own card: the state's description says the same words, and selecting the
  * state shows every detail in full in the panel.
  */
-function StepBrief({ step, under }: { readonly step: MachineStep; readonly under: boolean }) {
-  const Icon = step.icon ? STEP_ICON[step.icon] : undefined;
-  const details = step.details ?? [];
-  const more = details.length - STEP_BRIEF;
+function MetaBrief({ meta, under }: { readonly meta: MachineMeta; readonly under: boolean }) {
+  const Icon = meta.icon ? META_ICON[meta.icon] : undefined;
+  const details = meta.details ?? [];
+  const more = details.length - META_BRIEF;
   return (
     <div
-      data-mt-step={step.icon ?? ""}
+      data-mt-meta={meta.icon ?? ""}
       className={cn(
         "max-w-[26rem] border-hairline px-2.5 py-1 font-mono text-[10.5px] leading-4 text-muted-foreground",
         // Under an open box's header the header already draws the rule above.
@@ -1130,20 +1122,20 @@ function StepBrief({ step, under }: { readonly step: MachineStep; readonly under
       )}
     >
       <div className="flex flex-wrap items-center gap-x-1.5">
-        {Icon && <Icon aria-hidden className="size-3 shrink-0 text-[color:var(--mt-step)]" />}
+        {Icon && <Icon aria-hidden className="size-3 shrink-0 text-[color:var(--mt-meta)]" />}
         <b
           dir="auto"
-          className="text-[10px] font-semibold tracking-[0.06em] whitespace-nowrap text-[color:var(--mt-step)] uppercase"
+          className="text-[10px] font-semibold tracking-[0.06em] whitespace-nowrap text-[color:var(--mt-meta)] uppercase"
         >
-          <Highlight text={step.kind} />
+          <Highlight text={meta.kind} />
         </b>
-        {step.summary && (
+        {meta.summary && (
           <span dir="auto" className="text-[color:var(--sim-text,var(--foreground))]">
-            <Highlight text={step.summary} />
+            <Highlight text={meta.summary} />
           </span>
         )}
       </div>
-      {details.slice(0, STEP_BRIEF).map((detail, index) => (
+      {details.slice(0, META_BRIEF).map((detail, index) => (
         <div key={index} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2">
           <span dir="auto" className="truncate">
             <Highlight text={detail.label} />
