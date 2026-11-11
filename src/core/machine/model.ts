@@ -1,4 +1,10 @@
-import type { MachineDocument, MachineGraph, MachineIssue, MachineNode } from "./types.js";
+import {
+  MACHINE_STEP_ICONS,
+  type MachineDocument,
+  type MachineGraph,
+  type MachineIssue,
+  type MachineNode,
+} from "./types.js";
 const kinds = new Set(["atomic", "compound", "parallel", "initial", "final", "submachine", "note"]);
 const record = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
@@ -113,6 +119,29 @@ export function validateMachineDocument(value: unknown): MachineIssue[] {
       for (const key of ["entry", "exit", "tags"] as const)
         if (n[key] !== undefined && (!Array.isArray(n[key]) || !n[key]!.every(text)))
           add("invalid-node-field", `${key} must contain nonempty names.`, loc);
+      if (n.step !== undefined) {
+        const step: unknown = n.step;
+        if (!record(step) || !text(step.kind))
+          add("invalid-node-field", "step must name its kind.", loc);
+        else {
+          if (
+            step.icon !== undefined &&
+            !(MACHINE_STEP_ICONS as readonly unknown[]).includes(step.icon)
+          )
+            add("invalid-node-field", "step.icon must be a known icon or omitted.", loc);
+          if (step.summary !== undefined && typeof step.summary !== "string")
+            add("invalid-node-field", "step.summary must be text.", loc);
+          if (
+            step.details !== undefined &&
+            (!Array.isArray(step.details) ||
+              !step.details.every(
+                (detail) =>
+                  record(detail) && text(detail.label) && typeof detail.value === "string",
+              ))
+          )
+            add("invalid-node-field", "step.details must be label and value pairs.", loc);
+        }
+      }
       if (
         n.position !== undefined &&
         (!record(n.position) ||

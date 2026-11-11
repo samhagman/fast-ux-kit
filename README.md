@@ -117,7 +117,9 @@ The hierarchy draws each container as a flow outline: states top to bottom in th
 order the machine moves through them, alternatives side by side. A machine can also
 declare regions, named groups of sibling states the tree draws as one box that
 starts shut (`region` on a state, optional `regions` on its graph). Regions are for
-reading only and never change how the machine runs.
+reading only and never change how the machine runs. A state can also say what it
+does (`step`: its kind, who or what does the work, and its set-up), which the tree
+shows on the state's card and in full in the details panel.
 
 ## Package entries
 

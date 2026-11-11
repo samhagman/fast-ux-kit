@@ -6,6 +6,38 @@ export interface MachinePoint {
   readonly x: number;
   readonly y: number;
 }
+/** The looks a step can take: an icon and a tint. */
+export const MACHINE_STEP_ICONS = [
+  "person",
+  "agent",
+  "command",
+  "feed",
+  "decision",
+  "effect",
+  "collect",
+  "event",
+  "timer",
+  "branch",
+  "end",
+] as const;
+export type MachineStepIcon = (typeof MACHINE_STEP_ICONS)[number];
+export interface MachineStepDetail {
+  readonly label: string;
+  readonly value: string;
+}
+/**
+ * What a state does, in the host's words: the kind of step it is, who or what does the work, and
+ * how it is set up. It is for people reading the machine and never changes how the machine runs.
+ */
+export interface MachineStep {
+  /** The kind of step, as the host names it: "Ask", "Agent", "Command". */
+  readonly kind: string;
+  readonly icon?: MachineStepIcon;
+  /** One line: who or what does the work, and where. */
+  readonly summary?: string;
+  /** How it is set up, most important first. */
+  readonly details?: readonly MachineStepDetail[];
+}
 export interface MachineNode {
   readonly id: string;
   readonly label: string;
@@ -20,6 +52,8 @@ export interface MachineNode {
   readonly entry?: readonly string[];
   readonly exit?: readonly string[];
   readonly tags?: readonly string[];
+  /** Presentation only: what this state does and how it is set up. */
+  readonly step?: MachineStep;
   /**
    * Presentation only: the named region of its parent this state is drawn in. States that share a
    * name under one parent are drawn as one box. It never changes how the machine runs.

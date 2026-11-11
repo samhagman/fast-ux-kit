@@ -224,6 +224,21 @@
   inset-block-start: 15px;
 }
 
+/* What a state does: the kind's icon and name take a tint; three kinds have a colour of their own. */
+[data-mt-step] {
+  --mt-step: var(--sim-text, var(--muted-foreground));
+}
+[data-mt-step="person"] {
+  --mt-step: color-mix(in oklab, var(--warning) 62%, var(--foreground));
+}
+[data-mt-step="agent"],
+[data-mt-step="decision"] {
+  --mt-step: var(--signal);
+}
+[data-mt-step="command"] {
+  --mt-step: color-mix(in oklab, var(--success) 70%, var(--foreground));
+}
+
 /* In the outline every route has a row of its own with room around it, and meets the spine by a
  * line as dark as the spine: a tick it hangs off, or the spine itself passing by. */
 [data-mt-routes] [data-mt-tick]:not([data-live]) {

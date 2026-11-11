@@ -165,6 +165,42 @@ row keeps the host's own `node` and `graph`. `planMachineTreeFlow` and
 `presentMachineTree` in `/machine` are the pure functions behind this. Machine Graph
 and the legacy `MachineTreeView` ignore regions.
 
+### Steps
+
+A state can say what it does. `step` on a node is the host's own description: the
+kind of step, one line on who or what does the work, and its set-up as label and
+value pairs. It is for reading only and never changes how the machine runs.
+
+```ts
+{
+  id: "review",
+  label: "Review",
+  kind: "atomic",
+  step: {
+    kind: "Ask",
+    icon: "person",
+    summary: "a release manager answers",
+    details: [
+      { label: "question", value: "Approve this release?" },
+      { label: "via", value: "inbox" },
+    ],
+  },
+}
+```
+
+| Where             | What it shows                                             |
+| ----------------- | --------------------------------------------------------- |
+| The state's card  | The icon and kind, the summary, and the first two details |
+| The details panel | Every detail, in full, when the state is selected         |
+| Search            | The kind, summary and every detail are searched           |
+| A screen reader   | The kind and summary open the state's description         |
+
+`icon` is one of `person`, `agent`, `command`, `feed`, `decision`, `effect`,
+`collect`, `event`, `timer`, `branch` or `end`. The words are the host's: the tree
+does not work out a kind from a state's name or its routes, so a state with no
+`step` shows none. `validateMachineDocument` reports a malformed `step` as
+`invalid-node-field`. Machine Graph and the legacy `MachineTreeView` ignore it.
+
 ### Simulation
 
 The Simulation panel retains the existing dry-run previews, payload editor,

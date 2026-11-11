@@ -92,7 +92,8 @@ function largeDocument(): MachineDocument {
 
 /**
  * Release approval again, with its publish attempt declared as a region: a named box the tree draws
- * shut until it is opened. Only the drawing differs; the machine runs exactly as the plain case does.
+ * shut until it is opened. Two states also say what kind of step they are. Only the drawing
+ * differs; the machine runs exactly as the plain case does.
  */
 const release = machineLabCases.find((lab) => lab.id === "release")!;
 const withRegion: MachineDocument = {
@@ -102,8 +103,38 @@ const withRegion: MachineDocument = {
     regions: { publishing: { label: "Publish attempt" } },
     nodes: graph.nodes.map((node) =>
       node.id === "release-publish" || node.id === "release-retry"
-        ? { ...node, region: "publishing" }
-        : node,
+        ? {
+            ...node,
+            region: "publishing",
+            ...(node.id === "release-publish"
+              ? {
+                  step: {
+                    kind: "Command",
+                    icon: "command" as const,
+                    summary: "runs on the release runner",
+                    details: [
+                      { label: "runs", value: "release publish --channel stable" },
+                      { label: "timeout", value: "10 minutes" },
+                    ],
+                  },
+                }
+              : {}),
+          }
+        : node.id === "release-review"
+          ? {
+              ...node,
+              step: {
+                kind: "Ask",
+                icon: "person" as const,
+                summary: "a release manager answers",
+                details: [
+                  { label: "question", value: "Approve this release, or send it back?" },
+                  { label: "via", value: "inbox" },
+                  { label: "remind", value: "every 4 hours, up to 3 times" },
+                ],
+              },
+            }
+          : node,
     ),
   })),
 };

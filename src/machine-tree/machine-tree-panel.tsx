@@ -403,6 +403,26 @@ export function Details({
                 <dd>{row.node.id}</dd>
               </>
             )}
+            {row.node.step && (
+              // What the state does, in full: the card only has room for the start of it.
+              <>
+                <dt>step</dt>
+                <dd dir="auto" data-mt-step-full="">
+                  <b className="font-semibold">{row.node.step.kind}</b>
+                  {row.node.step.summary ? ` · ${row.node.step.summary}` : ""}
+                </dd>
+                {row.node.step.details?.map((detail, index) => (
+                  <React.Fragment key={index}>
+                    <dt dir="auto" className="break-words">
+                      {detail.label}
+                    </dt>
+                    <dd dir="auto" className="whitespace-pre-wrap">
+                      {detail.value}
+                    </dd>
+                  </React.Fragment>
+                ))}
+              </>
+            )}
             {row.node.tags?.length ? (
               <>
                 <dt>tags</dt>

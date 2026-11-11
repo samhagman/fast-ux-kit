@@ -4,23 +4,35 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUpRight,
+  Bot,
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  CircleHelp,
+  Clock,
   ExternalLink,
   FastForward,
   History,
+  Inbox,
+  Layers,
   LogIn,
   LogOut,
   Lock,
+  Rss,
+  Split,
+  Terminal,
   TriangleAlert,
+  User,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import {
   type MachineFlow,
   type MachineFlowLanding,
   type MachineFlowRoute,
   type MachineFlowStep,
+  type MachineStep,
+  type MachineStepIcon,
   type MachineTreeRow,
   type MachineTreeVisibleRow,
 } from "../core/index.js";
@@ -309,6 +321,14 @@ export function hiddenMatch(
   if (id?.toLowerCase().includes(needle)) return `id ${id}`;
   if ((row.transition?.description ?? row.node?.description)?.toLowerCase().includes(needle))
     return "description";
+  const step = row.node?.step;
+  if (
+    step &&
+    [step.kind, step.summary, ...(step.details ?? []).flatMap((d) => [d.label, d.value])].some(
+      (text) => text?.toLowerCase().includes(needle),
+    )
+  )
+    return "step details";
   return "metadata";
 }
 
@@ -661,6 +681,7 @@ export const StateCell = React.memo(function StateCell({
   const item = useItemProps(row, flags, parts.join(", "), {
     expanded: container ? open : undefined,
     description: [
+      node.step ? [node.step.kind, node.step.summary].filter(Boolean).join(": ") : "",
       node.description ?? "",
       fromInside.length ? `Routes from inside: ${fromInside.join("; ")}` : "",
     ]
@@ -755,12 +776,23 @@ export function StateBlock({
       sub ||
       presentation?.activities?.length
     );
+  // What the state does, when the host says: the card shows the kind and the first of its set-up.
+  const work = lane || pseudo ? undefined : node.step;
   const matchedVia = searching
     ? hiddenMatch(
         row,
         [
           row.label,
           ...(node.tags ?? []),
+          ...(work
+            ? [
+                work.kind,
+                work.summary,
+                ...(work.details ?? [])
+                  .slice(0, STEP_BRIEF)
+                  .flatMap((detail) => [detail.label, detail.value]),
+              ]
+            : []),
           ...(hasBody ? [node.description, ...(node.entry ?? []), ...(node.exit ?? [])] : []),
         ],
         query,
@@ -987,6 +1019,7 @@ export function StateBlock({
         </span>
       ) : null}
       {header}
+      {work && <StepBrief step={work} under={container && open} />}
       {status}
       <ArrivalNotes row={row} flow={flow} />
       {hasBody && (
@@ -1057,6 +1090,74 @@ export function StateBlock({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ───────────────────────────── what a state does ───────────────────────────── */
+
+const STEP_ICON: Record<MachineStepIcon, LucideIcon> = {
+  person: User,
+  agent: Bot,
+  command: Terminal,
+  feed: Rss,
+  decision: CircleHelp,
+  effect: Zap,
+  collect: Layers,
+  event: Inbox,
+  timer: Clock,
+  branch: Split,
+  end: CircleDot,
+};
+/** How many details a card shows; the panel shows them all. */
+const STEP_BRIEF = 2;
+/**
+ * The kind of step a state is, who or what does the work, and the first of its set-up. Plain text
+ * inside the state's own card: the state's description says the same words, and selecting the
+ * state shows every detail in full in the panel.
+ */
+function StepBrief({ step, under }: { readonly step: MachineStep; readonly under: boolean }) {
+  const Icon = step.icon ? STEP_ICON[step.icon] : undefined;
+  const details = step.details ?? [];
+  const more = details.length - STEP_BRIEF;
+  return (
+    <div
+      data-mt-step={step.icon ?? ""}
+      className={cn(
+        "max-w-[26rem] border-hairline px-2.5 py-1 font-mono text-[10.5px] leading-4 text-muted-foreground",
+        // Under an open box's header the header already draws the rule above.
+        under ? "border-b" : "border-t",
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-x-1.5">
+        {Icon && <Icon aria-hidden className="size-3 shrink-0 text-[color:var(--mt-step)]" />}
+        <b
+          dir="auto"
+          className="text-[10px] font-semibold tracking-[0.06em] whitespace-nowrap text-[color:var(--mt-step)] uppercase"
+        >
+          <Highlight text={step.kind} />
+        </b>
+        {step.summary && (
+          <span dir="auto" className="text-[color:var(--sim-text,var(--foreground))]">
+            <Highlight text={step.summary} />
+          </span>
+        )}
+      </div>
+      {details.slice(0, STEP_BRIEF).map((detail, index) => (
+        <div key={index} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2">
+          <span dir="auto" className="truncate">
+            <Highlight text={detail.label} />
+          </span>
+          <span
+            dir="auto"
+            title={detail.value}
+            className="truncate text-[color:var(--sim-text,var(--foreground))]"
+          >
+            <Highlight text={detail.value} />
+          </span>
+        </div>
+      ))}
+      {more > 0 && <div>+{more} more in the panel</div>}
     </div>
   );
 }
