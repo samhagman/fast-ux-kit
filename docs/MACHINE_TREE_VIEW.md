@@ -65,6 +65,8 @@ order the document lists them in. Lines are borders: nothing is drawn over conte
 | What you see                    | What it means                                                   |
 | ------------------------------- | --------------------------------------------------------------- |
 | A state directly under an arrow | The route above leads there; that route shows no target         |
+| A route sitting on the line     | It leads to the state drawn right below it                      |
+| A route hanging off by a tick   | It names where it goes                                          |
 | `↓ State`                       | The route carries on to that state, drawn further down          |
 | Columns                         | Alternatives. A column with no states is the direct route on    |
 | A dotted lead-in                | Nothing drawn above leads here; routes from elsewhere meet here |
@@ -147,7 +149,7 @@ initial pseudo-state.
 
 A shut region is one dashed box with a status line: where the run is inside it, or
 how many states it holds. Routes that leave it are listed under it with the state
-each one starts from. Regions start shut when the tree owns folding; a host that
+each one starts from: one route to a row, each with its own tick and where it lands. Regions start shut when the tree owns folding; a host that
 passes `collapsedIds` or `defaultCollapsedIds` decides for itself, and a default is
 never reported through `onCollapsedChange`.
 

@@ -348,7 +348,7 @@ export function SummaryRoute({
 }: {
   readonly box: MachineTreeRow;
   readonly route: MachineFlowRoute;
-  readonly connector: "elbow" | "none";
+  readonly connector: RouteConnectorKind;
   readonly last: boolean;
   /** Other routes are drawn between this one and the state it leads to, so it names that state. */
   readonly far?: boolean;
@@ -358,103 +358,131 @@ export function SummaryRoute({
   const leaves = React.useMemo(() => leavesOf(box, rows), [box, rows]);
   const target = targetOf(route, rows, links);
   const quiet = route.landing === "next" && route.exact && !far;
-  return (
+  const shown = lines.slice(0, 5);
+  const rest = lines.length - shown.length;
+  const count = shown.length + (rest > 0 ? 1 : 0);
+  const landing = !quiet && target && (
+    <span
+      onClick={(event) => {
+        event.stopPropagation();
+        reveal(target.id, box.id);
+      }}
+      className="flex cursor-pointer items-baseline gap-1 rounded-[5px] border border-dashed border-signal/45 px-1.5 font-mono text-[11px] leading-5 whitespace-nowrap text-signal hover:border-signal"
+    >
+      <Landing landing={route.landing} />
+      <b dir="auto" className="font-sans text-[12px] font-semibold">
+        {target.label}
+      </b>
+    </span>
+  );
+  // One row for each line, so every route has its own tick and says where it lands on its own line.
+  const item = (key: string, index: number, words: React.ReactNode) => (
     <li
+      key={key}
       role="none"
       aria-hidden
       data-mt-summary=""
       className="relative flex w-fit max-w-full min-h-6 items-center gap-2 ps-4"
     >
-      <RouteConnector connector={connector} last={last} />
-      <div className="py-0.5 ps-1 font-mono text-[11px] leading-5">
-        {lines.slice(0, 5).map((line) => {
-          const everywhere =
-            line.sources.length > 2 &&
-            line.sources.length === leaves.length &&
-            line.sources.every((source) => leaves.includes(source));
-          const shared = (line.sources[0]?.node?.tags ?? []).filter((tag) =>
-            line.sources.every((source) => source.node?.tags?.includes(tag)),
-          );
-          return (
-            <div
-              key={line.events.join("\u0000")}
-              className="flex flex-wrap items-baseline gap-x-1.5"
-            >
-              <span className="font-semibold whitespace-nowrap">
-                {line.events.slice(0, 2).join(" · ")}
-                {line.events.length > 2 && ` +${line.events.length - 2}`}
-              </span>
-              <span className="text-muted-foreground italic">from</span>
-              {everywhere ? (
-                <span className="text-muted-foreground">
-                  any of its {plural(leaves.length, "state")}
-                </span>
-              ) : line.sources.length > 3 ? (
-                // Too many to name: say how many, and what they have in common when they share a tag.
-                <span className="text-muted-foreground">
-                  <b className="font-semibold text-foreground">{line.sources.length}</b>{" "}
-                  {shared.join(" ")} of its {plural(leaves.length, "state")}
-                </span>
-              ) : (
-                line.sources.map((source, index) => (
-                  <React.Fragment key={source.id}>
-                    {index > 0 && (
-                      <span className="text-muted-foreground">
-                        {index === line.sources.length - 1 ? "and" : ","}
-                      </span>
-                    )}
-                    <span
-                      dir="auto"
-                      title="Open the box and show this state"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        reveal(source.id, box.id);
-                      }}
-                      className="cursor-pointer font-sans text-[12px] font-semibold hover:text-signal"
-                    >
-                      {source.label}
-                    </span>
-                  </React.Fragment>
-                ))
-              )}
-            </div>
-          );
-        })}
-        {lines.length > 5 && <div className="text-muted-foreground">+{lines.length - 5} more</div>}
+      <RouteConnector connector={connector} last={last && index === count - 1} />
+      <div className="flex flex-wrap items-baseline gap-x-1.5 py-0.5 ps-1 font-mono text-[11px] leading-5">
+        {words}
       </div>
-      {!quiet && target && (
-        <span
-          onClick={(event) => {
-            event.stopPropagation();
-            reveal(target.id, box.id);
-          }}
-          className="flex cursor-pointer items-baseline gap-1 rounded-[5px] border border-dashed border-border px-1.5 font-mono text-[11px] leading-5 hover:border-foreground/30"
-        >
-          <Landing landing={route.landing} />
-          <b dir="auto" className="font-sans text-[12px] font-semibold">
-            {target.label}
-          </b>
-        </span>
-      )}
+      {landing}
     </li>
+  );
+  return (
+    <>
+      {shown.map((line, index) => {
+        const everywhere =
+          line.sources.length > 2 &&
+          line.sources.length === leaves.length &&
+          line.sources.every((source) => leaves.includes(source));
+        const shared = (line.sources[0]?.node?.tags ?? []).filter((tag) =>
+          line.sources.every((source) => source.node?.tags?.includes(tag)),
+        );
+        return item(
+          line.events.join("\u0000"),
+          index,
+          <>
+            <span className="font-semibold whitespace-nowrap">
+              {line.events.slice(0, 2).join(" · ")}
+              {line.events.length > 2 && ` +${line.events.length - 2}`}
+            </span>
+            <span className="text-muted-foreground italic">from</span>
+            {everywhere ? (
+              <span className="text-muted-foreground">
+                any of its {plural(leaves.length, "state")}
+              </span>
+            ) : line.sources.length > 3 ? (
+              // Too many to name: say how many, and what they have in common when they share a tag.
+              <span className="text-muted-foreground">
+                <b className="font-semibold text-foreground">{line.sources.length}</b>{" "}
+                {shared.join(" ")} of its {plural(leaves.length, "state")}
+              </span>
+            ) : (
+              line.sources.map((source, at) => (
+                <React.Fragment key={source.id}>
+                  {at > 0 && (
+                    <span className="text-muted-foreground">
+                      {at === line.sources.length - 1 ? "and" : ","}
+                    </span>
+                  )}
+                  <span
+                    dir="auto"
+                    title="Open the box and show this state"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      reveal(source.id, box.id);
+                    }}
+                    className="cursor-pointer font-sans text-[12px] font-semibold hover:text-signal"
+                  >
+                    {source.label}
+                  </span>
+                </React.Fragment>
+              ))
+            )}
+          </>,
+        );
+      })}
+      {rest > 0 &&
+        item(
+          "more",
+          shown.length,
+          <span className="text-muted-foreground">+{rest} more from inside</span>,
+        )}
+    </>
   );
 }
 
 /** The elbow that ties a side route to the spine. Routes that sit on the spine need none. */
+/** How a route row meets the spine: hanging off it by a tick, sitting on it as it passes, or not at all. */
+export type RouteConnectorKind = "elbow" | "pass" | "none";
 export function RouteConnector({
   connector,
   last,
   live,
 }: {
-  readonly connector: "elbow" | "none";
+  readonly connector: RouteConnectorKind;
   readonly last: boolean;
   readonly live?: boolean;
 }) {
   if (connector === "none") return null;
+  // The spine runs past the row; the row's place on it says where the route goes.
+  if (connector === "pass")
+    return (
+      <span
+        aria-hidden
+        data-mt-tick="pass"
+        className="absolute inset-y-0 start-0 border-s border-border"
+      />
+    );
   return (
     <>
       <span
         aria-hidden
+        data-mt-tick="elbow"
+        data-live={live || undefined}
         className={cn(
           "absolute start-0 top-0 h-3 w-3 rounded-es-[6px] border-s border-b coarse:h-[22px]",
           live ? "border-signal/60" : "border-border",
@@ -463,6 +491,7 @@ export function RouteConnector({
       {!last && (
         <span
           aria-hidden
+          data-mt-tick="rest"
           className="absolute start-0 top-3 bottom-0 border-s border-border coarse:top-[22px]"
         />
       )}

@@ -51,6 +51,7 @@ import {
   LeafDots,
   LookInside,
   RouteConnector,
+  type RouteConnectorKind,
   SummaryRoute,
   flowIsWhole,
   stepLayout,
@@ -1090,13 +1091,22 @@ function StepRoutes({
   const label = `${row.label} transitions`;
   const entries = (
     list: readonly MachineFlowRoute[],
-    connector: "elbow" | "none",
+    /** "carry": these routes go on down the spine. */
+    kind: "elbow" | "none" | "carry",
     open: boolean,
     /** More is drawn between these routes and the state they lead to: they name it. */
     far = false,
   ) =>
     list.flatMap((route, index) => {
       const last = index === list.length - 1 && !open;
+      // A route sits on the line only when the line leads straight to the state drawn next. One that
+      // names where it goes hangs off the spine by a tick, like every other.
+      const connector: RouteConnectorKind =
+        kind !== "carry"
+          ? kind
+          : route.landing === "next" && route.exact && !far
+            ? "pass"
+            : "elbow";
       if (route.inside)
         return [
           <SummaryRoute
@@ -1145,7 +1155,7 @@ function StepRoutes({
                   entries(segment.branch.routes, "elbow", through || extra)
                 : kind === "side"
                   ? entries(segment.routes, "elbow", through || extra)
-                  : entries(segment.routes, "none", true, far)}
+                  : entries(segment.routes, "carry", true, far)}
             </ul>
           );
         })}
@@ -1222,8 +1232,8 @@ export const RouteRow = React.memo(function RouteRow({
   readonly landing?: MachineFlowLanding | undefined;
   /** It lands on the state drawn next, not on a state inside it: position already says where it goes. */
   readonly exact?: boolean | undefined;
-  /** "none": the list it sits in draws the spine itself. */
-  readonly connector?: "elbow" | "none" | undefined;
+  /** "pass": the spine runs past the row. "none": the list it sits in draws its own lines. */
+  readonly connector?: RouteConnectorKind | undefined;
 }) {
   const {
     visible,

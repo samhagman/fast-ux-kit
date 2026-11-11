@@ -224,9 +224,24 @@
   inset-block-start: 15px;
 }
 
-/* Routes that carry on down the spine sit on its line. */
-[data-mt-routes="main"] {
-  border-inline-start: 1px solid var(--mt-line);
+/* In the outline every route has a row of its own with room around it, and meets the spine by a
+ * line as dark as the spine: a tick it hangs off, or the spine itself passing by. */
+[data-mt-routes] [data-mt-tick]:not([data-live]) {
+  border-color: var(--mt-line);
+}
+@media not (pointer: coarse) {
+  [data-mt-routes] > li {
+    min-block-size: 32px;
+    padding-block-end: 4px;
+  }
+  [data-mt-routes] [data-mt-tick="elbow"] {
+    inline-size: 15px;
+    block-size: 14px;
+    border-end-start-radius: 8px;
+  }
+  [data-mt-routes] [data-mt-tick="rest"] {
+    inset-block-start: 14px;
+  }
 }
 
 /* Alternatives side by side. The fork is one grid; the forked state's cell spans its tracks and

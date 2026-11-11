@@ -222,6 +222,16 @@ test("flow outline: states are drawn in the order the machine runs, an alternati
       assert.equal(new Set([...listed, row(block)]).size, listed.length + 1, "one row each");
       assert.ok(row(onward) < row(label) || row(onward) > row(block));
     }
+    // Every route meets the spine by a line of its own: a tick it hangs off, or the spine passing by.
+    // Only a route that leads to the state drawn right below it sits on the line.
+    for (const route of view.container.querySelectorAll("[data-mt-routes] > li")) {
+      const tick = route.querySelector(":scope > [data-mt-tick]");
+      assert.ok(tick, route.textContent);
+      const bare = !route.querySelector("[data-substop]")?.textContent.trim();
+      // An alternative's label hangs off the spine too: its states are indented under it.
+      const label = route.parentElement.dataset.mtRoutes === "branch";
+      assert.equal(tick.dataset.mtTick === "pass", bare && !label, route.textContent);
+    }
     // A route's label is its source state's own row: still inside that state's tree item.
     assert.equal(view.item("DECLINE").closest("div[data-mt-item]"), view.item("Review"));
     // Every route keeps its inner stop (→ then Enter follows it), even where position says the target.
@@ -296,6 +306,11 @@ test("regions: a declared region starts shut, says what leaves it, floats its in
     const summary = region().querySelector("[data-mt-summary]");
     assert.match(summary.textContent, /SUCCEEDED\s*from\s*Publishing/);
     assert.equal(summary.getAttribute("aria-hidden"), "true");
+    // One route to a row, each meeting the spine by a line of its own.
+    for (const row of region().querySelectorAll("[data-mt-summary]")) {
+      assert.equal(row.querySelectorAll("span.italic").length, 1, row.textContent);
+      assert.ok(row.querySelector(":scope > [data-mt-tick]"), row.textContent);
+    }
     assert.match(
       region().getAttribute("aria-description"),
       /Routes from inside: SUCCEEDED from Publishing/,
