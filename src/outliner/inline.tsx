@@ -98,6 +98,9 @@ function shiftSegments(segments: readonly InlineSegment[], by: number): readonly
     end: segment.end + by,
     contentStart: segment.contentStart + by,
     contentEnd: segment.contentEnd + by,
+    ...(segment.displayOffsets
+      ? { displayOffsets: segment.displayOffsets.map((position) => position + by) }
+      : {}),
     ...(segment.marks ? { marks: segment.marks.map(move) } : {}),
   }));
 }
@@ -139,6 +142,37 @@ function Runs({
   readonly marks?: readonly InlineRange[];
 }) {
   const { contentStart: from, contentEnd: to, display } = segment;
+  if (segment.displayOffsets) {
+    const offsets = segment.displayOffsets;
+    const out: React.ReactNode[] = [];
+    let at = 0;
+    const marked = (index: number) =>
+      marks?.some((mark) => mark.start <= offsets[index]! && mark.end > offsets[index]!) ?? false;
+    while (at < display.length) {
+      const highlighted = marked(at);
+      let end = at + 1;
+      while (
+        end < display.length &&
+        offsets[end] === offsets[end - 1]! + 1 &&
+        marked(end) === highlighted
+      )
+        end++;
+      const props = { "data-src": offsets[at], children: display.slice(at, end) };
+      out.push(
+        highlighted ? (
+          <mark
+            key={at}
+            {...props}
+            className="rounded-[3px] bg-warning/30 text-inherit ring-1 ring-warning/40 dark:bg-warning/25"
+          />
+        ) : (
+          <span key={at} {...props} />
+        ),
+      );
+      at = end;
+    }
+    return <>{out}</>;
+  }
   const hits = (marks ?? [])
     .map((mark) => ({ start: Math.max(mark.start, from), end: Math.min(mark.end, to) }))
     .filter((mark) => mark.end > mark.start)
@@ -229,6 +263,7 @@ function Segment({
       return (
         <a
           href={segment.href}
+          aria-label={segment.displayOffsets ? segment.display : undefined}
           target="_blank"
           rel="noreferrer noopener"
           onPointerDown={stop}
