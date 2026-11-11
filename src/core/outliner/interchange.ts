@@ -575,11 +575,15 @@ const HTML_STYLE: Record<InlineStyle, string> = {
 export function inlineHtml(source: string, resolveRef?: (id: string) => string | null): string {
   return walkNested<string>(
     parseInline(source),
-    (segment) => leafHtml(segment, resolveRef),
+    (segment) => leafHtml(segment, resolveRef, source),
     (mark, children) => `<${HTML_STYLE[mark.kind]}>${children.join("")}</${HTML_STYLE[mark.kind]}>`,
   ).join("");
 }
-function leafHtml(segment: InlineSegment, resolveRef?: (id: string) => string | null): string {
+function leafHtml(
+  segment: InlineSegment,
+  resolveRef?: (id: string) => string | null,
+  source?: string,
+): string {
   const text = esc(segment.display);
   switch (segment.kind) {
     case "code":
@@ -588,6 +592,10 @@ function leafHtml(segment: InlineSegment, resolveRef?: (id: string) => string | 
       // TeX stays TeX between dollars (what math-aware editors paste back as a formula).
       return `$${text}$`;
     case "link":
+      // Portable HTML may be pasted into another origin. Keep a relative destination as
+      // literal Markdown rather than dropping it or making it point at the receiving host.
+      if (segment.href?.startsWith("/") && source !== undefined)
+        return esc(source.slice(segment.start, segment.end));
     case "url":
       return segment.href && SAFE_HREF.test(segment.href)
         ? `<a href="${esc(segment.href)}">${text}</a>`
