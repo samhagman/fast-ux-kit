@@ -267,6 +267,9 @@ export interface OutlinerHandle {
    * here is kept (a move between documents keeps its links). Returns the ids it inserted.
    */
   insertItems(nodes: readonly OutlineItem[]): readonly string[];
+  /** Update existing item fields synchronously as one undo step, preserving the
+   * current caret/selection. False when refused, vetoed or unchanged. */
+  updateItem(id: string, changes: Partial<Pick<OutlineItem, "text" | "checked" | "data">>): boolean;
   /** Remove items and their subtrees as one undo step. False when refused (locked, read-only). */
   removeItems(ids: readonly string[]): boolean;
   /**
@@ -913,6 +916,21 @@ export function Outliner({
           .filter((node) => !before.has(node.id))
           .map((node) => node.id);
       },
+      updateItem: (id, changes) => {
+        const { ol } = live.current;
+        if (
+          !changes ||
+          Object.keys(changes).some((key) => !["text", "checked", "data"].includes(key))
+        )
+          return false;
+        const before = ol.latestNodes();
+        const next = ol.dispatch({
+          type: "transaction",
+          focus: false,
+          commands: [{ type: "update", id, changes }],
+        });
+        return !next.refusal && ol.latestNodes() !== before;
+      },
       removeItems: (ids) => {
         const { ol } = live.current;
         if (!ids.length) return false;
@@ -1030,6 +1048,22 @@ export function Outliner({
       document.removeEventListener("keydown", onKey);
     };
   }, [focusView]);
+  // A remote replacement can remove the last editing target (or a collaboration binding
+  // can explicitly clear it). The outgoing row may still own focus while it animates out;
+  // end that editing session now, without taking focus from another control or workspace.
+  React.useLayoutEffect(() => {
+    if (!editing || ol.state.caret) return;
+    setEditing(false);
+    const root = rootRef.current;
+    if (!lastActive.current || restoring.current || root?.closest("[inert]")) return;
+    const active = document.activeElement;
+    const row = active?.closest<HTMLElement>("[data-row]")?.dataset.row;
+    const outgoing =
+      !!root?.contains(active) && row !== undefined && !findOutlineNode(ol.state.nodes, row);
+    if (active && active !== document.body && active.isConnected && !outgoing) return;
+    if (coarsePointer()) focusTrigger(null);
+    else focusView();
+  }, [editing, ol.state.caret, ol.state.nodes, focusTrigger, focusView]);
   /*
    * Zooming into a board or a mind map (or "View as" switching the view) unmounts the tree that
    * had focus, and the browser drops it on <body>: the new view's surface takes it. A view that
@@ -2760,6 +2794,7 @@ function ZoomTitle() {
   const ref = React.useRef<HTMLTextAreaElement>(null);
   const liveModule = useLiveField();
   const host = useFieldHost(ol);
+
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -2806,6 +2841,19 @@ function ZoomTitle() {
           findOutlineNode(ol.state.nodes, id)?.node.text ?? ol.external?.resolve(id) ?? null
         }
         hooks={{
+          typed: (el) => reportCollaborationField(ol, hoisted.id, "title", "selection", el),
+          caretMoved: (el) => {
+            reportCollaborationField(ol, hoisted.id, "title", "selection", el);
+            return false;
+          },
+          composition: (active, el) =>
+            reportCollaborationField(
+              ol,
+              hoisted.id,
+              "title",
+              active ? "composition-start" : "composition-end",
+              el,
+            ),
           key: (event) => {
             const mod = event.metaKey || event.ctrlKey;
             const lower = event.key.toLowerCase();
@@ -2858,6 +2906,25 @@ function ZoomTitle() {
         autoFocus
         rows={1}
         aria-label="Zoomed item title"
+        onSelect={(event) =>
+          reportCollaborationField(ol, hoisted.id, "title", "selection", event.currentTarget)
+        }
+        onCompositionStart={(event) =>
+          reportCollaborationField(
+            ol,
+            hoisted.id,
+            "title",
+            "composition-start",
+            event.currentTarget,
+          )
+        }
+        onCompositionEnd={(event) => {
+          const el = event.currentTarget;
+          setTimeout(
+            () => reportCollaborationField(ol, hoisted.id, "title", "composition-end", el),
+            0,
+          );
+        }}
         value={hoisted.text}
         onChange={(event) =>
           ol.dispatch({ type: "text", id: hoisted.id, text: event.target.value, time: Date.now() })
@@ -4431,6 +4498,24 @@ function noticeText(ui: OutlinerUi, notice: FieldNotice): string {
   }
 }
 
+function reportCollaborationField(
+  ol: OutlinerController,
+  itemId: string,
+  field: "title" | "note",
+  kind: "selection" | "composition-start" | "composition-end",
+  el: CaretField,
+) {
+  const backward = el.selectionDirection === "backward";
+  ol.reportField({
+    kind,
+    itemId,
+    field,
+    text: el.value,
+    anchor: backward ? el.selectionEnd : el.selectionStart,
+    head: backward ? el.selectionStart : el.selectionEnd,
+  });
+}
+
 export function RowField({
   row,
   field,
@@ -4446,6 +4531,15 @@ export function RowField({
   const liveModule = useLiveField();
   const LiveField = liveModule?.LiveField;
   const host = useFieldHost(ol);
+  const attachmentOwner = React.useRef({ ol, ui, active: true });
+  attachmentOwner.current.ol = ol;
+  attachmentOwner.current.ui = ui;
+  React.useEffect(() => {
+    attachmentOwner.current.active = true;
+    return () => {
+      attachmentOwner.current.active = false;
+    };
+  }, []);
   const ref = React.useRef<CaretField | null>(null);
   const textareaRef = React.useCallback((el: HTMLTextAreaElement | null) => {
     if (el || ref.current instanceof HTMLTextAreaElement) ref.current = el;
@@ -4453,6 +4547,11 @@ export function RowField({
   /** Set when a handled key moves the caret elsewhere; React's synthetic select for the same
    *  keydown would otherwise report this field's stale selection and undo that move. */
   const suppressSelect = React.useRef(false);
+  const reportField = (
+    kind: "selection" | "composition-start" | "composition-end",
+    el: CaretField,
+  ) => reportCollaborationField(ol, row.id, field, kind, el);
+
   const committed = field === "title" ? row.node.text : (row.details.note ?? "");
   /*
    * a keystroke paints from this local draft; the document update (and every part of the
@@ -4757,18 +4856,41 @@ export function RowField({
   const attachFiles = (files: readonly File[]) => {
     const handler = ui.host.onAttach;
     if (!handler || ol.readOnly || row.locked) return;
-    void Promise.resolve(handler(files, { itemId: row.id, field })).then((attachments) => {
-      const markup = attachmentMarkup(attachments);
-      if (!markup) return;
-      const node = findOutlineNode(ol.latestNodes(), row.id)?.node as OutlineItem | undefined;
-      if (!node) return;
-      const note = node.data?.note ? `${node.data.note}\n${markup}` : markup;
-      ol.dispatch({
-        type: "transaction",
-        commands: [{ type: "update", id: row.id, changes: { data: { ...node.data, note } } }],
+    void Promise.resolve()
+      .then(() => handler(files, { itemId: row.id, field }))
+      .then((attachments) => {
+        const current = attachmentOwner.current;
+        if (
+          !current.active ||
+          current.ol.readOnly ||
+          current.ol.isItemLocked(row.id) ||
+          current.ui.host.onAttach !== handler
+        )
+          return;
+        const markup = attachmentMarkup(attachments);
+        if (!markup) return;
+        const node = findOutlineNode(current.ol.latestNodes(), row.id)?.node as
+          OutlineItem | undefined;
+        if (!node) return;
+        const note = node.data?.note ? `${node.data.note}\n${markup}` : markup;
+        const before = current.ol.latestNodes();
+        const next = current.ol.dispatch({
+          type: "transaction",
+          focus: false,
+          commands: [{ type: "update", id: row.id, changes: { data: { ...node.data, note } } }],
+        });
+        // A controlled host can veto synchronously: the proposed result alone
+        // does not mean the current editor accepted the attachment.
+        current.ui.announce(
+          next.refusal || current.ol.latestNodes() === before
+            ? current.ui.labels.attachFailed
+            : current.ui.labels.attached(attachments.length),
+        );
+      })
+      .catch(() => {
+        if (attachmentOwner.current.active)
+          attachmentOwner.current.ui.announce(attachmentOwner.current.ui.labels.attachFailed);
       });
-      ui.announce(ui.labels.attached(attachments.length));
-    });
   };
   /** `https://…?zoom=<id>` of this page (or `?doc=…` of this workspace): insert `[[title|id]]`. */
   const pasteItemLink = (text: string, el: CaretField): boolean => {
@@ -4898,9 +5020,15 @@ export function RowField({
           hooks={{
             menuKey: onMenuKey,
             key: onFieldKey,
-            typed: (el) => ac.sync(el, true),
+            typed: (el) => {
+              ac.sync(el, true);
+              reportField("selection", el);
+            },
+            composition: (active, el) =>
+              reportField(active ? "composition-start" : "composition-end", el),
             hold: (el) => slash.onChange(el),
             caretMoved: (el) => {
+              reportField("selection", el);
               if (slash.onSelect(el)) return true;
               ac.sync(el);
               return false;
@@ -4961,6 +5089,11 @@ export function RowField({
         data-field={field}
         {...aria}
         spellCheck
+        onCompositionStart={(event) => reportField("composition-start", event.currentTarget)}
+        onCompositionEnd={(event) => {
+          const el = event.currentTarget;
+          setTimeout(() => reportField("composition-end", el), 0);
+        }}
         onMouseDown={() => (suppressSelect.current = false)}
         onChange={(event) => {
           // Typing the `/query` itself: shown, never stored (the menu filters on it).
@@ -4976,6 +5109,7 @@ export function RowField({
           });
           setDraft({ text, seq: ol.currentSeq() });
           ac.sync(event.target, true);
+          reportField("selection", event.target);
         }}
         onSelect={(event) => {
           const el = event.currentTarget;
@@ -4984,6 +5118,7 @@ export function RowField({
           if (suppressSelect.current || !el.isConnected || document.activeElement !== el) return;
           if (slash.onSelect(el)) return;
           ac.sync(el);
+          reportField("selection", el);
           ol.dispatch({
             type: "caret",
             id: row.id,

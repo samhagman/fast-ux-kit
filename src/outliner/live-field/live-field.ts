@@ -228,6 +228,12 @@ function readAtCaret(
  */
 function leaveClosedStyles(tr: Transaction, source: string, head: number, config: FieldConfig) {
   if (!tr.selection.empty) return;
+  // Only hidden delimiters give a caret an inside/outside choice. In plain text the probe can
+  // change the grammar (e.g. split $$ into two math delimiters); that is not a format command.
+  // Leaving a style there would insert new closing/opening markers on the next keystroke.
+  const map = serialize(tr.doc);
+  if (posToSource(map, tr.selection.head, "lo") === posToSource(map, tr.selection.head, "hi"))
+    return;
   const probe = sourceToDoc(config.field, source.slice(0, head) + PROBE + source.slice(head));
   let wanted: readonly Mark[] | null = null;
   probe.descendants((node) => {

@@ -383,6 +383,7 @@ export const DEFAULT_LABELS = {
   redone: "Redone",
   dragCopy: "Copy",
   versionHistory: "Version history…",
+  attachFailed: "The file could not be attached. Your existing text is unchanged.",
   attached: (count: number) => `Attached ${plural(count, "file")}`,
   // A document that cannot be shown (the rest of the workspace keeps working)
   documentFailed: (title: string) => `${title} can't be shown`,

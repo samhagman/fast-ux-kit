@@ -30,6 +30,14 @@ import type { OutlinerPaletteCommand } from "@samhagman/fast-ux-kit/outliner";
 import { deepLinkTarget } from "@samhagman/fast-ux-kit/outliner";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
+const AttachmentDemo = React.lazy(() =>
+  import("./attachment-demo").then((m) => ({ default: m.AttachmentDemo })),
+);
+
+const NotePagesDemo = React.lazy(() =>
+  import("./note-pages-demo").then((module) => ({ default: module.NotePagesDemo })),
+);
+
 /**
  * The page persists the reader's settings (the outliner never touches storage): controlled
  * `settings` + `onSettingsChange`, saved to localStorage, shared by every document.
@@ -113,6 +121,22 @@ export function OutlinerPage() {
     () => new URLSearchParams(window.location.search).get("workspace") === "1",
     [],
   );
+  const pages = React.useMemo(
+    () => new URLSearchParams(window.location.search).get("pages") === "1",
+    [],
+  );
+  if (new URLSearchParams(window.location.search).get("attachments") === "1")
+    return (
+      <React.Suspense fallback={<p>Loading image rows…</p>}>
+        <AttachmentDemo />
+      </React.Suspense>
+    );
+  if (pages)
+    return (
+      <React.Suspense fallback={<p role="status">Loading page extensions…</p>}>
+        <NotePagesDemo />
+      </React.Suspense>
+    );
   return workspace ? <WorkspacePage /> : <SinglePage />;
 }
 

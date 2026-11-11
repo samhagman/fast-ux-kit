@@ -400,3 +400,61 @@ test("hook: the typing fast path patches rows exactly like a full projection wou
     fresh.unmount();
   });
 });
+
+test("collaboration: precise originating operation/base/carets accompany proposals", () => {
+  const nodes = doc();
+  const state = start(nodes);
+  const operation = { type: "text", id: "a", text: "Changed", caret: 3, time: 1 };
+  const step = c.stepOutline(state, operation, options, true, 42);
+  assert.equal(step.proposal.meta.base, nodes);
+  assert.equal(step.proposal.meta.operation, operation);
+  assert.equal(step.proposal.meta.beforeCaret, state.editor.caret);
+  assert.equal(step.proposal.meta.afterCaret, step.result.caret);
+});
+
+test("collaboration: remote values never become snapshot undo and map UTF-16 caret", () => {
+  const host = cloningHost(start());
+  host.act({ type: "text", id: "a", text: "Alpha!", caret: 6, time: 1 });
+  host.echo();
+  assert(host.state.editor.history.past.length > 0);
+  const remote = [{ id: "a", text: "Remote Alpha!" }, ...doc().slice(1)];
+  let mapped = false;
+  const result = c.reconcileOutline(host.state, remote, {
+    ...options,
+    collaboration: {
+      canUndo: true,
+      canRedo: false,
+      undo() {},
+      redo() {},
+      mapCaret(caret, before, incoming) {
+        assert.equal(before, host.state.editor.nodes);
+        assert.equal(incoming, remote);
+        mapped = true;
+        return { ...caret, id: "a", start: 12, end: 12 };
+      },
+    },
+  });
+  assert(mapped);
+  assert.equal(result.outcome, "external");
+  assert.deepEqual(result.state.editor.history.past, []);
+  assert.deepEqual(result.state.editor.history.future, []);
+  assert.equal(result.state.editor.caret.start, 12);
+});
+
+test("collaboration: local echoes keep proposal identity and do not invoke remote mapper", () => {
+  const state = start();
+  const step = c.stepOutline(state, { type: "text", id: "a", text: "local" }, options, true, 1);
+  const result = c.reconcileOutline(step.state, step.result.nodes, {
+    collaboration: {
+      canUndo: false,
+      canRedo: false,
+      undo() {},
+      redo() {},
+      mapCaret() {
+        throw Error("not remote");
+      },
+    },
+  });
+  assert.equal(result.outcome, "echo");
+  assert.equal(result.accepted[0], step.proposal);
+});
