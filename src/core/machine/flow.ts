@@ -62,6 +62,13 @@ export interface MachineFlowBranch {
   /** Its last step flows back into the spine it left. */
   readonly rejoins: boolean;
 }
+/**
+ * One stretch of a step's routes, in the order the machine tries them: a run of routes listed
+ * beside the spine, a run that carries on to the next step, or an alternative with its states.
+ */
+export type MachineFlowSegment =
+  | { readonly kind: "side" | "carry"; readonly routes: readonly MachineFlowRoute[] }
+  | { readonly kind: "branch"; readonly branch: MachineFlowBranch };
 export interface MachineFlowStep {
   readonly rowId: string;
   /** The step above leads straight here. Otherwise routes from elsewhere meet here. */
@@ -70,10 +77,24 @@ export interface MachineFlowStep {
   readonly side: readonly MachineFlowRoute[];
   /** Routes from inside this step that leave the container. Worth drawing only while the step is shut. */
   readonly exits: readonly MachineFlowRoute[];
-  /** Alternatives, side by side. */
+  /**
+   * Alternatives. Side by side as columns, where a branch with no steps is the direct route on to
+   * the next step; or, when `stacked`, one under another, each hanging off the spine.
+   */
   readonly columns: readonly MachineFlowBranch[];
-  /** Routes that carry on to the next step, when there are no columns. */
+  /**
+   * The alternatives are drawn one under another instead of side by side: there is only one, or one
+   * of them is too long to stand beside the others without pushing the rest off the page.
+   */
+  readonly stacked: boolean;
+  /** Routes that carry on to the next step. Empty when side-by-side columns carry them instead. */
   readonly main: readonly MachineFlowRoute[];
+  /**
+   * Every route of the step in the order the document declares them, which is the order the machine
+   * tries them: a guarded route stays above the unguarded one it falls back to. This is the order
+   * they are drawn in, except side by side, where columns have no first and last.
+   */
+  readonly sequence: readonly MachineFlowSegment[];
 }
 export interface MachineFlowArrival {
   readonly sourceRowId: string;
@@ -105,6 +126,8 @@ export interface MachineTreeFlowPlan {
 /** Above these the plain list is used: placement is not worth its cost, and nobody reads it as a flow. */
 const MAX_ROWS = 20_000;
 const MAX_CHILDREN = 1_000;
+/** The most steps an alternative may hold and still stand side by side with the others. */
+const COLUMN_STEPS = 5;
 
 const EMPTY_PLAN: MachineTreeFlowPlan = {
   regions: [],
@@ -131,13 +154,18 @@ interface DraftRoute {
   exact: boolean;
   landing: MachineFlowLanding;
 }
+type DraftBranch = { routes: DraftRoute[]; steps: DraftStep[]; rejoins: boolean };
+type DraftSegment =
+  { kind: "side" | "carry"; routes: DraftRoute[] } | { kind: "branch"; branch: DraftBranch };
 interface DraftStep {
   rowId: string;
   linked: boolean;
   side: DraftRoute[];
   exits: DraftRoute[];
-  columns: { routes: DraftRoute[]; steps: DraftStep[]; rejoins: boolean }[];
+  columns: DraftBranch[];
+  stacked: boolean;
   main: DraftRoute[];
+  sequence: DraftSegment[];
   /** The step this one flows straight on to, if any. */
   to: string | undefined;
   /** Ends a branch by flowing back into the spine the branch left. */
@@ -244,7 +272,11 @@ function dominators(
   const depth = new Map<string, number>();
   for (const id of byDepth)
     depth.set(id, 1 + Math.max(0, ...(kidsOf.get(id) ?? []).map((kid) => depth.get(kid) ?? 0)));
-  return { roots, kids: (id: string) => kidsOf.get(id) ?? [], isMerge, back, depth };
+  /** How many steps each one dominates, itself included. */
+  const size = new Map<string, number>();
+  for (const id of byDepth)
+    size.set(id, 1 + (kidsOf.get(id) ?? []).reduce((sum, kid) => sum + (size.get(kid) ?? 0), 0));
+  return { roots, kids: (id: string) => kidsOf.get(id) ?? [], isMerge, back, depth, size };
 }
 
 /** Root-first list of rows from the machine row down to `rowId`. */
@@ -538,48 +570,74 @@ export function planMachineTreeFlow(model: MachineTreeModel): MachineTreeFlowPla
       const side: DraftRoute[] = [];
       const onward: DraftRoute[] = [];
       const rejoin: DraftRoute[] = [];
-      const forks = new Map<string, DraftRoute[]>();
+      const forks = new Map<string, DraftBranch>();
+      // The same routes again, in the order they are declared: runs of a kind, and each alternative
+      // where its first route is.
+      const sequence: DraftSegment[] = [];
+      const run = (kind: "side" | "carry", route: DraftRoute) => {
+        const last = sequence[sequence.length - 1];
+        if (last?.kind === kind) last.routes.push(route);
+        else sequence.push({ kind, routes: [route] });
+      };
       for (const route of routesOf(id)) {
         const g = route.landsOn;
         if (g === undefined) {
           side.push(route);
+          run("side", route);
           continue;
         }
         const back = D.back.has(route);
         if (g === next && !back) {
           onward.push(route);
+          run("carry", route);
           owned.add(g);
         } else if (branches.includes(g) && !back) {
           owned.add(g);
-          push(forks, g, route);
+          let branch = forks.get(g);
+          if (!branch) {
+            forks.set(g, (branch = { routes: [], steps: [], rejoins: false }));
+            sequence.push({ kind: "branch", branch });
+          }
+          branch.routes.push(route);
         } else if (!spine.length && after !== undefined && g === after && !back) {
           // The end of a branch that flows back into the spine it left.
           chips.push({ s: id, g, route, back: false });
           rejoin.push(route);
+          run("carry", route);
         } else {
           chips.push({ s: id, g, route, back });
           side.push(route);
+          run("side", route);
         }
       }
-      const columns: DraftStep["columns"] = [];
+      const columns: DraftBranch[] = [];
       let rejoined = false;
-      for (const [child, routes] of forks) {
+      for (const [child, branch] of forks) {
         const steps = build(child, undefined, next);
-        const rejoins = steps[steps.length - 1]!.rejoinsUp;
-        rejoined ||= rejoins;
-        columns.push({ routes, steps: link(steps), rejoins });
+        branch.steps = link(steps);
+        branch.rejoins = steps[steps.length - 1]!.rejoinsUp;
+        rejoined ||= branch.rejoins;
+        columns.push(branch);
       }
       const carry = [...onward, ...rejoin];
+      // Side by side only while every alternative is small, and there is more than one of them: a
+      // single alternative reads better hanging off the spine, and a long one would push the rest
+      // off the page.
+      const sideBySide =
+        columns.length > 1 &&
+        [...forks.keys()].every((child) => D.size.get(child)! <= COLUMN_STEPS);
       const step: DraftStep = {
         rowId: id,
         linked: false,
         side,
         exits: [...(exits.get(id)?.values() ?? [])],
         columns:
-          columns.length && carry.length
+          sideBySide && carry.length
             ? [{ routes: carry, steps: [], rejoins: true }, ...columns]
             : columns,
-        main: columns.length ? [] : carry,
+        stacked: columns.length > 0 && !sideBySide,
+        main: sideBySide ? [] : carry,
+        sequence,
         to: onward.length || rejoined ? next : undefined,
         rejoinsUp: rejoin.length > 0,
       };
@@ -652,9 +710,13 @@ export function planMachineTreeFlow(model: MachineTreeModel): MachineTreeFlowPla
         for (const route of list)
           if (!route.inside) for (const id of route.transitionRowIds) rank.set(id, rank.size);
       };
-      visit(step.side);
-      for (const column of step.columns) visit(column.routes);
-      visit(step.main);
+      if (step.columns.length && !step.stacked) {
+        // Side by side: the side routes, then each column's label.
+        visit(step.side);
+        for (const column of step.columns) visit(column.routes);
+      } else
+        for (const segment of step.sequence)
+          visit(segment.kind === "branch" ? segment.branch.routes : segment.routes);
       // Array.prototype.sort is stable: routes that share a place keep the order they were declared in.
       sorted = [...routes].sort((a, b) => (rank.get(a) ?? rank.size) - (rank.get(b) ?? rank.size));
     }

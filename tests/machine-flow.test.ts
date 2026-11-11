@@ -111,7 +111,7 @@ test("alternatives are columns, and the state they meet at sits on the spine bel
   );
 });
 
-test("one alternative stands beside the direct route, and its way back is a loop", () => {
+test("one alternative hangs off the spine, stacked, and its way back is a loop", () => {
   const doc = machine(
     [state("work"), state("failed"), state("next")],
     routes("work>failed:FAILED", "work>next:DONE", "failed>work:RETRY"),
@@ -121,15 +121,90 @@ test("one alternative stands beside the direct route, and its way back is a loop
   const flow = flowPlan.flows.get(root)!;
   const work = flow.steps[0]!;
   assert.deepEqual(ids(flow.steps), ["work", "next"]);
-  assert.equal(work.columns.length, 2);
-  assert.deepEqual(work.columns[0]!.steps, [], "the direct route is a column with no steps");
-  assert.deepEqual(work.columns[0]!.routes[0]!.transitionRowIds, [route("t1")]);
-  assert.deepEqual(ids(work.columns[1]!.steps), ["failed"]);
-  assert.equal(work.columns[1]!.steps[0]!.side[0]!.landing, "back");
+  assert.equal(work.stacked, true, "a single alternative is not a column");
+  assert.equal(work.columns.length, 1);
+  assert.deepEqual(ids(work.columns[0]!.steps), ["failed"]);
+  assert.deepEqual(
+    work.main[0]!.transitionRowIds,
+    [route("t1")],
+    "the direct route stays on the spine",
+  );
+  assert.equal(work.columns[0]!.steps[0]!.side[0]!.landing, "back");
   assert.equal(flow.steps[1]!.linked, true);
-  // A state's routes are listed in the order they are drawn: the direct column first.
+  // A state's routes are listed in the order they are drawn: the alternative's label, then the route on.
   const workRow = presented.rows.find((r) => r.id === row("work"))!;
-  assert.deepEqual(workRow.childIds, [route("t1"), route("t0")]);
+  assert.deepEqual(workRow.childIds, [route("t0"), route("t1")]);
+  assert.deepEqual(
+    work.sequence.map((segment) => segment.kind),
+    ["branch", "carry"],
+  );
+});
+
+test("a state's routes keep the order the machine tries them, whatever each one leads to", () => {
+  // A guarded skip, then the unguarded route it falls back to: the fallback opens an alternative.
+  const nodes = [state("intake"), state("draft"), state("review"), state("end")];
+  const rest = ["draft>review", "review>end"];
+  const kinds = (specs: string[]) => {
+    const { plan: flowPlan, presented } = plan(
+      machine(nodes, routes(...specs, ...rest), { initialId: "intake" }),
+    );
+    const first = flowPlan.flows.get(root)!.steps[0]!;
+    assert.equal(first.stacked, true);
+    assert.deepEqual(ids(first.columns[0]!.steps), ["draft", "review"]);
+    return {
+      kinds: first.sequence.map((segment) => segment.kind),
+      listed: presented.rows.find((r) => r.id === row("intake"))!.childIds.slice(-specs.length),
+    };
+  };
+  assert.deepEqual(kinds(["intake>end:SKIP", "intake>draft:GO"]), {
+    kinds: ["carry", "branch"],
+    listed: [route("t0"), route("t1")],
+  });
+  assert.deepEqual(kinds(["intake>draft:GO", "intake>end:SKIP"]), {
+    kinds: ["branch", "carry"],
+    listed: [route("t0"), route("t1")],
+  });
+  // Routes of one kind in a row are one run; a route of another kind between them splits it.
+  assert.deepEqual(
+    kinds(["intake>intake:AGAIN", "intake>end:SKIP", "intake>nowhere:LOST", "intake>draft:GO"]),
+    {
+      kinds: ["side", "carry", "side", "branch"],
+      listed: [route("t0"), route("t1"), route("t2"), route("t3")],
+    },
+  );
+});
+
+test("small alternatives stand side by side; a long one stacks them all", () => {
+  const two = machine(
+    [state("a"), state("b"), state("c"), state("end")],
+    routes("a>b", "a>c", "a>end", "b>end", "c>end"),
+    { initialId: "a" },
+  );
+  const a = plan(two).plan.flows.get(root)!.steps[0]!;
+  assert.equal(a.stacked, false);
+  assert.deepEqual(a.columns[0]!.steps, [], "side by side, the direct route is the first column");
+  assert.equal(a.columns.length, 3);
+  assert.deepEqual(a.main, []);
+  // Six states down one alternative is too long to stand beside the other.
+  const chain = ["b", "b1", "b2", "b3", "b4", "b5"];
+  const long = machine(
+    [state("a"), ...chain.map((id) => state(id)), state("c"), state("end")],
+    routes(
+      "a>b",
+      "a>c",
+      ...chain.slice(1).map((id, index) => `${chain[index]}>${id}`),
+      "b5>end",
+      "c>end",
+    ),
+    { initialId: "a" },
+  );
+  const stacked = plan(long).plan.flows.get(root)!.steps[0]!;
+  assert.equal(stacked.stacked, true);
+  assert.equal(
+    stacked.columns.every((column) => column.steps.length > 0),
+    true,
+    "no direct-route column when stacked",
+  );
 });
 
 test("every state of a container lands in exactly one step, reachable or not", () => {

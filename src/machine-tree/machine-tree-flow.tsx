@@ -77,30 +77,103 @@ export function FlowSteps({
           step.linked || (column && index === 0) ? "linked" : index > 0 ? "met" : undefined;
         if (!step.columns.length)
           return <StateCell key={step.rowId} id={step.rowId} step={step} flow={flow} lead={lead} />;
+        const count = step.columns.length;
         const last = step.columns.reduce((at, branch, i) => (branch.rejoins ? i : at), -1);
+        const layout = step.stacked ? stepLayout(step) : undefined;
         return (
           <div
             key={step.rowId}
             role="none"
-            data-mt-fork=""
+            data-mt-fork={step.stacked ? "stacked" : "columns"}
             data-lead={lead}
-            style={{ "--mt-cols": step.columns.length } as React.CSSProperties}
+            style={
+              {
+                [layout ? "--mt-rows" : "--mt-cols"]: layout ? layout.rows : count,
+              } as React.CSSProperties
+            }
           >
             <StateCell id={step.rowId} step={step} flow={flow} />
-            {step.columns.map((branch, i) => (
-              <FlowColumn
-                key={i}
-                branch={branch}
-                flow={flow}
-                index={i}
-                closes={i <= last}
-                end={i === last}
-              />
-            ))}
+            {layout
+              ? layout.segments.map(
+                  ({ segment, row, through }, i) =>
+                    segment.kind === "branch" && (
+                      <FlowBranch
+                        key={i}
+                        branch={segment.branch}
+                        flow={flow}
+                        row={row + 1}
+                        through={through}
+                      />
+                    ),
+                )
+              : step.columns.map((branch, i) => (
+                  <FlowColumn
+                    key={i}
+                    branch={branch}
+                    flow={flow}
+                    index={i}
+                    closes={i <= last}
+                    end={i === last}
+                  />
+                ))}
           </div>
         );
       })}
     </>
+  );
+}
+
+/*
+ * A step's routes are drawn in the order the machine tries them, so a guarded route stays above
+ * the unguarded one it falls back to. Stacked alternatives share one grid with the state they
+ * leave, by rows:
+ *
+ *   row 1    the state's card            ┐
+ *   row 2    a run of its routes         │ the state's own tree item spans these rows and hands
+ *   row 3    the label of an alternative │ them down (subgrid), so its route rows land between …
+ *   row 4    ── that alternative's states┘ … the blocks, which are its sibling states
+ *   row 5    the next run of routes
+ *   …
+ *   last     kept spare, for what only a view knows to add (a shut box's routes from inside)
+ */
+/** Where each stretch of a step's routes sits, and whether the spine carries on below it. */
+export function stepLayout(step: MachineFlowStep) {
+  // The line goes on to the next state: a route carries on down it, or an alternative curves back into it.
+  const flowsOn =
+    step.sequence.some((segment) => segment.kind === "carry") ||
+    step.columns.some((branch) => branch.rejoins);
+  let row = 2;
+  const segments = step.sequence.map((segment, index) => {
+    const at = row;
+    row += segment.kind === "branch" ? 2 : 1;
+    return { segment, row: at, through: index < step.sequence.length - 1 || flowsOn };
+  });
+  return { segments, rows: row, flowsOn };
+}
+
+/** One alternative hanging off the spine: its states indented, and a curve back if it flows back. */
+function FlowBranch({
+  branch,
+  flow,
+  row,
+  through,
+}: {
+  readonly branch: MachineFlowBranch;
+  readonly flow: MachineFlow;
+  readonly row: number;
+  readonly through: boolean;
+}) {
+  return (
+    <div
+      role="none"
+      data-mt-col=""
+      data-rejoins={branch.rejoins || undefined}
+      data-through={through || branch.rejoins ? "" : undefined}
+      style={{ "--mt-row": row } as React.CSSProperties}
+    >
+      <FlowSteps steps={branch.steps} flow={flow} column />
+      <span aria-hidden data-mt-close="" />
+    </div>
   );
 }
 
@@ -271,17 +344,20 @@ export function SummaryRoute({
   route,
   connector,
   last,
+  far,
 }: {
   readonly box: MachineTreeRow;
   readonly route: MachineFlowRoute;
   readonly connector: "elbow" | "none";
   readonly last: boolean;
+  /** Other routes are drawn between this one and the state it leads to, so it names that state. */
+  readonly far?: boolean;
 }) {
   const { rows, links, reveal } = useTree();
   const lines = summaryLines(route, rows);
   const leaves = React.useMemo(() => leavesOf(box, rows), [box, rows]);
   const target = targetOf(route, rows, links);
-  const quiet = route.landing === "next" && route.exact;
+  const quiet = route.landing === "next" && route.exact && !far;
   return (
     <li
       role="none"
@@ -463,18 +539,17 @@ function ArrivalLine({
     <div
       aria-hidden
       data-mt-arrivals=""
-      className="flex flex-wrap items-baseline gap-x-1 border-t border-dashed border-border px-2.5 py-1 font-mono text-[10.5px] leading-4 text-muted-foreground"
+      className="flex max-w-[26rem] flex-wrap items-baseline gap-x-1 border-t border-dashed border-border px-2.5 py-1 font-mono text-[10.5px] leading-4 text-muted-foreground"
     >
       {entering && (
         <ArrowDownRight aria-hidden className="size-3 shrink-0 self-center rtl:-scale-x-100" />
       )}
       <span className={cn(strong && "font-semibold text-foreground")}>{lead}</span>
-      {sources.slice(0, 3).map((arrival, index) => {
+      {sources.slice(0, 3).map((arrival, index, shown) => {
         const source = rows.get(arrival.sourceRowId);
         const names = [...new Set(arrival.transitionRowIds.map((id) => eventOf(rows.get(id))))];
         return (
           <React.Fragment key={arrival.sourceRowId}>
-            {index > 0 && <span>,</span>}
             <span
               onClick={(event) => {
                 event.stopPropagation();
@@ -490,11 +565,12 @@ function ArrivalLine({
               </b>{" "}
               · {names.slice(0, 2).join(", ")}
               {names.length > 2 && ` +${names.length - 2}`}
+              {(index < shown.length - 1 || sources.length > 3) && ","}
             </span>
           </React.Fragment>
         );
       })}
-      {sources.length > 3 && <span>, +{sources.length - 3} more</span>}
+      {sources.length > 3 && <span>+{sources.length - 3} more</span>}
     </div>
   );
 }

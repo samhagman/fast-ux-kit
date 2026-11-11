@@ -65,6 +65,7 @@ order the document lists them in. Lines are borders: nothing is drawn over conte
 | What you see                    | What it means                                                   |
 | ------------------------------- | --------------------------------------------------------------- |
 | A state directly under an arrow | The route above leads there; that route shows no target         |
+| `↓ State`                       | The route carries on to that state, drawn further down          |
 | Columns                         | Alternatives. A column with no states is the direct route on    |
 | A dotted lead-in                | Nothing drawn above leads here; routes from elsewhere meet here |
 | `↓ joins`, `↑ joins`            | The route lands on a state other routes also reach              |
@@ -74,13 +75,39 @@ order the document lists them in. Lines are borders: nothing is drawn over conte
 | `↘ in from`                     | The state is entered from outside its box                       |
 | `EVENT from State` under a box  | A route that starts at a state inside that box                  |
 
+Alternatives stand side by side only when there are at least two and each holds at
+most five states. A single alternative, or a set with a long one, is stacked
+instead: each hangs off the spine under its own label, with its states indented and
+a curve back where it flows back.
+
+A state's routes are drawn in the order the document declares them, which is the
+order the machine tries them. A guarded route therefore stays above the unguarded
+one it falls back to, whichever of the two opens an alternative. A route that
+carries on down the spine names its target when other routes are drawn between it
+and that state.
+
+```
+┌ Work ┐
+│  DONE [ready] ↓ Next    tried first: carries on, and names where to
+├─ DONE                   otherwise: the alternative's label
+│    ▼
+│   ┌ Review ┐            its states, indented
+├───╯                     a curve back into the spine
+▼
+┌ Next ┐
+```
+
+Side by side is the exception: columns have no first and last, and the direct route
+is always the first column, on the spine.
+
 The first state drawn in a box is where it starts, so there is no separate start
 mark. A state's accessible name still says "initial" where the machine declares it.
 
 The DOM keeps the tree's own shape. A state's routes stay inside its tree item and
 sibling states stay siblings, so keyboard order is DOM order: a state, its routes,
-then the columns under it from the start side to the end side. A column's label is
-its source state's own route row, set over the column with CSS subgrid. In a host
+then the alternatives under it in order. An alternative's label is its source
+state's own route row, set over (or, stacked, just above) the states it leads to
+with CSS subgrid. In a host
 narrower than 520px the columns stack, each under a caption naming its routes.
 
 A search, a parallel state's lanes, and a container with duplicate ids or more than

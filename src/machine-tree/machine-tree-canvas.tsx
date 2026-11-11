@@ -53,6 +53,7 @@ import {
   RouteConnector,
   SummaryRoute,
   flowIsWhole,
+  stepLayout,
   summaryText,
   useLookInside,
 } from "./machine-tree-flow.js";
@@ -1060,8 +1061,9 @@ export function StateBlock({
 }
 
 /**
- * A flow step's routes, each where the outline places it: side routes with their landing, then
- * either the routes that carry on down the spine or one list per column head.
+ * A flow step's routes, each where the outline places it. In the order the machine tries them:
+ * routes listed beside the spine with their landing, routes that carry on down it, and the label
+ * of each alternative. Side by side instead: the side routes, then one list per column head.
  */
 function StepRoutes({
   row,
@@ -1085,9 +1087,14 @@ function StepRoutes({
   // A route the plan does not place (it cannot happen for a whole flow) is still listed, plainly.
   const loose = routes.filter((id) => !placed.has(id));
   const forked = step.columns.length > 0;
-  const more = forked || step.main.length > 0;
   const label = `${row.label} transitions`;
-  const entries = (list: readonly MachineFlowRoute[], connector: "elbow" | "none", open: boolean) =>
+  const entries = (
+    list: readonly MachineFlowRoute[],
+    connector: "elbow" | "none",
+    open: boolean,
+    /** More is drawn between these routes and the state they lead to: they name it. */
+    far = false,
+  ) =>
     list.flatMap((route, index) => {
       const last = index === list.length - 1 && !open;
       if (route.inside)
@@ -1098,6 +1105,7 @@ function StepRoutes({
             route={route}
             connector={connector}
             last={last}
+            far={far}
           />,
         ];
       const id = route.transitionRowIds[0]!;
@@ -1108,40 +1116,79 @@ function StepRoutes({
               id={id}
               last={last}
               landing={route.landing}
-              exact={route.exact}
+              exact={route.exact && !far}
               connector={connector}
             />,
           ]
         : [];
     });
-  return (
-    <>
-      {(side.length > 0 || loose.length > 0) && (
-        <ul role="group" aria-label={label} data-mt-routes="side" className="ms-3.5 mt-0.5">
-          {entries(side, "elbow", more || loose.length > 0)}
-          {loose.map((id, index) => (
-            <RouteRow key={id} id={id} last={index === loose.length - 1 && !more} />
-          ))}
-        </ul>
-      )}
-      {forked
-        ? step.columns.map((column, index) => (
+  if (!forked || step.stacked) {
+    const { segments, rows: spare, flowsOn } = stepLayout(step);
+    const exits = folded ? step.exits : [];
+    const extra = exits.length > 0 || loose.length > 0;
+    return (
+      <>
+        {segments.map(({ segment, row: at, through }, index) => {
+          const kind = segment.kind;
+          const far = index < segments.length - 1 || extra;
+          return (
             <ul
               key={index}
               role="group"
               aria-label={label}
-              data-mt-routes="head"
-              data-mt-first={index === 0 ? "" : undefined}
-              style={{ "--mt-col": index + 1 } as React.CSSProperties}
+              data-mt-routes={kind === "carry" ? "main" : kind}
+              className={cn("ms-3.5", index === 0 && kind === "side" && "mt-0.5")}
+              style={{ "--mt-row": at } as React.CSSProperties}
             >
-              {entries(column.routes, "none", true)}
+              {kind === "branch"
+                ? // The label hangs off the spine by an elbow; the states it leads to are drawn right under it.
+                  entries(segment.branch.routes, "elbow", through || extra)
+                : kind === "side"
+                  ? entries(segment.routes, "elbow", through || extra)
+                  : entries(segment.routes, "none", true, far)}
             </ul>
-          ))
-        : step.main.length > 0 && (
-            <ul role="group" aria-label={label} data-mt-routes="main" className="ms-3.5">
-              {entries(step.main, "none", true)}
-            </ul>
-          )}
+          );
+        })}
+        {extra && (
+          <ul
+            role="group"
+            aria-label={label}
+            data-mt-routes="side"
+            data-mt-exits=""
+            className={cn("ms-3.5", !segments.length && "mt-0.5")}
+            style={{ "--mt-row": spare } as React.CSSProperties}
+          >
+            {entries(exits, "elbow", flowsOn || loose.length > 0)}
+            {loose.map((id, index) => (
+              <RouteRow key={id} id={id} last={index === loose.length - 1 && !flowsOn} />
+            ))}
+          </ul>
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      {(side.length > 0 || loose.length > 0) && (
+        <ul role="group" aria-label={label} data-mt-routes="side" className="ms-3.5 mt-0.5">
+          {entries(side, "elbow", true)}
+          {loose.map((id) => (
+            <RouteRow key={id} id={id} last={false} />
+          ))}
+        </ul>
+      )}
+      {step.columns.map((column, index) => (
+        <ul
+          key={index}
+          role="group"
+          aria-label={label}
+          data-mt-routes="head"
+          data-mt-first={index === 0 ? "" : undefined}
+          style={{ "--mt-col": index + 1 } as React.CSSProperties}
+        >
+          {entries(column.routes, "none", true)}
+        </ul>
+      ))}
     </>
   );
 }

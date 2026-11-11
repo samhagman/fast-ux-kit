@@ -179,7 +179,7 @@ async function mount(caseId, extra = {}) {
 
 /* ───────── tests ───────── */
 
-test("flow outline: states are drawn in the order the machine runs, alternatives side by side, and nothing is drawn over the tree", async () => {
+test("flow outline: states are drawn in the order the machine runs, an alternative hangs off the spine, and nothing is drawn over the tree", async () => {
   const view = await mount("release");
   try {
     assert.equal(
@@ -201,16 +201,26 @@ test("flow outline: states are drawn in the order the machine runs, alternatives
       "Released",
     ]);
     const forks = [...view.container.querySelectorAll("[data-mt-fork]")];
-    assert.equal(forks.length, 2, "Review and Publishing each fork");
+    assert.equal(forks.length, 2, "Review and Publishing each have one alternative");
     for (const fork of forks) {
-      const heads = fork.querySelectorAll(':scope > [data-mt-item] > [data-mt-routes="head"]');
-      const columns = fork.querySelectorAll(":scope > [data-mt-col]");
-      assert.equal(heads.length, columns.length, "one label list per column");
-      assert.equal(
-        columns[0].hasAttribute("data-pass"),
-        true,
-        "the direct route is the first column",
+      // One alternative hangs off the spine: its label, with its states indented right under it. The
+      // state's routes keep the order the machine tries them, so the route on is above or below.
+      assert.equal(fork.dataset.mtFork, "stacked");
+      const item = fork.querySelector(":scope > [data-mt-item]");
+      const label = item.querySelector(':scope > [data-mt-routes="branch"]');
+      const block = fork.querySelector(":scope > [data-mt-col]");
+      const onward = item.querySelector(':scope > [data-mt-routes="main"]');
+      assert.ok(label && block && onward);
+      const row = (el) => Number(el.style.getPropertyValue("--mt-row"));
+      assert.equal(row(block), row(label) + 1, "its states are right under its label");
+      const listed = [...item.querySelectorAll(":scope > [data-mt-routes]")].map(row);
+      assert.deepEqual(
+        listed,
+        [...listed].sort((a, b) => a - b),
+        "drawn in the order they are in the tree",
       );
+      assert.equal(new Set([...listed, row(block)]).size, listed.length + 1, "one row each");
+      assert.ok(row(onward) < row(label) || row(onward) > row(block));
     }
     // A route's label is its source state's own row: still inside that state's tree item.
     assert.equal(view.item("DECLINE").closest("div[data-mt-item]"), view.item("Review"));

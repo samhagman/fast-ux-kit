@@ -231,23 +231,23 @@
 
 /* Alternatives side by side. The fork is one grid; the forked state's cell spans its tracks and
  * hands them down (subgrid), so each column's label heads the column it leads to. */
-[data-mt-fork] {
+[data-mt-fork="columns"] {
   display: grid;
   grid-template-columns: repeat(var(--mt-cols), max-content);
   column-gap: var(--mt-gap);
   justify-content: start;
   justify-items: start;
 }
-[data-mt-fork] > [data-mt-item] {
+[data-mt-fork="columns"] > [data-mt-item] {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: subgrid;
   justify-items: start;
 }
-[data-mt-fork] > [data-mt-item] > * {
+[data-mt-fork="columns"] > [data-mt-item] > * {
   grid-column: 1 / -1;
 }
-[data-mt-fork] > [data-mt-item] > [data-mt-routes="head"] {
+[data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"] {
   grid-column: var(--mt-col);
   justify-self: stretch;
   position: relative;
@@ -328,36 +328,103 @@
 }
 /* A narrow host: the columns stack, each block under a caption naming the routes that lead to it. */
 @container mt-canvas (max-width: 520px) {
-  [data-mt-fork] {
+  [data-mt-fork="columns"] {
     grid-template-columns: minmax(0, max-content);
   }
-  [data-mt-fork] > [data-mt-item] > [data-mt-routes="head"],
-  [data-mt-col] {
+  [data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"],
+  [data-mt-fork="columns"] > [data-mt-col] {
     grid-column: 1;
   }
-  [data-mt-fork] > [data-mt-item] > [data-mt-routes="head"] {
+  [data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"] {
     margin-block-start: 0;
     padding-block-start: 0;
   }
-  [data-mt-routes="head"]::before,
-  [data-mt-routes="head"][data-mt-first]::after,
-  [data-mt-col]::before,
-  [data-mt-col]::after {
+  [data-mt-fork="columns"] [data-mt-routes="head"]::before,
+  [data-mt-fork="columns"] [data-mt-routes="head"][data-mt-first]::after,
+  [data-mt-fork="columns"] > [data-mt-col]::before,
+  [data-mt-fork="columns"] > [data-mt-col]::after {
     content: none;
   }
-  [data-mt-col] {
+  [data-mt-fork="columns"] > [data-mt-col] {
     margin-inline-start: var(--mt-spine);
     padding-block: 6px;
     padding-inline-start: 12px;
     border-inline-start: 1px solid var(--mt-line);
   }
-  [data-mt-col][data-pass],
-  [data-mt-col] > [data-mt-close] {
+  [data-mt-fork="columns"] > [data-mt-col][data-pass],
+  [data-mt-fork="columns"] > [data-mt-col] > [data-mt-close] {
     display: none;
   }
-  [data-mt-caption] {
+  [data-mt-fork="columns"] > [data-mt-col] > [data-mt-caption] {
     display: block;
   }
+}
+
+/* One alternative, or a long one: it hangs off the spine instead of standing beside the others.
+ * The fork is one grid by rows. The state's own tree item spans them and hands them down (subgrid),
+ * so its route rows land between the blocks of states they lead to, which are its siblings.
+ *
+ * The state's routes keep the order the machine tries them, so a route that carries on may sit
+ * above the alternative or below it.
+ *
+ *   ┌ Work ┐
+ *   │  DONE                   a route that carries on
+ *   ├─ FAILED                 the label, on an elbow off the spine
+ *   │    ▼
+ *   │   ┌ Failed ┐            the alternative's states, indented
+ *   │   │  SKIP
+ *   ├───╯                     a curve back, when it flows back into the spine
+ *   ▼
+ */
+[data-mt-fork="stacked"] {
+  display: grid;
+  grid-template-columns: max-content;
+  justify-items: start;
+}
+[data-mt-fork="stacked"] > [data-mt-item] {
+  grid-column: 1;
+  grid-row: 1 / span var(--mt-rows);
+  display: grid;
+  grid-template-rows: subgrid;
+  justify-items: start;
+}
+[data-mt-fork="stacked"] > [data-mt-item] > [data-mt-face] {
+  grid-row: 1;
+}
+[data-mt-fork="stacked"] > [data-mt-item] > [data-mt-routes] {
+  grid-row: var(--mt-row);
+}
+[data-mt-fork="stacked"] > [data-mt-col] {
+  grid-column: 1;
+  grid-row: var(--mt-row);
+  justify-self: start;
+  align-self: start;
+  margin-inline-start: var(--mt-spine);
+  padding-inline-start: 22px;
+  border-inline-start: 1px solid transparent;
+}
+/* The spine runs past the block while more of the state's routes are drawn below it. */
+[data-mt-fork="stacked"] > [data-mt-col][data-through],
+[data-mt-fork="stacked"]:has(> [data-mt-item] > [data-mt-exits]) > [data-mt-col] {
+  border-inline-start-color: var(--mt-line);
+}
+[data-mt-fork="stacked"] > [data-mt-col]:not([data-rejoins]) {
+  padding-block-end: 6px;
+}
+/* It flows back: from under its last state, a curve round to the spine. */
+[data-mt-fork="stacked"] > [data-mt-col][data-rejoins] > [data-mt-close] {
+  display: block;
+  flex: none;
+  align-self: flex-start;
+  min-block-size: 0;
+  block-size: 13px;
+  inline-size: calc(22px + var(--mt-spine));
+  margin-inline-start: -22px;
+  margin-block-end: 6px;
+  border-inline-start: 0;
+  border-inline-end: 1px solid var(--mt-line);
+  border-block-end: 1px solid var(--mt-line);
+  border-end-end-radius: 10px;
 }
 
 /* A shut box: a second edge behind it says there is more inside. */
