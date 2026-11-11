@@ -7,7 +7,7 @@ import {
   type MachinePendingWork,
   type MachinePresentation,
 } from "@samhagman/fast-ux-kit/machine";
-import type { MachineInspectionProps } from "@samhagman/fast-ux-kit/machine-view";
+import type { MachineInspectionProps } from "@samhagman/fast-ux-kit/machine-graph";
 import type { MachineTreeProps } from "@samhagman/fast-ux-kit/machine-tree";
 import { Button } from "@samhagman/fast-ux-kit/components/ui/button";
 import {
@@ -18,8 +18,10 @@ import {
   SelectValue,
 } from "@samhagman/fast-ux-kit/components/ui/select";
 
-const MachineView = React.lazy(() =>
-  import("@samhagman/fast-ux-kit/machine-view").then((module) => ({ default: module.MachineView })),
+const MachineGraphView = React.lazy(() =>
+  import("@samhagman/fast-ux-kit/machine-graph").then((module) => ({
+    default: module.MachineGraphView,
+  })),
 );
 const MachineTree = React.lazy(() =>
   import("@samhagman/fast-ux-kit/machine-tree").then((module) => ({ default: module.MachineTree })),
@@ -329,7 +331,11 @@ export function MachineObservationDemo({
         </Button>
       </div>
       <React.Suspense fallback={<p>Loading inspection view…</p>}>
-        {view === "tree" ? <MachineTree {...demoProps} /> : <MachineView {...demoProps} readOnly />}
+        {view === "tree" ? (
+          <MachineTree {...demoProps} />
+        ) : (
+          <MachineGraphView {...demoProps} readOnly />
+        )}
       </React.Suspense>
     </div>
   );

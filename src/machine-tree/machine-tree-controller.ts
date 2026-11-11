@@ -12,7 +12,10 @@
 import * as React from "react";
 import {
   buildMachineTree,
+  planMachineTreeFlow,
+  presentMachineTree,
   resolveMachineTreeTarget,
+  type MachineTreeFlowPlan,
   type MachineDocument,
   type MachineGraph,
   type MachineRuntimeOptions,
@@ -67,6 +70,8 @@ export interface TreeBase {
   /** This instance's accessible name (the `label` prop, else the root machine's label). */
   readonly label: string;
   readonly sim: MachineSimulation;
+  /** How the topology is drawn: declared regions, reading order, and placement per container. */
+  readonly flowPlan: MachineTreeFlowPlan;
   /** Topology without run state: navigation targets and ancestors. */
   readonly topology: MachineTreeModel;
   /** Topology plus active flags for the frame on screen. */
@@ -148,13 +153,15 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
   const dir = useResolvedDirection(rootRef, props.dir);
 
   /* — data from the core — */
-  // The core's issues plus the structural warnings Machine View shows too (nested transitions,
+  // The core's issues plus the structural warnings Machine Graph shows too (nested transitions,
   // dead ends), so both components flag the same things in the same words.
   const structural = React.useMemo(
     () => document.machines.flatMap((graph) => structuralIssues(graph)),
     [document],
   );
-  const topology = React.useMemo(
+  // The tree is built from the host's document as it is. Regions and reading order are a layer over
+  // its rows (the plan), worked out once per topology and applied to every activity frame.
+  const source = React.useMemo(
     () =>
       withStructural(
         buildMachineTree(document, maxItems === undefined ? {} : { maxItems }),
@@ -162,6 +169,8 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       ),
     [document, maxItems, structural],
   );
+  const flowPlan = React.useMemo(() => planMachineTreeFlow(source), [source]);
+  const topology = React.useMemo(() => presentMachineTree(source, flowPlan), [source, flowPlan]);
   // Only the deepest active states are "active"; their ancestors become `activeDescendant`.
   const active =
     mode === "inspect"
@@ -175,15 +184,18 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
   const model = React.useMemo(
     () =>
       activeKey
-        ? withStructural(
-            buildMachineTree(document, {
-              ...(maxItems === undefined ? {} : { maxItems }),
-              activeStates: JSON.parse(activeKey),
-            }),
-            structural,
+        ? presentMachineTree(
+            withStructural(
+              buildMachineTree(document, {
+                ...(maxItems === undefined ? {} : { maxItems }),
+                activeStates: JSON.parse(activeKey),
+              }),
+              structural,
+            ),
+            flowPlan,
           )
         : topology,
-    [activeKey, document, maxItems, topology, structural],
+    [activeKey, document, maxItems, topology, structural, flowPlan],
   );
   const rows = React.useMemo(() => new Map(model.rows.map((row) => [row.id, row])), [model]);
   const links = React.useMemo(() => {
@@ -255,6 +267,7 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
     rootGraph,
     label: props.label?.trim() || rootGraph.label,
     sim,
+    flowPlan,
     topology,
     model,
     rows,
@@ -326,8 +339,10 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       applyFix: run.applyFix,
       setPreview: run.setPreview,
       refFor,
+      flowOf: (rowId) => flowPlan.flows.get(rowId),
     }),
     [
+      flowPlan,
       model,
       rows,
       nav.projected,

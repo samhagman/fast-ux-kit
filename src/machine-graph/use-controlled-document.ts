@@ -14,12 +14,12 @@ import {
 
 /**
  * React wiring for the document contract in `controlled-document.ts`: one owner for the
- * document, its bounded history and the host's answers. Machine View's controller builds on it;
+ * document, its bounded history and the host's answers. Machine Graph's controller builds on it;
  * it is also what the hook-level tests drive.
  *
- *   <MachineView defaultDocument={doc} onDocumentChange={save} />   uncontrolled + notification
- *   <MachineView document={doc} onDocumentChange={(next) => setDoc(next)} />   controlled
- *   <MachineView document={serverDoc} readOnly />   controlled live viewer (no edits, no handler)
+ *   <MachineGraphView defaultDocument={doc} onDocumentChange={save} />   uncontrolled + notification
+ *   <MachineGraphView document={doc} onDocumentChange={(next) => setDoc(next)} />   controlled
+ *   <MachineGraphView document={serverDoc} readOnly />   controlled live viewer (no edits, no handler)
  *
  * Controlled hosts answer by passing the proposed document back (any number of renders later),
  * or veto with `return false` / `meta.reject()`.
@@ -87,7 +87,7 @@ export function useControlledDocument(source: DocumentSource, hooks: DocumentHoo
   const warn = (key: string, message: string) => {
     if (!DEV || warned.current.has(key)) return;
     warned.current.add(key);
-    console.error(`MachineView: ${message}`);
+    console.error(`MachineGraphView: ${message}`);
   };
   if (wasControlled.current !== controlled)
     warn(

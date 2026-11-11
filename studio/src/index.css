@@ -185,3 +185,12 @@
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* The sheet Editorial UI is shown on in the Studio. A consumer sets these tokens to its own paper. */
+.editorial-paper {
+  --fux-ed-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --fux-ed-sans: var(--font-sans);
+  --fux-ed-mono: var(--font-mono);
+  background: var(--fux-ed-paper);
+  color: var(--fux-ed-ink);
+}

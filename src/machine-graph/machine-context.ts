@@ -1,24 +1,24 @@
 import * as React from "react";
 import type { MachineGraph, MachineNode } from "../core/index.js";
-import type { MachineViewController } from "./use-machine-view.js";
+import type { MachineGraphController } from "./use-machine-graph.js";
 
 /**
- * Machine View context boundaries:
+ * Machine Graph context boundaries:
  *  - `MachineContext`: the controller (document, selection, layout, simulation).
  *  - `ChromeContext`: view-only shell state (phone vs desktop, inspector, sheet snap).
  *   - CanvasContext and DiagramContext: stable render facts for topology and activity.
  * Shared vocabulary helpers keep canvas, inspector, menus and screen readers consistent.
  */
-export const MachineContext = React.createContext<MachineViewController | null>(null);
+export const MachineContext = React.createContext<MachineGraphController | null>(null);
 export const useMachine = () => {
   const value = React.useContext(MachineContext);
-  if (!value) throw new Error("Machine parts must render inside <MachineView>.");
+  if (!value) throw new Error("Machine parts must render inside <MachineGraphView>.");
   return value;
 };
 
 /** Diagram render facts exclude observation payloads, work and history. Event handlers read the current controller. */
 type DiagramFacts = Pick<
-  MachineViewController,
+  MachineGraphController,
   | "graph"
   | "machines"
   | "direction"
@@ -41,28 +41,35 @@ type DiagramFacts = Pick<
 export const DiagramContext = React.createContext<DiagramFacts | null>(null);
 export function useDiagram() {
   const value = React.useContext(DiagramContext);
-  if (!value) throw new Error("Diagram parts must render inside <MachineView>.");
+  if (!value) throw new Error("Diagram parts must render inside <MachineGraphView>.");
   return value;
 }
-export function useDiagramFacts(mv: MachineViewController): DiagramFacts {
+export function useDiagramFacts(mv: MachineGraphController): DiagramFacts {
   const latest = React.useRef(mv);
   latest.current = mv;
   const openMachine = React.useCallback((id: string) => latest.current.openMachine(id), []);
-  const setSelection = React.useCallback<MachineViewController["setSelection"]>(
+  const setSelection = React.useCallback<MachineGraphController["setSelection"]>(
     (value) => latest.current.setSelection(value),
     [],
   );
-  const sendEvent = React.useCallback((event: string) => latest.current.sendEvent(event), []);
+  const sendEvent = React.useCallback<MachineGraphController["sendEvent"]>(
+    (event, input) => latest.current.sendEvent(event, input),
+    [],
+  );
   const previewEvent = React.useCallback(
     (event: string | null) => latest.current.previewEvent(event),
     [],
   );
   const takenKey = JSON.stringify(mv.frame?.transitionIds ?? []);
   const takenIds = React.useMemo<readonly string[]>(() => JSON.parse(takenKey), [takenKey]);
-  const candidatesKey = JSON.stringify([[...mv.candidates.enabled], [...mv.candidates.blocked]]);
+  const candidatesKey = JSON.stringify([
+    [...mv.candidates.enabled],
+    [...mv.candidates.blocked],
+    [...mv.candidates.offered],
+  ]);
   const candidates = React.useMemo(() => {
-    const [enabled, blocked] = JSON.parse(candidatesKey) as [string[], string[]];
-    return { enabled: new Set(enabled), blocked: new Set(blocked) };
+    const [enabled, blocked, offered] = JSON.parse(candidatesKey) as [string[], string[], string[]];
+    return { enabled: new Set(enabled), blocked: new Set(blocked), offered: new Set(offered) };
   }, [candidatesKey]);
   const simulating = mv.mode === "inspect" ? !!mv.frame : !!mv.snapshot;
   const pingSequence = mv.snapshot?.sequence;
@@ -110,7 +117,7 @@ export function useDiagramFacts(mv: MachineViewController): DiagramFacts {
 
 /** Canvas controls only subscribe to topology, selection and local simulation changes. */
 type CanvasController = Pick<
-  MachineViewController,
+  MachineGraphController,
   | "graph"
   | "machineId"
   | "direction"
@@ -139,6 +146,7 @@ type CanvasController = Pick<
   | "setRenaming"
   | "openMachine"
   | "sendEvent"
+  | "eventOptions"
   | "requestFocus"
   | "reparent"
   | "deleteSelection"
@@ -147,41 +155,43 @@ type CanvasController = Pick<
 export const CanvasContext = React.createContext<CanvasController | null>(null);
 export function useCanvas() {
   const value = React.useContext(CanvasContext);
-  if (!value) throw new Error("Canvas parts must render inside <MachineView>.");
+  if (!value) throw new Error("Canvas parts must render inside <MachineGraphView>.");
   return value;
 }
 export function useCanvasController(
-  mv: MachineViewController,
+  mv: MachineGraphController,
   diagram: DiagramFacts,
 ): CanvasController {
   const latest = React.useRef(mv);
   latest.current = mv;
   const commands = React.useMemo(
     () => ({
-      run: (...args: Parameters<MachineViewController["run"]>) => latest.current.run(...args),
-      announce: (...args: Parameters<MachineViewController["announce"]>) =>
+      run: (...args: Parameters<MachineGraphController["run"]>) => latest.current.run(...args),
+      announce: (...args: Parameters<MachineGraphController["announce"]>) =>
         latest.current.announce(...args),
-      notify: (...args: Parameters<MachineViewController["notify"]>) =>
+      notify: (...args: Parameters<MachineGraphController["notify"]>) =>
         latest.current.notify(...args),
       latestGraph: () => latest.current.latestGraph(),
-      freshId: (...args: Parameters<MachineViewController["freshId"]>) =>
+      freshId: (...args: Parameters<MachineGraphController["freshId"]>) =>
         latest.current.freshId(...args),
-      reportHeights: (...args: Parameters<MachineViewController["reportHeights"]>) =>
+      reportHeights: (...args: Parameters<MachineGraphController["reportHeights"]>) =>
         latest.current.reportHeights(...args),
-      setSelection: (...args: Parameters<MachineViewController["setSelection"]>) =>
+      setSelection: (...args: Parameters<MachineGraphController["setSelection"]>) =>
         latest.current.setSelection(...args),
-      setRenaming: (...args: Parameters<MachineViewController["setRenaming"]>) =>
+      setRenaming: (...args: Parameters<MachineGraphController["setRenaming"]>) =>
         latest.current.setRenaming(...args),
-      openMachine: (...args: Parameters<MachineViewController["openMachine"]>) =>
+      openMachine: (...args: Parameters<MachineGraphController["openMachine"]>) =>
         latest.current.openMachine(...args),
-      sendEvent: (...args: Parameters<MachineViewController["sendEvent"]>) =>
+      sendEvent: (...args: Parameters<MachineGraphController["sendEvent"]>) =>
         latest.current.sendEvent(...args),
-      requestFocus: (...args: Parameters<MachineViewController["requestFocus"]>) =>
+      eventOptions: (...args: Parameters<MachineGraphController["eventOptions"]>) =>
+        latest.current.eventOptions(...args),
+      requestFocus: (...args: Parameters<MachineGraphController["requestFocus"]>) =>
         latest.current.requestFocus(...args),
-      reparent: (...args: Parameters<MachineViewController["reparent"]>) =>
+      reparent: (...args: Parameters<MachineGraphController["reparent"]>) =>
         latest.current.reparent(...args),
       deleteSelection: () => latest.current.deleteSelection(),
-      addConnected: (...args: Parameters<MachineViewController["addConnected"]>) =>
+      addConnected: (...args: Parameters<MachineGraphController["addConnected"]>) =>
         latest.current.addConnected(...args),
     }),
     [],
@@ -292,7 +302,7 @@ export const countTransitions = (graph: MachineGraph) => {
   return graph.transitions.filter((t) => !(pseudo.has(t.sourceId) && !t.event)).length;
 };
 
-export function stepCursor(mv: MachineViewController, delta: number) {
+export function stepCursor(mv: MachineGraphController, delta: number) {
   const trace = mv.snapshot?.trace ?? [];
   if (!trace.length) return;
   const current = mv.cursor ?? trace.length - 1;

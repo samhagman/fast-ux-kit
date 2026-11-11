@@ -1,5 +1,5 @@
 // Outliner controlled document (controlled-outline.ts): value/defaultValue, echo, veto, late echo,
-// external changes, and undo/redo surviving a host round trip. Mirrors machine-view.test.mjs.
+// external changes, and undo/redo surviving a host round trip. Mirrors machine-graph.test.mjs.
 //
 //   cd studio && node --test tests/
 //

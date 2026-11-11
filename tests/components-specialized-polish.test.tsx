@@ -68,16 +68,23 @@ test("pagination pins the ends around a three-page window and keeps its names", 
   const labels = Array.from(nav.querySelectorAll("button:not([inert])")).map(
     (button) => button.getAttribute("aria-label") ?? button.textContent,
   );
+  // Each gap is a button that names the pages it hides.
   assert.deepEqual(labels, [
     "Previous",
     "Page 1",
+    "Go to page, pages 2 to 10 are hidden",
     "Page 11",
     "Page 12",
     "Page 13",
+    "Go to page, pages 14 to 39 are hidden",
     "Page 40",
     "Next",
   ]);
-  assert.equal(nav.querySelectorAll('[aria-hidden="true"] svg').length >= 2, true);
+  // Every slot is sized in rem, so the selection box and the number in it always agree.
+  const current = view.getByRole("button", { name: "Page 12" });
+  const marker = current.parentElement!.querySelector<HTMLElement>("span.pointer-events-none")!;
+  assert.equal(marker.style.inlineSize, current.style.inlineSize);
+  assert.match(current.style.inlineSize, /^[\d.]+rem$/);
   for (const hidden of nav.querySelectorAll("button[inert]")) {
     assert.equal(hidden.getAttribute("tabindex"), "-1", "an off-window page takes no focus");
     assert.equal(hidden.getAttribute("aria-hidden"), "true");
@@ -87,14 +94,24 @@ test("pagination pins the ends around a three-page window and keeps its names", 
   const after = Array.from(nav.querySelectorAll("button:not([inert])")).map(
     (button) => button.getAttribute("aria-label") ?? button.textContent,
   );
-  assert.deepEqual(after.slice(2, 5), ["Page 12", "Page 13", "Page 14"]);
+  assert.deepEqual(after.slice(3, 6), ["Page 12", "Page 13", "Page 14"]);
   assert.equal(view.getByRole("button", { name: "Page 13" }).getAttribute("aria-current"), "page");
   // At the last page the window stops and the selection moves to the pinned end.
   fireEvent.click(view.getByRole("button", { name: "Page 40" }));
   const end = Array.from(nav.querySelectorAll("button:not([inert])")).map(
     (button) => button.getAttribute("aria-label") ?? button.textContent,
   );
-  assert.deepEqual(end, ["Previous", "Page 1", "Page 37", "Page 38", "Page 39", "Page 40", "Next"]);
+  // The trailing gap hides nothing now, so it is out of reach; the leading one still jumps.
+  assert.deepEqual(end, [
+    "Previous",
+    "Page 1",
+    "Go to page, pages 2 to 36 are hidden",
+    "Page 37",
+    "Page 38",
+    "Page 39",
+    "Page 40",
+    "Next",
+  ]);
   view.rerender(<Pagination label="Results" count={50} defaultPage={1} />);
   // Five pages: nothing is hidden behind an ellipsis.
   assert.equal(view.getAllByRole("button", { name: /^Page / }).length, 5);
@@ -117,6 +134,51 @@ test("compact pagination reads out the page and keeps icon buttons named", () =>
   fireEvent.click(view.getByRole("button", { name: "Previous" }));
   assert.deepEqual(pages, [3, 2]);
   assert.equal(view.queryByRole("button", { name: "Page 3" }), null);
+});
+
+test("a gap opens a field for the exact page, and the compact readout does the same", async () => {
+  const pages: number[] = [];
+  const view = render(
+    <Pagination label="Results" count={400} defaultPage={12} onPageChange={(p) => pages.push(p)} />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "Go to page, pages 14 to 39 are hidden" }));
+  const field = (await waitFor(() => view.getByLabelText("Go to page"))) as HTMLInputElement;
+  assert.equal(field.value, "12", "the field starts on the current page");
+  assert.equal(field.max, "40");
+  // Not a page: nothing changes and the field stays open to be corrected.
+  fireEvent.change(field, { target: { value: "2.5" } });
+  fireEvent.submit(field.form!);
+  assert.deepEqual(pages, []);
+  assert.ok(view.queryByLabelText("Go to page"));
+  fireEvent.change(field, { target: { value: "27" } });
+  fireEvent.submit(field.form!);
+  assert.deepEqual(pages, [27]);
+  assert.equal(view.getByRole("button", { name: "Page 27" }).getAttribute("aria-current"), "page");
+  await waitFor(() => assert.equal(view.queryByLabelText("Go to page"), null));
+  view.unmount();
+
+  // Past the last page goes to the last page.
+  const compact = render(
+    <Pagination
+      label="Compact"
+      compact
+      count={120}
+      defaultPage={2}
+      onPageChange={(p) => pages.push(p)}
+    />,
+  );
+  fireEvent.click(compact.getByRole("button", { name: "Page 2 of 12" }));
+  const jump = (await waitFor(() => compact.getByLabelText("Go to page"))) as HTMLInputElement;
+  fireEvent.change(jump, { target: { value: "99" } });
+  fireEvent.submit(jump.form!);
+  assert.deepEqual(pages, [27, 12]);
+  assert.ok(compact.getByRole("button", { name: "Page 12 of 12" }));
+  compact.unmount();
+
+  // One page: there is nowhere to jump, so the readout is plain text.
+  const single = render(<Pagination label="One" compact count={8} />);
+  assert.match(single.getByRole("navigation").textContent ?? "", /Page 1 of 1/);
+  assert.equal(single.queryByRole("button", { name: /Page 1 of 1/ }), null);
 });
 
 test("clipboard confirms a copy, then returns to its resting state", async () => {

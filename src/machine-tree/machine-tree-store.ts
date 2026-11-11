@@ -33,7 +33,9 @@ export function useControllable<T>(
     setInner(resolved);
     changeRef.current?.(resolved);
   }, []);
-  return [value, set] as const;
+  /** Moves the uncontrolled value to a new default without telling the host: nobody asked for a change. */
+  const seed = React.useCallback((next: (previous: T) => T) => setInner(next), []);
+  return [value, set, seed] as const;
 }
 
 /** A stable function identity that always calls the latest closure (event handlers only). */
@@ -45,7 +47,7 @@ export function useEvent<A extends unknown[], R>(fn: (...args: A) => R): (...arg
   return React.useCallback((...args: A) => ref.current(...args), []);
 }
 
-/* Focus hand-off lives in machine-shared/machine-focus.ts (shared with Machine View); the
+/* Focus hand-off lives in machine-shared/machine-focus.ts (shared with Machine Graph); the
  * platform modifier label in lib/platform.ts; media queries in hooks/use-media-query.ts. */
 
 /* ───────────────────────────── view store ─────────────────────────────
@@ -57,6 +59,8 @@ export interface ViewState {
   readonly selected: string | null;
   readonly peek: string | null;
   readonly flash: string | null;
+  /** The shut box whose inside is floated over the canvas while the pointer rests on it. */
+  readonly look: string | null;
   readonly match: string | null;
   readonly spotlight: string | null;
   /** Dry-run preview: the event being hovered/focused and the rows it would enter and exit. */
@@ -77,6 +81,7 @@ export function createViewStore(): ViewStore {
     selected: null,
     peek: null,
     flash: null,
+    look: null,
     match: null,
     spotlight: null,
     previewEvent: null,
@@ -177,6 +182,8 @@ export interface TreeModelCtx {
   /** Shows (or clears) the dry-run ghost for an enabled event. */
   readonly setPreview: (event: string | null, via?: "pointer" | "key") => void;
   readonly refFor: (rowId: string) => (el: HTMLElement | null) => void;
+  /** Placement of a container's states (see core `flow.ts`); undefined where the plain list is drawn. */
+  readonly flowOf: (containerRowId: string) => import("../core/index.js").MachineFlow | undefined;
 }
 export const ModelCtx = React.createContext<TreeModelCtx | null>(null);
 export const useTree = () => React.useContext(ModelCtx)!;

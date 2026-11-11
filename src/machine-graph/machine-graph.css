@@ -1,4 +1,4 @@
-/* ───────── Machine View canvas (React Flow) ─────────
+/* ───────── Machine Graph canvas (React Flow) ─────────
  * Colour mixes with neutrals use oklab: oklch interpolates hue toward the neutral's
  * meaningless hue 0 and tints signal mixes pink. */
 .machine-flow {

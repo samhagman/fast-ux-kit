@@ -113,20 +113,28 @@ export function MachineCommands({
                       .filter((t) => t.event && mv.activeSet.has(t.sourceId))
                       .map((t) => t.event!),
                   ),
-                ].map((type) => (
-                  <CommandItem
-                    key={type}
-                    value={`send simulation ${type}`}
-                    disabled={!mv.sim.payload.ok || mv.cursor !== null}
-                    onSelect={() =>
-                      choose(() => {
-                        mv.sendEvent(type);
-                      })
-                    }
-                  >
-                    Send {type}
-                  </CommandItem>
-                ))}
+                ].flatMap((type) => {
+                  // One item per known input, so a guarded event is sendable from the keyboard too.
+                  const options = mv.eventOptions(type);
+                  const plain = options.length <= 1 && options[0]?.payload === undefined;
+                  return (plain ? [undefined] : options).map((option, index) => (
+                    <CommandItem
+                      key={`${type}:${index}`}
+                      value={`send simulation ${type} ${option?.label ?? ""}`}
+                      disabled={mv.cursor !== null}
+                      onSelect={() =>
+                        choose(() => {
+                          mv.sendEvent(type, { payload: option?.payload });
+                        })
+                      }
+                    >
+                      Send {type}
+                      {option && (
+                        <span className="font-mono text-muted-foreground">{option.label}</span>
+                      )}
+                    </CommandItem>
+                  ));
+                })}
               </CommandGroup>
             )}
             <CommandGroup heading="Local simulation">

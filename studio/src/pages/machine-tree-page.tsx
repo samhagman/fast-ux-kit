@@ -90,7 +90,63 @@ function largeDocument(): MachineDocument {
   };
 }
 
+/**
+ * Release approval again, with its publish attempt declared as a region: a named box the tree draws
+ * shut until it is opened. Two states also carry metadata saying what they do. Only the drawing
+ * differs; the machine runs exactly as the plain case does.
+ */
+const release = machineLabCases.find((lab) => lab.id === "release")!;
+const withRegion: MachineDocument = {
+  ...release.document,
+  machines: release.document.machines.map((graph) => ({
+    ...graph,
+    regions: { publishing: { label: "Publish attempt" } },
+    nodes: graph.nodes.map((node) =>
+      node.id === "release-publish" || node.id === "release-retry"
+        ? {
+            ...node,
+            region: "publishing",
+            ...(node.id === "release-publish"
+              ? {
+                  meta: {
+                    kind: "Command",
+                    icon: "command" as const,
+                    summary: "runs on the release runner",
+                    details: [
+                      { label: "runs", value: "release publish --channel stable" },
+                      { label: "timeout", value: "10 minutes" },
+                    ],
+                  },
+                }
+              : {}),
+          }
+        : node.id === "release-review"
+          ? {
+              ...node,
+              meta: {
+                kind: "Ask",
+                icon: "person" as const,
+                summary: "a release manager answers",
+                details: [
+                  { label: "question", value: "Approve this release, or send it back?" },
+                  { label: "via", value: "inbox" },
+                  { label: "remind", value: "every 4 hours, up to 3 times" },
+                ],
+              },
+            }
+          : node,
+    ),
+  })),
+};
+
 const synthetic: readonly TreeCase[] = [
+  {
+    id: "regions",
+    label: "Release approval, with a region",
+    document: withRegion,
+    options: release.options,
+    scenarios: release.scenarios,
+  },
   { id: "malformed", label: "Malformed import", document: malformed, options: {}, scenarios: [] },
   {
     id: "large",

@@ -19,6 +19,14 @@ export interface MachineTreeIssue {
   readonly rowId?: string;
   readonly machineId?: string;
 }
+/** A declared region: a presentation row its member states hang under (see `presentMachineTree`). */
+export interface MachineTreeRegion {
+  readonly name: string;
+  /** The machine's own default for whether the box starts shut. */
+  readonly collapsed: boolean;
+  /** Member state rows, in document order. */
+  readonly memberIds: readonly string[];
+}
 export interface MachineTreeRow {
   readonly id: string;
   /** Identity of this occurrence's containing machine row, including duplicates. */
@@ -39,6 +47,11 @@ export interface MachineTreeRow {
   /** At least one contained state has an exact supplied active ID. */
   readonly activeDescendant: boolean;
   readonly recovered: boolean;
+  /**
+   * Set on a region row. Its `node` is a stand-in that is not in the document, so it is not a
+   * state: do not count it, send it events or look its id up in the host's data.
+   */
+  readonly region?: MachineTreeRegion;
 }
 export interface MachineTreeModel {
   readonly rows: readonly MachineTreeRow[];
@@ -468,12 +481,16 @@ export function resolveMachineTreeSource(
 
 function searchText(row: MachineTreeRow): string[] {
   return [
-    row.elementId,
+    // A region's id is made up for the tree; only its title is something a person would search for.
+    row.region ? undefined : row.elementId,
     row.label,
     row.node?.description,
     ...(row.node?.tags ?? []),
     ...(row.node?.entry ?? []),
     ...(row.node?.exit ?? []),
+    row.node?.meta?.kind,
+    row.node?.meta?.summary,
+    ...(row.node?.meta?.details ?? []).flatMap((detail) => [detail.label, detail.value]),
     row.transition?.description,
     row.transition?.sourceId,
     row.transition?.targetId,

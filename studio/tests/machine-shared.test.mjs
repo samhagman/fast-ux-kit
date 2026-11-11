@@ -1,5 +1,5 @@
-// Contract tests for the pieces Machine View and Machine Tree share (machine-shared/, lib/platform).
-// Same pattern as machine-view.test.mjs: `node --test` plus Vite's own SSR loader, no framework.
+// Contract tests for the pieces Machine Graph and Machine Tree share (machine-shared/, lib/platform).
+// Same pattern as machine-graph.test.mjs: `node --test` plus Vite's own SSR loader, no framework.
 //
 //   cd studio && node --test tests/
 //
@@ -48,7 +48,7 @@ const graph = {
   ],
 };
 
-test("structuralIssues: dead ends and nested transitions, in Machine View's words", async () => {
+test("structuralIssues: dead ends and nested transitions, in Machine Graph's words", async () => {
   const { structuralIssues, deadEndStates } = await load(
     "/src/registry/machine-shared/machine-issues.ts",
   );
@@ -275,14 +275,14 @@ test("machine-copy: start, send, blocked and finish sentences", async () => {
 test("machine-copy: one plural and one key-cap vocabulary, used by both components", async () => {
   const copy = await load("/src/registry/machine-shared/machine-copy.ts");
   const tree = await load("/src/registry/machine-tree/machine-tree-logic.ts");
-  const view = await load("/src/registry/machine-view/machine-context.ts");
+  const view = await load("/src/registry/machine-graph/machine-context.ts");
   assert.equal(tree.plural, copy.plural, "the tree's plural is the shared one");
-  assert.equal(view.plural, copy.plural, "Machine View's plural is the shared one");
+  assert.equal(view.plural, copy.plural, "Machine Graph's plural is the shared one");
   assert.equal(tree.modCombo, copy.modCombo);
   assert.equal(copy.KEY.enter, "↵");
   assert.equal(copy.KEY.escape, "esc");
   // No sentence is built outside machine-copy, and no key cap is spelled out by hand.
-  const dirs = ["machine-view", "machine-tree"];
+  const dirs = ["machine-graph", "machine-tree"];
   const { readdirSync } = await import("node:fs");
   for (const dir of dirs) {
     const base = new URL(`../../src/${dir}/`, import.meta.url);
@@ -316,12 +316,12 @@ test("per-instance toaster: toasts carry their owner and a persistent marker; id
   assert.match(src, /data-persistent=\{persistent \|\| undefined\}/);
   assert.match(src, /"data-machine-toast-owner": id/);
   const view = readFileSync(
-    new URL("../../src/machine-view/machine-view.tsx", import.meta.url),
+    new URL("../../src/machine-graph/machine-graph.tsx", import.meta.url),
     "utf8",
   );
   assert.match(
     view,
     /useMachineToaster\(root, \{ toolbar: "\[data-mv-toolbar\]" \}\)/,
-    "Machine View's phone shell has its own toaster under its toolbar",
+    "Machine Graph's phone shell has its own toaster under its toolbar",
   );
 });

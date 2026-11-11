@@ -179,7 +179,7 @@ export function MachineTreeFooter() {
                       onClick={() => applyFix(notice.fix!, notice.rowId)}
                       className="mt-hit shrink-0 rounded-[5px] border border-signal/45 px-1.5 text-[10.5px] text-signal transition-colors hover:bg-signal-muted"
                     >
-                      Try {notice.fix.text}
+                      Try {notice.fix.label}
                     </button>
                   )}
                 </span>
@@ -418,13 +418,13 @@ export function SimulationTab({
                   <button
                     key={`${fix.event}${fix.text}`}
                     type="button"
-                    aria-label={`${fix.event} is blocked; try it with ${fix.text}`}
+                    aria-label={`${fix.event} is blocked; try it with ${fix.label}`}
                     onClick={() => applyFix(fix)}
                     className="flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-dashed border-warning/70 px-1.5 font-mono text-[11px] transition-colors hover:bg-muted coarse:h-11 coarse:px-3"
                   >
                     <Lock aria-hidden className="size-2.5 shrink-0 text-warning" />
                     <span className="font-semibold">{fix.event}</span>
-                    <span className="min-w-0 truncate text-muted-foreground">try {fix.text}</span>
+                    <span className="min-w-0 truncate text-muted-foreground">try {fix.label}</span>
                   </button>
                 ))}
               </div>

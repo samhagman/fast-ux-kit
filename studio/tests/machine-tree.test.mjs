@@ -1,6 +1,6 @@
 // Machine Tree interaction tests: the real component, rendered with react-dom/client in jsdom and
 // driven with DOM events (click, keydown, input), the way a user drives it. Same harness as
-// machine-view.test.mjs: `node --test` plus Vite's SSR loader, so `@/` and `@fux/*` resolve as in
+// machine-graph.test.mjs: `node --test` plus Vite's SSR loader, so `@/` and `@fux/*` resolve as in
 // the app. No test framework.
 //
 //   cd studio && node --test tests/
@@ -179,6 +179,263 @@ async function mount(caseId, extra = {}) {
 
 /* ───────── tests ───────── */
 
+test("flow outline: states are drawn in the order the machine runs, an alternative hangs off the spine, and nothing is drawn over the tree", async () => {
+  const view = await mount("release");
+  try {
+    assert.equal(
+      view.container.querySelector("[data-mt-wires], [data-mt-wire]"),
+      null,
+      "no overlay",
+    );
+    const names = (selector) =>
+      [...view.container.querySelectorAll(selector)].map(
+        (el) => el.getAttribute("aria-label").split(",")[0],
+      );
+    // Draft leads to Review; Review's two ways out are columns (the direct one first); and so on down.
+    assert.deepEqual(names('[role="tree"] div[data-mt-item]').slice(1), [
+      "Draft",
+      "Review",
+      "Declined",
+      "Publishing",
+      "Retry available",
+      "Released",
+    ]);
+    const forks = [...view.container.querySelectorAll("[data-mt-fork]")];
+    assert.equal(forks.length, 2, "Review and Publishing each have one alternative");
+    for (const fork of forks) {
+      // One alternative hangs off the spine: its label, with its states indented right under it. The
+      // state's routes keep the order the machine tries them, so the route on is above or below.
+      assert.equal(fork.dataset.mtFork, "stacked");
+      const item = fork.querySelector(":scope > [data-mt-item]");
+      const label = item.querySelector(':scope > [data-mt-routes="branch"]');
+      const block = fork.querySelector(":scope > [data-mt-col]");
+      const onward = item.querySelector(':scope > [data-mt-routes="main"]');
+      assert.ok(label && block && onward);
+      const row = (el) => Number(el.style.getPropertyValue("--mt-row"));
+      assert.equal(row(block), row(label) + 1, "its states are right under its label");
+      const listed = [...item.querySelectorAll(":scope > [data-mt-routes]")].map(row);
+      assert.deepEqual(
+        listed,
+        [...listed].sort((a, b) => a - b),
+        "drawn in the order they are in the tree",
+      );
+      assert.equal(new Set([...listed, row(block)]).size, listed.length + 1, "one row each");
+      assert.ok(row(onward) < row(label) || row(onward) > row(block));
+    }
+    // Every route meets the spine by a line of its own: a tick it hangs off, or the spine passing by.
+    // Only a route that leads to the state drawn right below it sits on the line.
+    for (const route of view.container.querySelectorAll("[data-mt-routes] > li")) {
+      const tick = route.querySelector(":scope > [data-mt-tick]");
+      assert.ok(tick, route.textContent);
+      const bare = !route.querySelector("[data-substop]")?.textContent.trim();
+      // An alternative's label hangs off the spine too: its states are indented under it.
+      const label = route.parentElement.dataset.mtRoutes === "branch";
+      assert.equal(tick.dataset.mtTick === "pass", bare && !label, route.textContent);
+    }
+    // A route's label is its source state's own row: still inside that state's tree item.
+    assert.equal(view.item("DECLINE").closest("div[data-mt-item]"), view.item("Review"));
+    // Every route keeps its inner stop (→ then Enter follows it), even where position says the target.
+    for (const route of view.container.querySelectorAll("li[data-mt-item]"))
+      assert.ok(route.querySelector("[data-substop]"), route.getAttribute("aria-label"));
+    assert.match(
+      view.item("RETRY").textContent,
+      /back to\s*Publishing/,
+      "a loop says it goes back",
+    );
+    assert.match(view.face("Publishing").textContent, /also from\s*Retry available/);
+    // The start is the state drawn first; only the machine's declared start is named initial.
+    assert.equal(view.container.querySelector('[title="Initial state"]'), null, "no start mark");
+    assert.deepEqual(
+      names("[data-mt-item]").filter((_, index) =>
+        /, initial/.test(
+          view.container.querySelectorAll("[data-mt-item]")[index].getAttribute("aria-label"),
+        ),
+      ),
+      ["Draft"],
+    );
+    // Keyboard order is DOM order: Down from the top visits every row as it is laid out.
+    const order = [...view.container.querySelectorAll("[data-mt-item]")].map(
+      (el) => el.dataset.rowId,
+    );
+    const first = view.container.querySelector("[data-mt-item]");
+    await act(async () => first.focus());
+    const walked = [document.activeElement.dataset.rowId];
+    for (let i = 1; i < order.length; i++) {
+      await view.key(document.activeElement, "ArrowDown");
+      walked.push(document.activeElement.dataset.rowId);
+    }
+    assert.deepEqual(walked, order);
+  } finally {
+    await view.unmount();
+  }
+});
+
+test("meta: a state says what it does; the card shows the start of its set-up and the panel all of it", async () => {
+  const { machineLabCases } = await load("/src/demo/machine-lab-data.ts");
+  const release = machineLabCases.find((c) => c.id === "release");
+  const meta = {
+    kind: "Ask",
+    icon: "person",
+    summary: "a release manager answers",
+    details: [
+      { label: "question", value: "Approve this release?" },
+      { label: "via", value: "inbox" },
+      { label: "remind", value: "every 4 hours" },
+    ],
+  };
+  const document_ = {
+    ...release.document,
+    machines: release.document.machines.map((graph) => ({
+      ...graph,
+      nodes: graph.nodes.map((node) => (node.id === "release-review" ? { ...node, meta } : node)),
+    })),
+  };
+  // The panel's scroll area asks for running animations, which jsdom does not have. There are none.
+  window.Element.prototype.getAnimations ??= () => [];
+  const view = await mount(document_, { runtime: release.options, defaultPanelOpen: true });
+  try {
+    const brief = view.face("Review").querySelector("[data-mt-meta]");
+    assert.equal(brief.dataset.mtMeta, "person");
+    assert.match(brief.textContent, /Ask\s*a release manager answers/);
+    assert.match(brief.textContent, /question\s*Approve this release\?/);
+    assert.doesNotMatch(brief.textContent, /every 4 hours/, "the card shows only the start");
+    assert.match(brief.textContent, /\+1 more in the panel/);
+    assert.equal(brief.querySelector("button, a, [tabindex]"), null, "nothing to tab to inside");
+    assert.match(
+      view.item("Review").getAttribute("aria-description"),
+      /^Ask: a release manager answers/,
+    );
+    assert.equal(view.face("Draft").querySelector("[data-mt-meta]"), null, "only where declared");
+    // Selecting the state shows every detail, in full.
+    await view.click(view.face("Review"));
+    const full = view.container.querySelector("[data-mt-meta-full]");
+    assert.ok(full, "the panel shows the metadata");
+    assert.match(full.textContent, /Ask · a release manager answers/);
+    assert.match(full.parentElement.textContent, /remind\s*every 4 hours/);
+  } finally {
+    await view.unmount();
+  }
+});
+
+test("regions: a declared region starts shut, says what leaves it, floats its inside on hover, and opens on a click", async () => {
+  const { machineLabCases } = await load("/src/demo/machine-lab-data.ts");
+  const release = machineLabCases.find((c) => c.id === "release");
+  const document_ = {
+    ...release.document,
+    machines: release.document.machines.map((graph) => ({
+      ...graph,
+      regions: { publishing: { label: "Publish attempt" } },
+      nodes: graph.nodes.map((node) =>
+        node.id === "release-publish" || node.id === "release-retry"
+          ? { ...node, region: "publishing" }
+          : node,
+      ),
+    })),
+  };
+  const calls = { collapsed: 0, selected: 0 };
+  const view = await mount(document_, {
+    runtime: release.options,
+    onCollapsedChange: () => calls.collapsed++,
+    onSelectedChange: () => calls.selected++,
+  });
+  try {
+    const region = () => view.item("Publish attempt");
+    assert.equal(region().getAttribute("aria-expanded"), "false", "a region starts shut");
+    assert.equal(calls.collapsed, 0, "a default is not a change");
+    assert.match(region().getAttribute("aria-label"), /^Publish attempt, region/);
+    assert.equal(view.item("Publishing"), undefined, "its states are folded away");
+    assert.match(
+      view.face("Publish attempt").textContent,
+      /2 states/,
+      "a shut box says how much is inside",
+    );
+    // The route out of the shut box names the state it leaves from, for the eye and in words.
+    const summary = region().querySelector("[data-mt-summary]");
+    assert.match(summary.textContent, /SUCCEEDED\s*from\s*Publishing/);
+    assert.equal(summary.getAttribute("aria-hidden"), "true");
+    // One route to a row, each meeting the spine by a line of its own.
+    for (const row of region().querySelectorAll("[data-mt-summary]")) {
+      assert.equal(row.querySelectorAll("span.italic").length, 1, row.textContent);
+      assert.ok(row.querySelector(":scope > [data-mt-tick]"), row.textContent);
+    }
+    assert.match(
+      region().getAttribute("aria-description"),
+      /Routes from inside: SUCCEEDED from Publishing/,
+    );
+    // A route into a state inside the next box still names that state.
+    assert.match(view.item("DECIDE").textContent, /Publishing/);
+    // Six states in the header: a region is not a state.
+    assert.match(view.item("Release approval").textContent, /6 states/);
+
+    // Resting the pointer on it floats the real inside, outside the tree, and changes nothing.
+    const hover = (type) => {
+      const event = new MouseEvent(type, { bubbles: true });
+      Object.defineProperty(event, "pointerType", { value: "mouse" });
+      return event;
+    };
+    await act(async () => view.face("Publish attempt").dispatchEvent(hover("pointerover")));
+    await act(async () => sleep(380));
+    const float = view.container.querySelector("[data-mt-float]");
+    assert.ok(float, "the inside is floated");
+    assert.equal(float.closest('[role="tree"]'), null, "outside the tree");
+    assert.ok(float.querySelector("[inert]"), "and inert: no focus, no keys, not read out");
+    assert.match(float.textContent, /Publishing[\s\S]*Retry available/);
+    assert.equal(region().getAttribute("aria-expanded"), "false", "hovering opens nothing");
+    assert.deepEqual(calls, { collapsed: 0, selected: 0 });
+    // One click on the float opens the region in place.
+    await view.click(float);
+    assert.equal(view.container.querySelector("[data-mt-float]"), null);
+    assert.equal(region().getAttribute("aria-expanded"), "true");
+    assert.equal(calls.collapsed, 1);
+    assert.ok(view.item("Publishing"), "its states are tree items now");
+    // The name is a toggle too.
+    await view.click(region().querySelector("[data-mt-toggle]"));
+    assert.equal(region().getAttribute("aria-expanded"), "false");
+
+    // The machine runs exactly as it does without the region.
+    await view.click(view.button("Simulate"));
+    const submit = view.item("SUBMIT");
+    submit.focus();
+    await view.key(submit, "Enter");
+    assert.equal(view.polite(), "SUBMIT fired — now in Review");
+  } finally {
+    await view.unmount();
+  }
+});
+
+test("known inputs: the tree's one-tap fix reads the same inputs as Machine Graph, host-declared first", async () => {
+  const { knownPayloads } = await load("/src/registry/machine-tree/machine-tree-logic.ts");
+  const { machineLabCases } = await load("/src/demo/machine-lab-data.ts");
+  const lab = machineLabCases.find((c) => c.id === "release");
+  const graph = lab.document.machines[0];
+  assert.deepEqual(
+    knownPayloads(graph, lab.scenarios, lab.options).map((fix) => [fix.event, fix.label, fix.text]),
+    [
+      ["DECIDE", "approved: true", '{"approved":true}'],
+      ["DECIDE", "approved: false", '{"approved":false}'],
+    ],
+  );
+  const declared = knownPayloads(graph, lab.scenarios, {
+    ...lab.options,
+    eventInputs: { DECIDE: [{ label: "Approve", payload: { approved: true } }] },
+  });
+  assert.deepEqual(
+    declared.map((fix) => fix.label),
+    ["Approve", "approved: false"],
+  );
+  // The blocked route offers the input in the words a person would use.
+  const view = await mount("release");
+  try {
+    await view.click(view.button("Simulate"));
+    const submit = view.item("SUBMIT");
+    submit.focus();
+    await view.key(submit, "Enter");
+    assert.match(view.item("DECIDE").getAttribute("aria-label"), /fix: send with approved: true$/);
+  } finally {
+    await view.unmount();
+  }
+});
+
 test("send loop: Enter on an enabled route sends, announces, and moves the live leaf (rail + signal name)", async () => {
   const view = await mount("release");
   try {
@@ -209,10 +466,11 @@ test("send loop: Enter on an enabled route sends, announces, and moves the live 
     await view.key(decide, "Enter");
     assert.match(
       view.polite(),
-      /^DECIDE blocked — guard approved is false/,
+      // The demo's own explanation of its guard (runtime.guardDescriptions), not the generic one.
+      /^DECIDE blocked — the reviewer has to approve/,
       "one phrasing: the same words as the row's name",
     );
-    assert.match(decide.getAttribute("aria-label"), /blocked: guard approved is false/);
+    assert.match(decide.getAttribute("aria-label"), /blocked: the reviewer has to approve/);
     assert.match(view.item("Review").getAttribute("aria-label"), /active/, "nothing moved");
   } finally {
     await view.unmount();
@@ -384,7 +642,9 @@ test("⌘K send while simulating: a state's name lists its Send but goes to the 
       "the guarded route says it is blocked",
     );
     assert.ok(
-      options().some((o) => /guard confident is false/.test(o) && !/CLASSIFIED blocked/.test(o)),
+      options().some(
+        (o) => /confidence has to be 0\.8 or higher/.test(o) && !/CLASSIFIED blocked/.test(o),
+      ),
       "the reason doesn't repeat the event",
     );
     await view.key(input, "Enter");
@@ -780,7 +1040,7 @@ test("toasts are per instance: two trees and the page's toaster never share a to
         ),
       );
     }
-    await act(async () => machineToast("mv-reason", "Machine View says hi"));
+    await act(async () => machineToast("mv-reason", "Machine Graph says hi"));
     await act(async () => sleep(80));
     const sections = [...document.querySelectorAll("section[aria-label]")];
     const treeSections = sections.filter(
@@ -797,10 +1057,10 @@ test("toasts are per instance: two trees and the page's toaster never share a to
     );
     assert.deepEqual(
       toastsIn(page),
-      ["Machine View says hi"],
+      ["Machine Graph says hi"],
       "a toast without toasterId stays in the page toaster, untouched by either tree",
     );
-    assert.ok(treeSections.every((s) => !toastsIn(s).some((t) => /Machine View/.test(t))));
+    assert.ok(treeSections.every((s) => !toastsIn(s).some((t) => /Machine Graph/.test(t))));
     assert.equal(
       document.documentElement.style.getPropertyValue("--mt-toast-top"),
       "",

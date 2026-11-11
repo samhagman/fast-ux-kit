@@ -1,0 +1,1434 @@
+/* Editorial UI: the styles for @samhagman/fast-ux-kit/editorial.
+   Plain CSS with no framework layer, so a static page can use it on its own.
+
+   Theme by overriding the --fux-ed-* tokens on :root or on .fux-article. Each token falls back to
+   the kit's app theme when that is loaded, and to a neutral paper when it is not.
+   Nothing here needs a style attribute: figure geometry lives in SVG and state in data attributes. */
+
+:root {
+  --fux-ed-paper: var(--background, #fbfbf8);
+  --fux-ed-raised: var(--card, #ffffff);
+  --fux-ed-ink: var(--foreground, #1d2321);
+  --fux-ed-ink-soft: var(--muted-foreground, #56605b);
+  --fux-ed-rule: var(--border, #d5d9d2);
+  --fux-ed-tone: var(--muted, #eef0ea);
+  --fux-ed-accent: var(--signal, #7d5410);
+  --fux-ed-good: var(--success, #2f6b4a);
+  --fux-ed-mark: color-mix(in srgb, var(--fux-ed-accent) 13%, transparent);
+
+  --fux-ed-serif: var(--font-serif, ui-serif, "Iowan Old Style", Georgia, "Times New Roman", serif);
+  --fux-ed-sans: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --fux-ed-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+
+  --fux-ed-size: 1.1875rem;
+  --fux-ed-leading: 1.58;
+  --fux-ed-small: 0.8125rem;
+  --fux-ed-measure: 34rem;
+  --fux-ed-margin: 13.5rem;
+  --fux-ed-gap: 2.5rem;
+  --fux-ed-gutter: clamp(1rem, 4vw, 3rem);
+  --fux-ed-radius: 2px;
+  --fux-ed-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.fux-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Article ------------------------------------------------------------------------------------- */
+
+.fux-article {
+  container: fux-article / inline-size;
+  color: var(--fux-ed-ink);
+  font-family: var(--fux-ed-serif);
+  font-size: var(--fux-ed-size);
+  line-height: var(--fux-ed-leading);
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+}
+.fux-article[data-surface="paper"] {
+  background: var(--fux-ed-paper);
+  padding-inline: var(--fux-ed-gutter);
+}
+.fux-article :where(p, ul, ol, dl, figure, blockquote, h1, h2, h3, table, pre) {
+  margin: 0;
+}
+.fux-article :where(a) {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+.fux-article :where(a:hover) {
+  text-decoration-thickness: 2px;
+}
+.fux-article :where(a, button, input, pre, summary):focus-visible {
+  outline: 2px solid var(--fux-ed-accent);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+/* Figures and notes are numbered per reading column. The counters start here, not on the
+   article: the article is a size container, and style containment would give every nested
+   figure a counter of its own. */
+.fux-article-body {
+  counter-reset: fux-figure fux-note;
+}
+.fux-article-header,
+.fux-article-body {
+  max-inline-size: calc(var(--fux-ed-measure) + var(--fux-ed-gap) + var(--fux-ed-margin));
+  margin-inline: auto;
+}
+
+/* Blocks keep the text measure. Sections are full width so margin blocks have a margin to sit in. */
+.fux-article-body > *,
+.fux-section > *,
+.fux-status > * {
+  max-inline-size: var(--fux-ed-measure);
+}
+.fux-article-body > .fux-section,
+.fux-article-body > .fux-status {
+  max-inline-size: none;
+}
+.fux-article-body > * + *,
+.fux-section > * + *,
+.fux-status > * + * {
+  margin-block-start: 1.05em;
+}
+.fux-article-body::after,
+.fux-section::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+.fux-article-header {
+  padding-block: clamp(1.75rem, 5vw, 3.5rem) clamp(1.5rem, 3vw, 2.25rem);
+}
+.fux-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.9rem;
+  margin: 0;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.875rem;
+  font-weight: 560;
+  line-height: 1.4;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-headline {
+  margin-block-start: 0.7rem;
+  max-inline-size: 21ch;
+  font-family: var(--fux-ed-serif);
+  font-weight: 560;
+  font-size: clamp(2.3rem, 1.3rem + 4.4cqi, 4.1rem);
+  line-height: 1.02;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+}
+.fux-deck {
+  margin-block-start: 1.1rem;
+  max-inline-size: 38ch;
+  font-size: clamp(1.2rem, 1.05rem + 0.7cqi, 1.45rem);
+  line-height: 1.4;
+  color: var(--fux-ed-ink-soft);
+  text-wrap: pretty;
+}
+.fux-byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0;
+  margin-block-start: clamp(1.4rem, 3vw, 2rem);
+  padding: 0.55rem 0;
+  list-style: none;
+  border-block: 1px solid var(--fux-ed-ink);
+  box-shadow: 0 3px 0 -2px var(--fux-ed-ink);
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  line-height: 1.4;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-byline li + li {
+  margin-inline-start: 0.85rem;
+  padding-inline-start: 0.85rem;
+  border-inline-start: 1px solid var(--fux-ed-rule);
+}
+.fux-byline li:first-child {
+  color: var(--fux-ed-ink);
+  font-weight: 560;
+}
+/* When the byline wraps, a rule at the start of a line reads as a stray mark. Use a gap instead. */
+@container fux-article (max-width: 30rem) {
+  .fux-byline {
+    gap: 0.15rem 1.1rem;
+  }
+  .fux-byline li + li {
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+}
+
+.fux-section,
+.fux-status {
+  margin-block-start: clamp(2.25rem, 5vw, 3.25rem);
+}
+.fux-section-title {
+  font-family: var(--fux-ed-serif);
+  font-weight: 560;
+  font-size: 1.55rem;
+  line-height: 1.15;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.fux-section-title + * {
+  margin-block-start: 0.7em;
+}
+
+.fux-dropcap::first-letter {
+  float: inline-start;
+  margin-block-start: 0.07em;
+  margin-inline-end: 0.09em;
+  font-size: 3.35em;
+  line-height: 0.8;
+  font-weight: 520;
+  color: var(--fux-ed-accent);
+}
+
+/* Atoms --------------------------------------------------------------------------------------- */
+
+.fux-term-word {
+  font-style: normal;
+  font-weight: 560;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.fux-term-gloss {
+  font-family: var(--fux-ed-sans);
+  font-size: 0.78em;
+  color: var(--fux-ed-ink-soft);
+}
+
+.fux-sparkline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+.fux-sparkline svg {
+  display: inline-block;
+  inline-size: 3.4em;
+  block-size: 0.95em;
+  overflow: visible;
+  transform: translateY(0.08em);
+}
+.fux-sparkline-line {
+  stroke: var(--fux-ed-ink);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fux-sparkline-end {
+  fill: var(--fux-ed-accent);
+}
+.fux-sparkline-ends {
+  font-family: var(--fux-ed-sans);
+  font-size: 0.72em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fux-ed-ink-soft);
+}
+
+.fux-keychord {
+  white-space: nowrap;
+}
+.fux-keychord-press {
+  font: inherit;
+}
+.fux-key {
+  display: inline-block;
+  min-inline-size: 1.5em;
+  padding: 0.02em 0.4em 0.06em;
+  border: 1px solid var(--fux-ed-rule);
+  border-block-end-width: 2px;
+  border-radius: 4px;
+  background: var(--fux-ed-raised);
+  font-family: var(--fux-ed-sans);
+  font-size: 0.74em;
+  font-weight: 560;
+  line-height: 1.5;
+  text-align: center;
+  vertical-align: 0.08em;
+}
+.fux-keychord-plus {
+  margin-inline: 0.18em;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.74em;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-keychord-then {
+  font-style: italic;
+  color: var(--fux-ed-ink-soft);
+}
+
+.fux-literal {
+  padding: 0.06em 0.3em;
+  border-radius: 3px;
+  background: var(--fux-ed-tone);
+  font-family: var(--fux-ed-mono);
+  font-size: 0.8em;
+  display: inline-block;
+  max-inline-size: 100%;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.fux-dated {
+  white-space: nowrap;
+}
+.fux-dated-date {
+  margin-inline-start: 0.4em;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.72em;
+  color: var(--fux-ed-ink-soft);
+}
+
+.fux-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.fux-stage svg {
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+  color: var(--fux-ed-good);
+}
+
+.fux-marker {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 1.45em;
+  block-size: 1.45em;
+  padding-inline: 0.3em;
+  border-radius: 999px;
+  background: var(--fux-ed-ink);
+  color: var(--fux-ed-paper);
+  font-family: var(--fux-ed-sans);
+  font-size: 0.68em;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  vertical-align: 0.14em;
+}
+
+.fux-control-label {
+  padding: 0;
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  font-weight: 560;
+  line-height: 1.3;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.fux-choice legend {
+  float: inline-start;
+  margin-inline-end: 0.75rem;
+}
+.fux-choice-options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--fux-ed-ink);
+  border-radius: var(--fux-ed-radius);
+}
+.fux-choice-option {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  font-weight: 560;
+  line-height: 1.3;
+}
+.fux-choice-option + .fux-choice-option {
+  border-inline-start: 1px solid var(--fux-ed-ink);
+}
+.fux-choice-option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.fux-choice-option span {
+  padding: 0.38rem 0.75rem;
+  transition:
+    background-color 140ms var(--fux-ed-ease),
+    color 140ms var(--fux-ed-ease);
+}
+.fux-choice-option input:checked + span {
+  background: var(--fux-ed-ink);
+  color: var(--fux-ed-paper);
+}
+.fux-choice-option input:focus-visible + span {
+  outline: 2px solid var(--fux-ed-accent);
+  outline-offset: 2px;
+}
+.fux-choice-option:hover input:not(:checked) + span {
+  background: var(--fux-ed-tone);
+}
+
+.fux-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+}
+.fux-range input {
+  inline-size: min(11rem, 100%);
+  accent-color: var(--fux-ed-ink);
+}
+.fux-range-value {
+  min-inline-size: 3.5ch;
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  font-variant-numeric: tabular-nums;
+  font-weight: 560;
+}
+
+.fux-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--fux-ed-ink);
+  border-radius: var(--fux-ed-radius);
+  background: transparent;
+  color: var(--fux-ed-ink);
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  font-weight: 560;
+  line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--fux-ed-ease),
+    color 140ms var(--fux-ed-ease);
+}
+.fux-action:hover:not(:disabled),
+.fux-action[data-tone="strong"] {
+  background: var(--fux-ed-ink);
+  color: var(--fux-ed-paper);
+}
+.fux-action[data-tone="strong"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fux-ed-ink) 86%, var(--fux-ed-paper));
+}
+.fux-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.fux-playback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.fux-playback-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--fux-ed-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fux-ed-ink-soft);
+  font-family: var(--fux-ed-sans);
+  font-size: 0.75rem;
+  font-weight: 560;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.fux-playback-toggle:hover:not(:disabled) {
+  border-color: var(--fux-ed-ink);
+  color: var(--fux-ed-ink);
+}
+.fux-playback :disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.fux-playback {
+  flex-wrap: wrap;
+}
+.fux-playback-steps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+/* Each dot is a 24px target (WCAG 2.5.8), however small the mark inside it is. */
+.fux-playback-step {
+  display: grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.fux-playback-step::before {
+  content: "";
+  inline-size: 0.42rem;
+  block-size: 0.42rem;
+  border-radius: 999px;
+  background: var(--fux-ed-rule);
+  transition:
+    background-color 200ms var(--fux-ed-ease),
+    transform 200ms var(--fux-ed-ease);
+}
+.fux-playback-step:hover::before {
+  background: var(--fux-ed-ink-soft);
+}
+.fux-playback-step[aria-current]::before {
+  background: var(--fux-ed-ink);
+  transform: scale(1.35);
+}
+
+/* Figure -------------------------------------------------------------------------------------- */
+
+.fux-figure {
+  counter-increment: none;
+  margin-block: 1.9em;
+  clear: both;
+}
+.fux-figure[data-numbered] {
+  counter-increment: fux-figure;
+}
+.fux-figure-body {
+  padding: clamp(0.9rem, 2.5cqi, 1.4rem);
+  border: 1px solid var(--fux-ed-rule);
+  background: var(--fux-ed-raised);
+}
+.fux-figure[data-bare] > .fux-figure-body,
+.fux-figure-body:has(
+  > :is(
+      .fux-code,
+      .fux-terminal,
+      .fux-compare,
+      .fux-walkthrough,
+      .fux-source-result,
+      .fux-ledger
+    ):only-child
+) {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.fux-figure-body > :where(svg, img) {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+.fux-figure-caption {
+  margin-block-start: 0.6rem;
+  max-inline-size: var(--fux-ed-measure);
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  line-height: 1.45;
+  color: var(--fux-ed-ink-soft);
+  text-wrap: pretty;
+}
+.fux-figure-label::before {
+  content: attr(data-label) " " counter(fux-figure) ".";
+  margin-inline-end: 0.45em;
+  color: var(--fux-ed-ink);
+  font-weight: 650;
+}
+.fux-figure-text {
+  color: var(--fux-ed-ink);
+}
+.fux-figure-credit {
+  display: block;
+  margin-block-start: 0.15rem;
+  font-size: 0.75rem;
+}
+
+/* Margin notes -------------------------------------------------------------------------------- */
+
+.fux-note {
+  counter-increment: fux-note;
+}
+.fux-note-ref::after,
+.fux-note-num::before {
+  content: counter(fux-note);
+  font-family: var(--fux-ed-sans);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--fux-ed-accent);
+}
+.fux-note-ref {
+  margin-inline-start: 0.08em;
+  font-size: 0.62em;
+  line-height: 0;
+}
+.fux-note-num {
+  margin-inline-end: 0.45em;
+}
+.fux-note-body,
+.fux-aside {
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  color: var(--fux-ed-ink-soft);
+  text-wrap: pretty;
+}
+.fux-note-body {
+  display: block;
+  margin-block: 0.7rem;
+  padding-inline-start: 0.8rem;
+  border-inline-start: 2px solid var(--fux-ed-rule);
+}
+.fux-aside {
+  margin-block: 1.4em;
+  padding-block-start: 0.6rem;
+  border-block-start: 1px solid var(--fux-ed-ink);
+}
+.fux-aside > * + * {
+  margin-block-start: 0.6rem;
+}
+.fux-aside-heading {
+  color: var(--fux-ed-ink);
+  font-weight: 650;
+}
+
+/* The margin opens once the article is wide enough to hold it beside a readable column. */
+@container fux-article (min-width: 46rem) {
+  .fux-article-body > *,
+  .fux-section > *,
+  .fux-status > * {
+    max-inline-size: min(
+      var(--fux-ed-measure),
+      calc(100% - var(--fux-ed-gap) - var(--fux-ed-margin))
+    );
+  }
+  .fux-article-body > .fux-section,
+  .fux-article-body > .fux-status {
+    max-inline-size: none;
+  }
+  .fux-note-body {
+    float: inline-end;
+    clear: inline-end;
+    inline-size: var(--fux-ed-margin);
+    margin-block: 0.25rem 0.9rem;
+    margin-inline-end: calc(-1 * (var(--fux-ed-margin) + var(--fux-ed-gap)));
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+  .fux-aside,
+  .fux-figure[data-size="margin"] {
+    float: inline-end;
+    clear: inline-end;
+    inline-size: var(--fux-ed-margin);
+    max-inline-size: none;
+    margin-block: 0.3rem 1.2rem;
+    margin-inline-start: var(--fux-ed-gap);
+  }
+  /* A margin block keeps the element after it from picking up the stacked-block gap twice. */
+  .fux-aside + *,
+  .fux-figure[data-size="margin"] + * {
+    margin-block-start: 0;
+  }
+  .fux-figure[data-size="wide"],
+  .fux-article-body > .fux-figure[data-size="wide"],
+  .fux-section > .fux-figure[data-size="wide"] {
+    max-inline-size: none;
+  }
+}
+
+/* Pull quote, abstract, facts ----------------------------------------------------------------- */
+
+.fux-pullquote {
+  margin-block: 2em;
+  padding-block: 1.1rem 1.2rem;
+  border-block: 1px solid var(--fux-ed-ink);
+}
+.fux-pullquote-text {
+  font-family: var(--fux-ed-serif);
+  font-style: italic;
+  font-weight: 460;
+  font-size: clamp(1.45rem, 1.2rem + 1.2cqi, 1.9rem);
+  line-height: 1.22;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.fux-pullquote-source {
+  display: inline-block;
+  margin-block-start: 0.7rem;
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  color: var(--fux-ed-ink-soft);
+}
+
+.fux-abstract {
+  padding: 0.9rem 1.1rem 1rem;
+  border-inline-start: 3px solid var(--fux-ed-ink);
+  background: var(--fux-ed-tone);
+}
+.fux-abstract-heading {
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  font-weight: 650;
+}
+.fux-abstract-body {
+  margin-block-start: 0.3rem;
+  font-size: 0.94em;
+  line-height: 1.5;
+}
+.fux-abstract-body > * + * {
+  margin-block-start: 0.5em;
+}
+
+.fux-facts {
+  font-family: var(--fux-ed-sans);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.fux-fact {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 0.42fr) minmax(0, 1fr);
+  gap: 0.1rem 1rem;
+  padding-block: 0.5rem;
+  border-block-start: 1px solid var(--fux-ed-rule);
+}
+.fux-fact:last-child {
+  border-block-end: 1px solid var(--fux-ed-rule);
+}
+.fux-fact dt {
+  color: var(--fux-ed-ink-soft);
+}
+.fux-fact dd {
+  margin: 0;
+  color: var(--fux-ed-ink);
+}
+.fux-facts[data-layout="stack"] .fux-fact,
+.fux-aside .fux-fact {
+  grid-template-columns: minmax(0, 1fr);
+  padding-block: 0.4rem;
+}
+.fux-facts[data-layout="stack"] dt,
+.fux-aside .fux-fact dt {
+  font-size: 0.75rem;
+}
+
+/* Code, terminal, tree ------------------------------------------------------------------------ */
+
+.fux-code,
+.fux-terminal {
+  border: 1px solid var(--fux-ed-rule);
+  background: var(--fux-ed-raised);
+  font-family: var(--fux-ed-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.fux-code-head,
+.fux-terminal-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0.85rem;
+  border-block-end: 1px solid var(--fux-ed-rule);
+  font-family: var(--fux-ed-sans);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-code-file {
+  color: var(--fux-ed-ink);
+  font-family: var(--fux-ed-mono);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.fux-code {
+  container: fux-code / inline-size;
+}
+.fux-code-pre,
+.fux-terminal-pre {
+  min-inline-size: 0;
+  margin: 0;
+  padding-block: 0.7rem;
+  font: inherit;
+  tab-size: 2;
+  /* Long lines wrap with a hanging indent. Nothing a note points at can be clipped, and a reader
+     on a phone never has to scroll sideways to find it. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fux-code-pre code {
+  display: block;
+  font: inherit;
+}
+.fux-code-line {
+  display: flex;
+  padding-inline: 0.85rem;
+  border-inline-start: 2px solid transparent;
+  transition:
+    background-color 260ms var(--fux-ed-ease),
+    border-color 260ms var(--fux-ed-ease);
+}
+.fux-code-text {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  padding-inline-start: 2ch;
+  text-indent: -2ch;
+}
+.fux-code-line[data-marked] {
+  border-inline-start-color: var(--fux-ed-accent);
+  background: var(--fux-ed-mark);
+}
+.fux-code-n {
+  flex: none;
+  inline-size: 2.2ch;
+  margin-inline-end: 0.6ch;
+  text-indent: 0;
+  color: var(--fux-ed-ink-soft);
+  text-align: end;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.fux-tok-comment {
+  color: var(--fux-ed-ink-soft);
+  font-style: italic;
+}
+.fux-tok-string {
+  color: var(--fux-ed-good);
+}
+.fux-tok-number {
+  color: var(--fux-ed-accent);
+}
+.fux-tok-keyword {
+  font-weight: 600;
+}
+.fux-code-notes {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  list-style: none;
+  border-block-start: 1px solid var(--fux-ed-rule);
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  line-height: 1.45;
+  color: var(--fux-ed-ink-soft);
+}
+@container fux-code (min-width: 42rem) {
+  .fux-code[data-noted] .fux-code-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 14.5rem;
+  }
+  .fux-code-notes {
+    border-block-start: 0;
+    border-inline-start: 1px solid var(--fux-ed-rule);
+  }
+}
+.fux-code-notes li + li {
+  margin-block-start: 0.7rem;
+}
+.fux-code-note-ref {
+  display: block;
+  color: var(--fux-ed-accent);
+  font-weight: 650;
+}
+
+.fux-terminal-pre {
+  padding: 0.7rem 0.85rem;
+}
+.fux-terminal-line {
+  display: block;
+  padding-inline-start: 2ch;
+  text-indent: -2ch;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-terminal-line[data-kind="in"] {
+  color: var(--fux-ed-ink);
+  font-weight: 600;
+}
+.fux-terminal-prompt {
+  color: var(--fux-ed-accent);
+  user-select: none;
+}
+
+.fux-tree {
+  font-family: var(--fux-ed-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.fux-tree-level {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fux-tree-level .fux-tree-level {
+  margin-inline-start: 0.5rem;
+  padding-inline-start: 1rem;
+  border-inline-start: 1px solid var(--fux-ed-rule);
+}
+.fux-tree-item {
+  position: relative;
+  padding-block: 0.14rem;
+}
+.fux-tree-level .fux-tree-level > .fux-tree-item::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -1rem;
+  inset-block-start: 0.95em;
+  inline-size: 0.7rem;
+  border-block-start: 1px solid var(--fux-ed-rule);
+}
+.fux-tree-name[data-kind="folder"] {
+  font-weight: 600;
+}
+.fux-tree-name[data-marked] {
+  padding: 0.05em 0.35em;
+  background: var(--fux-ed-mark);
+  box-shadow: inset 2px 0 0 var(--fux-ed-accent);
+}
+.fux-tree-note {
+  margin-inline-start: 0.75rem;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.75rem;
+  color: var(--fux-ed-ink-soft);
+}
+
+/* Compare, source and result, ledger ---------------------------------------------------------- */
+
+.fux-side-label {
+  padding-block-end: 0.4rem;
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--fux-ed-ink);
+}
+.fux-compare,
+.fux-source-result,
+.fux-status-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 1.4rem clamp(1.25rem, 4cqi, 2.25rem);
+}
+.fux-compare-side,
+.fux-source-result-side,
+.fux-status-column {
+  min-inline-size: 0;
+  padding-block-start: 0.55rem;
+  border-block-start: 1px solid var(--fux-ed-ink);
+}
+.fux-compare-body {
+  font-size: 0.94em;
+  line-height: 1.5;
+}
+.fux-compare-body > * + * {
+  margin-block-start: 0.6em;
+}
+.fux-source-result-output {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--fux-ed-rule);
+  background: var(--fux-ed-raised);
+  font-size: 0.94em;
+  line-height: 1.5;
+}
+
+.fux-ledger {
+  container: fux-ledger / inline-size;
+}
+.fux-ledger table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  text-align: start;
+}
+.fux-ledger thead th {
+  padding: 0 0.9rem 0.45rem 0;
+  border-block-end: 1px solid var(--fux-ed-ink);
+  font-size: var(--fux-ed-small);
+  font-weight: 650;
+  text-align: start;
+}
+.fux-ledger tbody :is(th, td) {
+  padding: 0.6rem 0.9rem 0.6rem 0;
+  border-block-end: 1px solid var(--fux-ed-rule);
+  font-weight: 400;
+  text-align: start;
+  vertical-align: top;
+}
+.fux-ledger tbody th {
+  font-weight: 600;
+}
+.fux-ledger tbody td {
+  color: var(--fux-ed-ink-soft);
+}
+@container fux-ledger (max-width: 30rem) {
+  .fux-ledger thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .fux-ledger :is(tbody, tr, th, td) {
+    display: block;
+  }
+  .fux-ledger tbody tr {
+    padding-block: 0.6rem;
+    border-block-end: 1px solid var(--fux-ed-rule);
+  }
+  .fux-ledger tbody :is(th, td) {
+    padding: 0.1rem 0;
+    border: 0;
+  }
+  .fux-ledger tbody td::before {
+    content: attr(data-label) ": ";
+    color: var(--fux-ed-ink);
+    font-weight: 600;
+  }
+}
+
+/* Procedure, pipeline, chronoline, bars, citation --------------------------------------------- */
+
+.fux-procedure-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: fux-step;
+}
+.fux-procedure-steps li {
+  position: relative;
+  counter-increment: fux-step;
+  padding-block: 0.35rem;
+  padding-inline-start: 2.2rem;
+}
+.fux-procedure-steps li::before {
+  content: counter(fux-step);
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.5rem;
+  display: grid;
+  place-items: center;
+  inline-size: 1.45rem;
+  block-size: 1.45rem;
+  border: 1px solid var(--fux-ed-ink);
+  border-radius: 999px;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1;
+}
+.fux-procedure-done {
+  display: flex;
+  gap: 0.75rem;
+  margin-block-start: 0.5rem;
+  padding-block-start: 0.6rem;
+  border-block-start: 1px solid var(--fux-ed-rule);
+  font-family: var(--fux-ed-sans);
+  font-size: 0.875rem;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-procedure-check {
+  inline-size: 1.45rem;
+  flex: none;
+  text-align: center;
+  color: var(--fux-ed-good);
+  font-weight: 700;
+}
+
+.fux-pipeline {
+  container: fux-pipeline / inline-size;
+}
+.fux-pipeline-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--fux-ed-sans);
+}
+.fux-pipeline-stage {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-inline-size: 0;
+  padding: 0.6rem 0.75rem 0.65rem;
+  border: 1px solid var(--fux-ed-rule);
+  background: var(--fux-ed-raised);
+  transition:
+    border-color 320ms var(--fux-ed-ease),
+    background-color 320ms var(--fux-ed-ease);
+}
+.fux-pipeline-stage + .fux-pipeline-stage::before {
+  content: "";
+  position: absolute;
+  inset-block-start: -0.85rem;
+  inset-inline-start: 1.1rem;
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-inline-end: 1.5px solid var(--fux-ed-ink-soft);
+  border-block-end: 1.5px solid var(--fux-ed-ink-soft);
+  transform: rotate(45deg);
+}
+.fux-pipeline-label {
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.fux-pipeline-detail {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-pipeline-stage[data-active] {
+  border-color: var(--fux-ed-ink);
+  background: var(--fux-ed-mark);
+}
+.fux-pipeline-stage[data-passed] .fux-pipeline-label::after {
+  content: " ✓";
+  color: var(--fux-ed-good);
+}
+@container fux-pipeline (min-width: 36rem) {
+  .fux-pipeline-stages {
+    flex-direction: row;
+    gap: 1.5rem;
+  }
+  .fux-pipeline-stage + .fux-pipeline-stage::before {
+    inset-block-start: 1rem;
+    inset-inline-start: -1.05rem;
+    transform: rotate(-45deg);
+  }
+  [dir="rtl"] .fux-pipeline-stage + .fux-pipeline-stage::before {
+    transform: rotate(135deg);
+  }
+}
+
+.fux-chronoline-scale {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  max-block-size: 3.5rem;
+}
+.fux-chronoline-axis {
+  stroke: var(--fux-ed-ink-soft);
+  stroke-width: 1;
+}
+.fux-chronoline-dot {
+  fill: var(--fux-ed-ink);
+}
+.fux-chronoline-num {
+  fill: var(--fux-ed-paper);
+  font-family: var(--fux-ed-sans);
+  font-size: 11px;
+  font-weight: 700;
+}
+.fux-chronoline-key {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0.5rem 1.25rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: fux-chrono;
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  line-height: 1.4;
+}
+.fux-chronoline-key li {
+  position: relative;
+  counter-increment: fux-chrono;
+  padding-inline-start: 1.7rem;
+}
+.fux-chronoline-key li::before {
+  content: counter(fux-chrono);
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.05rem;
+  display: grid;
+  place-items: center;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  border-radius: 999px;
+  background: var(--fux-ed-ink);
+  color: var(--fux-ed-paper);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.fux-chronoline-when {
+  display: block;
+  color: var(--fux-ed-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.fux-chronoline-label {
+  color: var(--fux-ed-ink);
+  font-weight: 560;
+}
+
+.fux-bars {
+  display: grid;
+  grid-template-columns: max-content minmax(3rem, 1fr) max-content;
+  align-items: center;
+  gap: 0.55rem 0.9rem;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+.fux-bar {
+  display: contents;
+}
+.fux-bar-track {
+  inline-size: 100%;
+  block-size: 0.5rem;
+}
+.fux-bar-rail {
+  fill: var(--fux-ed-tone);
+}
+.fux-bar-fill {
+  fill: var(--fux-ed-ink-soft);
+}
+.fux-bar[data-marked] .fux-bar-fill {
+  fill: var(--fux-ed-accent);
+}
+.fux-bar[data-marked] .fux-bar-label {
+  font-weight: 650;
+}
+.fux-bar-value {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  color: var(--fux-ed-ink-soft);
+}
+
+.fux-citation {
+  padding-inline-start: 1rem;
+  border-inline-start: 2px solid var(--fux-ed-ink);
+}
+.fux-citation-claim {
+  font-size: 1.04em;
+  line-height: 1.45;
+}
+.fux-citation-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  margin-block-start: 0.6rem;
+  padding-block-start: 0.5rem;
+  border-block-start: 1px solid var(--fux-ed-rule);
+  font-family: var(--fux-ed-sans);
+  font-size: var(--fux-ed-small);
+  line-height: 1.4;
+}
+.fux-citation-source cite {
+  font-style: normal;
+  font-weight: 560;
+}
+.fux-citation-relation {
+  color: var(--fux-ed-ink-soft);
+}
+
+/* Organisms ----------------------------------------------------------------------------------- */
+
+.fux-explorable-stage {
+  padding: clamp(0.9rem, 2.5cqi, 1.5rem);
+  border: 1px solid var(--fux-ed-rule);
+  background: var(--fux-ed-raised);
+}
+.fux-explorable-stage > :where(svg, img) {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+.fux-explorable-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  align-items: center;
+  gap: 0.7rem 1.75rem;
+  padding: 0.8rem clamp(0.9rem, 2.5cqi, 1.5rem);
+  border: 1px solid var(--fux-ed-rule);
+  border-block-start: 0;
+  background: color-mix(in srgb, var(--fux-ed-tone) 55%, var(--fux-ed-raised));
+}
+.fux-explorable-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.1rem;
+}
+.fux-explorable-readout {
+  font-family: var(--fux-ed-serif);
+  font-size: 1.02rem;
+  line-height: 1.4;
+  color: var(--fux-ed-ink);
+  text-wrap: pretty;
+}
+
+.fux-walkthrough {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  align-items: flex-start;
+}
+.fux-walkthrough > .fux-code {
+  flex: 3 1 22rem;
+  min-inline-size: 0;
+}
+.fux-walkthrough-rail {
+  flex: 1 1 13rem;
+  min-inline-size: 0;
+  font-family: var(--fux-ed-sans);
+}
+.fux-walkthrough-steps {
+  margin: 0 0 0.8rem;
+  padding: 0;
+  list-style: none;
+}
+.fux-walkthrough-step {
+  padding-block: 0.6rem;
+  border-block-start: 1px solid var(--fux-ed-rule);
+}
+.fux-walkthrough-step[data-active] {
+  border-block-start-color: var(--fux-ed-ink);
+}
+.fux-walkthrough-pick {
+  display: block;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.fux-walkthrough-lines {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-walkthrough-step[data-active] .fux-walkthrough-lines {
+  color: var(--fux-ed-accent);
+}
+.fux-walkthrough-title {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.fux-walkthrough-text {
+  margin-block-start: 0.3rem;
+  font-size: var(--fux-ed-small);
+  line-height: 1.45;
+  color: var(--fux-ed-ink-soft);
+}
+.fux-walkthrough[data-ready] .fux-walkthrough-step:not([data-active]) .fux-walkthrough-text {
+  display: none;
+}
+.fux-walkthrough[data-ready] .fux-walkthrough-step:not([data-active]) .fux-walkthrough-title {
+  font-weight: 500;
+  color: var(--fux-ed-ink-soft);
+}
+
+.fux-status-summary {
+  font-size: 1.04em;
+}
+.fux-status-columns {
+  max-inline-size: none;
+  margin-block-start: 1.4rem;
+  font-family: var(--fux-ed-sans);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.fux-status-column ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fux-status-column li {
+  position: relative;
+  padding-block: 0.3rem;
+  padding-inline-start: 1.3rem;
+}
+.fux-status-column li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0.1rem;
+  inset-block-start: 0.68rem;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 999px;
+}
+.fux-status-column[data-kind="works"] li::before {
+  background: var(--fux-ed-good);
+}
+.fux-status-column[data-kind="not-yet"] li::before {
+  box-shadow: inset 0 0 0 1.5px var(--fux-ed-ink-soft);
+}
+.fux-status-column[data-kind="not-yet"] li {
+  color: var(--fux-ed-ink-soft);
+}
+/* One list on its own runs in two columns once there is room for them. */
+.fux-status-columns[data-single] ul {
+  columns: 2 16rem;
+  column-gap: clamp(1.25rem, 4cqi, 2.25rem);
+}
+.fux-status-columns[data-single] li {
+  break-inside: avoid;
+}
+.fux-status-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1.3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Motion and print ---------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .fux-article *,
+  .fux-playback *,
+  .fux-code-line,
+  .fux-pipeline-stage {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@media print {
+  .fux-playback,
+  .fux-explorable-controls {
+    display: none;
+  }
+  .fux-walkthrough .fux-walkthrough-text {
+    display: block !important;
+  }
+}

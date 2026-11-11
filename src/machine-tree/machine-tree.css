@@ -48,7 +48,7 @@
   border-inline-start: 4px solid color-mix(in oklab, var(--foreground) 55%, transparent);
   pointer-events: none;
 }
-.mt-peek[data-region]::before {
+.mt-peek[data-lane]::before {
   top: 14px;
 }
 
@@ -166,5 +166,315 @@
   .mt-ping {
     animation: none;
     opacity: 0;
+  }
+}
+
+/* ───────── Flow outline (machine-tree-flow) ─────────
+ * A container's states, top to bottom in the order the machine moves through them. Lines are
+ * borders and never cross content. Everything is in logical properties, so it mirrors in RTL.
+ *
+ *   --mt-spine   where a spine runs, measured from a cell's inline start
+ *   --mt-gap     the space between two columns
+ */
+[data-mt-canvas],
+[data-mt-float] {
+  --mt-line: color-mix(in oklab, var(--foreground) 30%, transparent);
+  --mt-spine: 14px;
+  --mt-gap: 26px;
+}
+[data-mt-canvas] {
+  container: mt-canvas / inline-size;
+}
+
+/* The state above leads straight here: its line carries on down and ends in an arrowhead. */
+[data-lead] {
+  position: relative;
+}
+[data-lead="linked"] {
+  padding-block-start: 13px;
+}
+[data-lead]::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: var(--mt-spine);
+  block-size: 8px;
+  border-inline-start: 1px solid var(--mt-line);
+  pointer-events: none;
+}
+[data-lead]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 7px;
+  inset-inline-start: calc(var(--mt-spine) - 3.5px);
+  border-inline: 4px solid transparent;
+  border-block-start: 6px solid var(--mt-line);
+  pointer-events: none;
+}
+/* Nothing drawn above leads here: routes from elsewhere meet at this state. A gap and a dotted lead-in. */
+[data-lead="met"] {
+  margin-block-start: 10px;
+  padding-block-start: 21px;
+}
+[data-lead="met"]::before {
+  block-size: 16px;
+  border-inline-start-style: dotted;
+}
+[data-lead="met"]::after {
+  inset-block-start: 15px;
+}
+
+/* What a state does: the kind's icon and name take a tint; three kinds have a colour of their own. */
+[data-mt-meta] {
+  --mt-meta: var(--sim-text, var(--muted-foreground));
+}
+[data-mt-meta="person"] {
+  --mt-meta: color-mix(in oklab, var(--warning) 62%, var(--foreground));
+}
+[data-mt-meta="agent"],
+[data-mt-meta="decision"] {
+  --mt-meta: var(--signal);
+}
+[data-mt-meta="command"] {
+  --mt-meta: color-mix(in oklab, var(--success) 70%, var(--foreground));
+}
+
+/* In the outline every route has a row of its own with room around it, and meets the spine by a
+ * line as dark as the spine: a tick it hangs off, or the spine itself passing by. */
+[data-mt-routes] [data-mt-tick]:not([data-live]) {
+  border-color: var(--mt-line);
+}
+@media not (pointer: coarse) {
+  [data-mt-routes] > li {
+    min-block-size: 32px;
+    padding-block-end: 4px;
+  }
+  [data-mt-routes] [data-mt-tick="elbow"] {
+    inline-size: 15px;
+    block-size: 14px;
+    border-end-start-radius: 8px;
+  }
+  [data-mt-routes] [data-mt-tick="rest"] {
+    inset-block-start: 14px;
+  }
+}
+
+/* Alternatives side by side. The fork is one grid; the forked state's cell spans its tracks and
+ * hands them down (subgrid), so each column's label heads the column it leads to. */
+[data-mt-fork="columns"] {
+  display: grid;
+  grid-template-columns: repeat(var(--mt-cols), max-content);
+  column-gap: var(--mt-gap);
+  justify-content: start;
+  justify-items: start;
+}
+[data-mt-fork="columns"] > [data-mt-item] {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  justify-items: start;
+}
+[data-mt-fork="columns"] > [data-mt-item] > * {
+  grid-column: 1 / -1;
+}
+[data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"] {
+  grid-column: var(--mt-col);
+  justify-self: stretch;
+  position: relative;
+  margin-block-start: 10px;
+  margin-inline-start: var(--mt-spine);
+  padding-block-start: 8px;
+  border-inline-start: 1px solid var(--mt-line);
+}
+/* The line across the top, from each column's spine to the next one's. */
+[data-mt-routes="head"]::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: -1px;
+  inset-inline-end: calc(-1 * (var(--mt-gap) + var(--mt-spine)));
+  border-block-start: 1px solid var(--mt-line);
+  pointer-events: none;
+}
+[data-mt-routes="head"]:last-of-type::before {
+  content: none;
+}
+/* From the state down to that line. */
+[data-mt-routes="head"][data-mt-first]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: -10px;
+  inset-inline-start: -1px;
+  block-size: 10px;
+  border-inline-start: 1px solid var(--mt-line);
+  pointer-events: none;
+}
+[data-mt-col] {
+  grid-column: var(--mt-col);
+  justify-self: stretch;
+  align-self: stretch;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* The direct route on has no states of its own: its column is just the line. */
+[data-mt-col][data-pass]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--mt-spine);
+  border-inline-start: 1px solid var(--mt-line);
+  pointer-events: none;
+}
+[data-mt-close] {
+  display: none;
+}
+[data-mt-col][data-closes] > [data-mt-close] {
+  display: block;
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-block-size: 14px;
+}
+/* A column that flows back drops to the closing line, which runs back to the spine. */
+[data-mt-col][data-rejoins]:not([data-pass]) > [data-mt-close] {
+  margin-inline-start: var(--mt-spine);
+  border-inline-start: 1px solid var(--mt-line);
+}
+[data-mt-col][data-closes]::after {
+  content: "";
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: var(--mt-spine);
+  inset-inline-end: calc(-1 * (var(--mt-gap) + var(--mt-spine) + 1px));
+  border-block-end: 1px solid var(--mt-line);
+  pointer-events: none;
+}
+[data-mt-col][data-closes="end"]::after {
+  content: none;
+}
+[data-mt-caption] {
+  display: none;
+}
+/* A narrow host: the columns stack, each block under a caption naming the routes that lead to it. */
+@container mt-canvas (max-width: 520px) {
+  [data-mt-fork="columns"] {
+    grid-template-columns: minmax(0, max-content);
+  }
+  [data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"],
+  [data-mt-fork="columns"] > [data-mt-col] {
+    grid-column: 1;
+  }
+  [data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"] {
+    margin-block-start: 0;
+    padding-block-start: 0;
+  }
+  [data-mt-fork="columns"] [data-mt-routes="head"]::before,
+  [data-mt-fork="columns"] [data-mt-routes="head"][data-mt-first]::after,
+  [data-mt-fork="columns"] > [data-mt-col]::before,
+  [data-mt-fork="columns"] > [data-mt-col]::after {
+    content: none;
+  }
+  [data-mt-fork="columns"] > [data-mt-col] {
+    margin-inline-start: var(--mt-spine);
+    padding-block: 6px;
+    padding-inline-start: 12px;
+    border-inline-start: 1px solid var(--mt-line);
+  }
+  [data-mt-fork="columns"] > [data-mt-col][data-pass],
+  [data-mt-fork="columns"] > [data-mt-col] > [data-mt-close] {
+    display: none;
+  }
+  [data-mt-fork="columns"] > [data-mt-col] > [data-mt-caption] {
+    display: block;
+  }
+}
+
+/* One alternative, or a long one: it hangs off the spine instead of standing beside the others.
+ * The fork is one grid by rows. The state's own tree item spans them and hands them down (subgrid),
+ * so its route rows land between the blocks of states they lead to, which are its siblings.
+ *
+ * The state's routes keep the order the machine tries them, so a route that carries on may sit
+ * above the alternative or below it.
+ *
+ *   ┌ Work ┐
+ *   │  DONE                   a route that carries on
+ *   ├─ FAILED                 the label, on an elbow off the spine
+ *   │    ▼
+ *   │   ┌ Failed ┐            the alternative's states, indented
+ *   │   │  SKIP
+ *   ├───╯                     a curve back, when it flows back into the spine
+ *   ▼
+ */
+[data-mt-fork="stacked"] {
+  display: grid;
+  grid-template-columns: max-content;
+  justify-items: start;
+}
+[data-mt-fork="stacked"] > [data-mt-item] {
+  grid-column: 1;
+  grid-row: 1 / span var(--mt-rows);
+  display: grid;
+  grid-template-rows: subgrid;
+  justify-items: start;
+}
+[data-mt-fork="stacked"] > [data-mt-item] > [data-mt-face] {
+  grid-row: 1;
+}
+[data-mt-fork="stacked"] > [data-mt-item] > [data-mt-routes] {
+  grid-row: var(--mt-row);
+}
+[data-mt-fork="stacked"] > [data-mt-col] {
+  grid-column: 1;
+  grid-row: var(--mt-row);
+  justify-self: start;
+  align-self: start;
+  margin-inline-start: var(--mt-spine);
+  padding-inline-start: 22px;
+  border-inline-start: 1px solid transparent;
+}
+/* The spine runs past the block while more of the state's routes are drawn below it. */
+[data-mt-fork="stacked"] > [data-mt-col][data-through],
+[data-mt-fork="stacked"]:has(> [data-mt-item] > [data-mt-exits]) > [data-mt-col] {
+  border-inline-start-color: var(--mt-line);
+}
+[data-mt-fork="stacked"] > [data-mt-col]:not([data-rejoins]) {
+  padding-block-end: 6px;
+}
+/* It flows back: from under its last state, a curve round to the spine. */
+[data-mt-fork="stacked"] > [data-mt-col][data-rejoins] > [data-mt-close] {
+  display: block;
+  flex: none;
+  align-self: flex-start;
+  min-block-size: 0;
+  block-size: 13px;
+  inline-size: calc(22px + var(--mt-spine));
+  margin-inline-start: -22px;
+  margin-block-end: 6px;
+  border-inline-start: 0;
+  border-inline-end: 1px solid var(--mt-line);
+  border-block-end: 1px solid var(--mt-line);
+  border-end-end-radius: 10px;
+}
+
+/* A shut box: a second edge behind it says there is more inside. */
+[data-mt-face][data-shut]:not([data-lane]) {
+  box-shadow:
+    3px 3px 0 -1px var(--card),
+    3px 3px 0 0 color-mix(in oklab, var(--foreground) 16%, transparent);
+  margin-block-end: 3px;
+}
+
+/* A shut box you can look inside by resting on it: the cursor says so. Its name and chevron, which
+ * open it for good, keep the hand. */
+[data-mt-face][data-look] {
+  cursor:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'><g stroke='white' stroke-width='4.5'><path d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/><circle cx='12' cy='12' r='3'/></g><g stroke='%23171717' stroke-width='2' fill='white'><path d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'/><circle cx='12' cy='12' r='3'/></g></svg>")
+      12 12,
+    zoom-in;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-mt-float] {
+    animation: mt-ghost-in 0.12s var(--ease-standard) both;
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@samhagman/fast-ux-kit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": false,
   "description": "Reusable React UX layer, rich outliner and extensible text intelligence",
   "type": "module",
@@ -33,6 +33,11 @@
       "import": "./dist/components/index.js"
     },
     "./components.css": "./dist/library.css",
+    "./editorial": {
+      "types": "./dist/editorial/index.d.ts",
+      "import": "./dist/editorial/index.js"
+    },
+    "./editorial.css": "./dist/editorial.css",
     "./tokens.css": "./dist/tokens.css",
     "./rich": {
       "types": "./dist/rich/index.d.ts",
@@ -49,6 +54,11 @@
       "import": "./dist/outliner/index.js"
     },
     "./outliner.css": "./dist/library.css",
+    "./machine-graph": {
+      "types": "./dist/machine-graph/index.d.ts",
+      "import": "./dist/machine-graph/index.js"
+    },
+    "./machine-graph.css": "./dist/library.css",
     "./machine-view": {
       "types": "./dist/machine-view/index.d.ts",
       "import": "./dist/machine-view/index.js"

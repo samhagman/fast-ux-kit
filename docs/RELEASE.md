@@ -15,7 +15,7 @@ snapshot must match the commit pushed for review.
 
 ## Review the deliverable
 
-- Verify the 86-family catalog and all three tools through the gallery and browser
+- Verify the 92-family catalog and all three tools through the gallery and browser
   acceptance checks in COMPONENT_COVERAGE.md.
 - Install the packed tarball in an independent React app. Verify public entries,
   declarations, compiled styles, fonts, hydration and a single React instance.

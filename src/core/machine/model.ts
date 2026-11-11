@@ -1,4 +1,10 @@
-import type { MachineDocument, MachineGraph, MachineIssue, MachineNode } from "./types.js";
+import {
+  MACHINE_META_ICONS,
+  type MachineDocument,
+  type MachineGraph,
+  type MachineIssue,
+  type MachineNode,
+} from "./types.js";
 const kinds = new Set(["atomic", "compound", "parallel", "initial", "final", "submachine", "note"]);
 const record = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
@@ -58,6 +64,22 @@ export function validateMachineDocument(value: unknown): MachineIssue[] {
     const target = { machineId };
     if (machineIds.has(machineId)) add("duplicate-machine", "Machine IDs must be unique.", target);
     machineIds.add(machineId);
+    if (raw.regions !== undefined) {
+      const options = record(raw.regions) ? Object.values(raw.regions) : [undefined];
+      if (
+        !options.every(
+          (entry) =>
+            record(entry) &&
+            (entry.label === undefined || typeof entry.label === "string") &&
+            (entry.collapsed === undefined || typeof entry.collapsed === "boolean"),
+        )
+      )
+        add(
+          "invalid-regions",
+          "regions must map each region name to an optional label and collapsed flag.",
+          target,
+        );
+    }
     if (raw.nodes.length > 2000 || raw.transitions.length > 5000) {
       add("graph-limit", "A graph supports at most 2,000 nodes and 5,000 transitions.", target);
       continue;
@@ -92,9 +114,34 @@ export function validateMachineDocument(value: unknown): MachineIssue[] {
       for (const key of ["parentId", "initialId", "machineId", "attachedToId"] as const)
         if (n[key] !== undefined && !text(n[key]))
           add("empty-reference", `${key} must be a nonempty ID or omitted.`, loc);
+      if (n.region !== undefined && !text(n.region))
+        add("invalid-node-field", "region must be a nonempty name or omitted.", loc);
       for (const key of ["entry", "exit", "tags"] as const)
         if (n[key] !== undefined && (!Array.isArray(n[key]) || !n[key]!.every(text)))
           add("invalid-node-field", `${key} must contain nonempty names.`, loc);
+      if (n.meta !== undefined) {
+        const meta: unknown = n.meta;
+        if (!record(meta) || !text(meta.kind))
+          add("invalid-node-field", "meta must name its kind.", loc);
+        else {
+          if (
+            meta.icon !== undefined &&
+            !(MACHINE_META_ICONS as readonly unknown[]).includes(meta.icon)
+          )
+            add("invalid-node-field", "meta.icon must be a known icon or omitted.", loc);
+          if (meta.summary !== undefined && typeof meta.summary !== "string")
+            add("invalid-node-field", "meta.summary must be text.", loc);
+          if (
+            meta.details !== undefined &&
+            (!Array.isArray(meta.details) ||
+              !meta.details.every(
+                (detail) =>
+                  record(detail) && text(detail.label) && typeof detail.value === "string",
+              ))
+          )
+            add("invalid-node-field", "meta.details must be label and value pairs.", loc);
+        }
+      }
       if (
         n.position !== undefined &&
         (!record(n.position) ||

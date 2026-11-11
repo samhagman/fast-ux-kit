@@ -1,5 +1,5 @@
 // Outliner search filters: the core grammar plus is:todo and the date filters (search-filters.ts).
-// Same pattern as machine-view.test.mjs: `node --test` plus Vite's own SSR loader, no framework.
+// Same pattern as machine-graph.test.mjs: `node --test` plus Vite's own SSR loader, no framework.
 //
 //   cd studio && node --test tests/
 //

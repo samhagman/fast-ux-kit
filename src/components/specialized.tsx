@@ -37,6 +37,8 @@ import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { Toggle } from "@base-ui/react/toggle";
 import { Button, type RadioGroupProps } from "./basic.js";
 import { Tree, safeNavigationHref, type TreeNode } from "./collections.js";
+import { Input } from "./ui/input.js";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.js";
 import { Progress } from "./ui/progress.js";
 import { buttonVariants } from "./ui/button.js";
 import { cn } from "../lib/utils.js";
@@ -57,8 +59,15 @@ export interface PaginationProps {
   onPageChange?: (page: number) => void;
   previousLabel?: string;
   nextLabel?: string;
-  /** Replaces the numbered pages with icon-only previous and next buttons and a "Page 2 of 5" readout. */
+  /**
+   * Replaces the numbered pages with icon-only previous and next buttons and a "Page 2 of 5"
+   * readout. The readout is a button that opens the jump-to-page field.
+   */
   compact?: boolean;
+  /** Names the jump-to-page control and labels its field. */
+  jumpLabel?: string;
+  /** The jump field's submit button. */
+  goLabel?: string;
 }
 
 /** Up to this many pages show every number; more pages pin the ends and slide a strip between them. */
@@ -79,14 +88,18 @@ function PageStrip({
   current,
   pages,
   select,
+  jump,
 }: {
   current: number;
   pages: number;
   select: (page: number) => void;
+  jump: Pick<PageJumpProps, "label" | "goLabel">;
 }) {
   const start = Math.min(Math.max(current - 1, 2), pages - 3);
-  // Slots fit the widest page number; tabular digits keep every number the same width.
-  const slot = `max(2rem, calc(${String(pages).length}ch + 1.25rem))`;
+  // Slots fit the widest page number. The width is in rem, not ch: ch follows each element's own
+  // font, so the selection box (body text) and the number in it (small, semibold) would disagree
+  // by a couple of pixels and the number would sit off-centre.
+  const slot = `${Math.max(2, String(pages).length * 0.6 + 1.25)}rem`;
   const step = `calc(${slot} + 0.25rem)`;
   const pageButton = (
     value: number,
@@ -121,16 +134,22 @@ function PageStrip({
       {pageButton(value, "relative")}
     </span>
   );
-  const gap = (shown: boolean) => (
-    <span
-      aria-hidden
-      className={cn(
-        "grid size-8 place-items-center text-muted-foreground transition-opacity duration-200 motion-reduce:transition-none max-sm:hidden",
+  // The gap stands for the pages it hides, so it is the way to reach one of them directly.
+  const gap = (shown: boolean, from: number, to: number) => (
+    <PageJump
+      {...jump}
+      current={current}
+      pages={pages}
+      select={select}
+      triggerLabel={`${jump.label}, pages ${from} to ${to} are hidden`}
+      disabled={!shown}
+      triggerClassName={cn(
+        "size-8 px-0 text-muted-foreground transition-opacity duration-200 hover:text-foreground motion-reduce:transition-none max-sm:hidden",
         shown ? "opacity-100" : "opacity-0",
       )}
     >
-      <Ellipsis className="size-4" />
-    </span>
+      <Ellipsis className="size-4" aria-hidden />
+    </PageJump>
   );
   const strip: number[] = [];
   for (let value = start - STRIP_BUFFER; value <= start + 2 + STRIP_BUFFER; value++)
@@ -139,7 +158,7 @@ function PageStrip({
   return (
     <>
       {pinned(1)}
-      {gap(start > 2)}
+      {gap(start > 2, 2, start - 1)}
       <span
         className="relative h-8 shrink-0 overflow-hidden"
         style={{ inlineSize: `calc(3 * ${slot} + 0.5rem)` }}
@@ -158,9 +177,97 @@ function PageStrip({
           ),
         )}
       </span>
-      {gap(start + 2 < pages - 1)}
+      {gap(start + 2 < pages - 1, start + 3, pages - 1)}
       {pinned(pages)}
     </>
+  );
+}
+
+interface PageJumpProps {
+  current: number;
+  pages: number;
+  select: (page: number) => void;
+  /** The field's visible label: "Go to page". */
+  label: string;
+  goLabel: string;
+  /** The trigger's accessible name, when its content is not text. */
+  triggerLabel?: string;
+  triggerClassName?: string;
+  /** Keeps the trigger in the layout but out of reach, for a gap that hides no pages right now. */
+  disabled?: boolean;
+  children: React.ReactNode;
+}
+
+/**
+ * A quiet button that opens a small field for typing the exact page. It is how the "…" gaps and
+ * the compact "Page 2 of 12" readout become a way to jump, without adding a control to the row.
+ */
+function PageJump({
+  current,
+  pages,
+  select,
+  label,
+  goLabel,
+  triggerLabel,
+  triggerClassName,
+  disabled = false,
+  children,
+}: PageJumpProps) {
+  const [open, setOpen] = React.useState(false);
+  const id = React.useId();
+  const field = React.useRef<HTMLInputElement>(null);
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const value = Number(field.current?.value);
+    // An empty or fractional entry is not a page; leave the field open so it can be corrected.
+    if (!Number.isInteger(value) || value < 1) return field.current?.focus();
+    select(value);
+    setOpen(false);
+  }
+  return (
+    <Popover open={open && !disabled} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            aria-label={triggerLabel}
+            aria-hidden={disabled || undefined}
+            tabIndex={disabled ? -1 : undefined}
+            inert={disabled || undefined}
+            className={triggerClassName}
+          />
+        }
+      >
+        {children}
+      </PopoverTrigger>
+      <PopoverContent className="w-auto" data-slot="pagination-jump">
+        <form onSubmit={submit} className="flex flex-col gap-1.5">
+          <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
+            {label}
+          </label>
+          <div className="flex items-center gap-2">
+            <Input
+              ref={field}
+              id={id}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={pages}
+              step={1}
+              defaultValue={current}
+              onFocus={(event) => event.currentTarget.select()}
+              className="w-20 tabular-nums"
+            />
+            <span className="text-sm whitespace-nowrap text-muted-foreground tabular-nums">
+              of {pages}
+            </span>
+            <Button type="submit" size="sm">
+              {goLabel}
+            </Button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -185,6 +292,8 @@ export function Pagination({
   previousLabel = "Previous",
   nextLabel = "Next",
   compact = false,
+  jumpLabel = "Go to page",
+  goLabel = "Go",
 }: PaginationProps) {
   if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(pageSize) || pageSize < 1)
     throw new Error("Pagination requires a non-negative count and a positive page size.");
@@ -225,6 +334,11 @@ export function Pagination({
       <ChevronRight data-icon="inline-end" className="rtl:rotate-180" aria-hidden />
     </Button>
   );
+  const readout = (
+    <span>
+      Page <span className="font-medium text-foreground">{current}</span> of {pages}
+    </span>
+  );
   if (compact)
     return (
       <nav
@@ -234,11 +348,22 @@ export function Pagination({
         style={{ flexWrap: "wrap" }}
       >
         {previous}
-        <span
-          aria-live="polite"
-          className="min-w-24 text-center text-sm text-muted-foreground tabular-nums"
-        >
-          Page <span className="font-medium text-foreground">{current}</span> of {pages}
+        <span aria-live="polite" className="text-sm text-muted-foreground tabular-nums">
+          {pages > 1 ? (
+            // More than one page: the readout is also the way to pick one.
+            <PageJump
+              current={current}
+              pages={pages}
+              select={select}
+              label={jumpLabel}
+              goLabel={goLabel}
+              triggerClassName="min-w-24 px-2 font-normal text-muted-foreground"
+            >
+              {readout}
+            </PageJump>
+          ) : (
+            <span className="inline-block min-w-24 text-center">{readout}</span>
+          )}
         </span>
         {next}
       </nav>
@@ -252,7 +377,12 @@ export function Pagination({
     >
       {previous}
       {pages > ALL_PAGES ? (
-        <PageStrip current={current} pages={pages} select={select} />
+        <PageStrip
+          current={current}
+          pages={pages}
+          select={select}
+          jump={{ label: jumpLabel, goLabel }}
+        />
       ) : (
         Array.from({ length: pages }, (_, index) => index + 1).map((value) => (
           <Button

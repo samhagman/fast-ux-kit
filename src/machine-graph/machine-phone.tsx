@@ -37,7 +37,7 @@ export function PeekBar() {
   // The route reads in the page's direction: "Review → Publishing", or in RTL "Publishing ← Review".
   const arrow = useDirection() === "rtl" ? "←" : "→";
   const live = mv.snapshot ? [...mv.leafIds].map(label).join(" · ") : null;
-  const events = mv.candidates.enabled.size;
+  const events = mv.candidates.enabled.size + mv.candidates.offered.size;
   const design = mv.mode === "design" && mv.editable;
   const nodeActions = !!node && design && node.kind !== "initial" && mv.renaming !== node.id;
   const edgeActions = !!transition && design;

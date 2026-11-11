@@ -13,7 +13,7 @@ import {
 } from "../core/index.js";
 
 /**
- * Local, explicitly started simulation over the portable runtime. Shared by Machine View
+ * Local, explicitly started simulation over the portable runtime. Shared by Machine Graph
  * and Machine Tree so both agree on what "active", "enabled", "blocked" and "taken" mean.
  * Guards and actions resolve only through the host's `runtime`; document strings never run.
  *

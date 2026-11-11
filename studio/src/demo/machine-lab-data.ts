@@ -307,6 +307,8 @@ export const machineLabCases: readonly MachineLabCase[] = [
     document: release,
     options: {
       guards: { approved: (_context, event) => payload(event.payload).approved === true },
+      // Said when the guard refuses: what it reads, in words, so a refusal tells you what to send.
+      guardDescriptions: { approved: () => "the reviewer has to approve" },
       actions: {
         countAttempt: (context) => ({ ...context, attempts: Number(context.attempts ?? 0) + 1 }),
         recordApproval: (context) => ({ ...context, approved: true }),
@@ -357,6 +359,14 @@ export const machineLabCases: readonly MachineLabCase[] = [
     document: parallel,
     options: {
       guards: { ready: (context) => context.connected === true && context.configured === true },
+      guardDescriptions: {
+        ready: (context) =>
+          context.connected === true
+            ? "configuration has to finish first"
+            : context.configured === true
+              ? "the connection has to finish first"
+              : "connection and configuration both have to finish first",
+      },
       actions: {
         markConnected: (context) => ({ ...context, connected: true }),
         markConfigured: (context) => ({ ...context, configured: true }),
@@ -387,6 +397,7 @@ export const machineLabCases: readonly MachineLabCase[] = [
       guards: {
         confident: (_context, event) => Number(payload(event.payload).confidence ?? 0) >= 0.8,
       },
+      guardDescriptions: { confident: () => "confidence has to be 0.8 or higher" },
     },
     scenarios: [
       {

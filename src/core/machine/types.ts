@@ -6,6 +6,38 @@ export interface MachinePoint {
   readonly x: number;
   readonly y: number;
 }
+/** The looks a state's metadata can take: an icon and a tint. */
+export const MACHINE_META_ICONS = [
+  "person",
+  "agent",
+  "command",
+  "feed",
+  "decision",
+  "effect",
+  "collect",
+  "event",
+  "timer",
+  "branch",
+  "end",
+] as const;
+export type MachineMetaIcon = (typeof MACHINE_META_ICONS)[number];
+export interface MachineMetaDetail {
+  readonly label: string;
+  readonly value: string;
+}
+/**
+ * Metadata about a state, in the host's words: what kind of state it is, who or what does the
+ * work, and how it is set up. It is for people reading the machine and never changes how it runs.
+ */
+export interface MachineMeta {
+  /** The kind of state, as the host names it: "Ask", "Agent", "Command". */
+  readonly kind: string;
+  readonly icon?: MachineMetaIcon;
+  /** One line: who or what does the work, and where. */
+  readonly summary?: string;
+  /** How it is set up, most important first. */
+  readonly details?: readonly MachineMetaDetail[];
+}
 export interface MachineNode {
   readonly id: string;
   readonly label: string;
@@ -20,6 +52,20 @@ export interface MachineNode {
   readonly entry?: readonly string[];
   readonly exit?: readonly string[];
   readonly tags?: readonly string[];
+  /** Presentation only: what this state does and how it is set up. */
+  readonly meta?: MachineMeta;
+  /**
+   * Presentation only: the named region of its parent this state is drawn in. States that share a
+   * name under one parent are drawn as one box. It never changes how the machine runs.
+   */
+  readonly region?: string;
+}
+/** How a declared region is drawn. Presentation only. */
+export interface MachineRegionOptions {
+  /** The box's title. Defaults to the region's name as words ("checkInbox" reads "Check inbox"). */
+  readonly label?: string;
+  /** Whether the box starts shut. Defaults to true. */
+  readonly collapsed?: boolean;
 }
 export interface MachineTransition {
   readonly id: string;
@@ -39,6 +85,8 @@ export interface MachineGraph {
   readonly initialId?: string;
   readonly nodes: readonly MachineNode[];
   readonly transitions: readonly MachineTransition[];
+  /** Presentation only: options by region name, for every parent in this graph that uses the name. */
+  readonly regions?: Readonly<Record<string, MachineRegionOptions>>;
 }
 export interface MachineDocument {
   readonly version: 1;
@@ -147,6 +195,14 @@ export interface MachineRuntimeOptions {
   >;
   readonly guards?: Readonly<
     Record<string, (context: Readonly<Record<string, unknown>>, event: MachineEvent) => boolean>
+  >;
+  /**
+   * Known ways to send an event, by event type: the payloads a guard or action actually reads,
+   * declared by the same host that wrote them. A simulator offers them as choices, so nobody has
+   * to guess the JSON a guard expects. Data only; nothing here is executed.
+   */
+  readonly eventInputs?: Readonly<
+    Record<string, readonly { readonly label?: string; readonly payload?: unknown }[]>
   >;
   /** Actions must be pure. Return the next context; external effects belong to the host. */
   readonly actions?: Readonly<

@@ -1,6 +1,6 @@
 # Component coverage
 
-The canonical inventory contains 86 families. Its source is
+The canonical inventory contains 92 families. Its source is
 `src/components/catalog.json`, exposed as `componentManifest`. Leaf parts and
 utility functions are listed separately from canonical families.
 

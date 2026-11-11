@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createMachineLayoutEngine } from "../src/machine-view/layout-worker.js";
+import { createMachineLayoutEngine } from "../src/machine-graph/layout-worker.js";
 
 test("layout worker is lazy, correlates concurrent responses and releases only its owned worker", async () => {
   const messages: { id: number; graph: { id: string } }[] = [];

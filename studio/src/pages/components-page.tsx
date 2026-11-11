@@ -4,6 +4,7 @@ import type { ComponentFixture } from "./components-gallery/fixture-kit";
 import { basicFixtures } from "./components-gallery/basic";
 import { collectionsFixtures } from "./components-gallery/collections";
 import { datesColorsFixtures } from "./components-gallery/dates-colors";
+import { displayFixtures } from "./components-gallery/display";
 import { overlaysMediaFixtures } from "./components-gallery/overlays-media";
 import { specializedFixtures } from "./components-gallery/specialized";
 
@@ -16,6 +17,7 @@ export const componentFixtures: Readonly<Record<string, ComponentFixture>> = {
   ...datesColorsFixtures,
   ...overlaysMediaFixtures,
   ...specializedFixtures,
+  ...displayFixtures,
 };
 
 /** The families in catalog order, grouped by category. */
@@ -45,6 +47,7 @@ const WIDE = new Set([
   "Steps",
   "Form",
   "Panel",
+  "CodeBlock",
 ]);
 const slug = (name: string) => `family-${name}`;
 const familyFromHash = () => window.location.hash.match(/^#\/components\/([A-Za-z]+)$/)?.[1];
@@ -140,15 +143,15 @@ export function ComponentsPage() {
           Fast UX Kit
         </p>
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">Component library</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">App components</h1>
           <span className="font-mono text-xs text-muted-foreground">
             {C.componentManifest.length} families
           </span>
         </div>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <p className="hidden max-w-2xl text-sm text-muted-foreground sm:block">
-            Every control, data view and interaction in the kit, on one page. Scroll through them,
-            or jump with the tabs.
+            The controls, data views and interactions for building an application, on one page.
+            Scroll through them, or jump with the tabs.
           </p>
           <div className="w-full sm:w-64">
             <C.SearchField label="Find a component" value={query} onValueChange={setQuery} />

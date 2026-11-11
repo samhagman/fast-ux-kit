@@ -169,7 +169,7 @@ export function MachineInspectorSheet() {
   const mvRef = React.useRef(mv);
   mvRef.current = mv;
   const returnFocus = React.useCallback(() => {
-    const view = root.current?.closest<HTMLElement>("[data-slot=machine-view]");
+    const view = root.current?.closest<HTMLElement>("[data-slot=machine-graph]");
     if (!view) return;
     const sel = mvRef.current.selection;
     const node =

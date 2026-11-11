@@ -29,7 +29,7 @@ test("a single catalog Button excludes retired owners and heavyweight tools", as
       (name) =>
         retired.test(name) ||
         heavy.test(name) ||
-        /src\/(outliner|machine-view|machine-tree|react|rich)\//.test(name),
+        /src\/(outliner|machine-graph|machine-tree|react|rich)\//.test(name),
     ),
     false,
   );
@@ -76,7 +76,7 @@ test("portable core excludes DOM and React runtimes", async () => {
   const result = await bundle('export * from "./src/core/index.ts";');
   assert.equal(
     result.used.some((name) =>
-      /node_modules\/(react|react-dom|@base-ui)|src\/(components|react|outliner|machine-view|machine-tree)\//.test(
+      /node_modules\/(react|react-dom|@base-ui)|src\/(components|react|outliner|machine-graph|machine-tree)\//.test(
         name,
       ),
     ),

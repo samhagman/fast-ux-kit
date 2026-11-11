@@ -255,7 +255,7 @@ export function StateNode({ id, data, selected }: NodeProps<Node<StateData, "sta
   const { mv, leaf, sim } = useNodeState(id);
   const node = data.node;
   // "Not here" inside a container that IS live: the card recedes into its (signal-tinted) region
-  // instead of standing out as the brightest thing in it (machine-view.css, `data-sim-recessed`).
+  // instead of standing out as the brightest thing in it (machine-graph.css, `data-sim-recessed`).
   const recessed = sim === "inactive" && !!node.parentId && mv.activeSet.has(node.parentId);
   const final = node.kind === "final";
   const sub = node.kind === "submachine";

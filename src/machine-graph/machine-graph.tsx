@@ -10,10 +10,10 @@ import { motionTokens } from "../lib/motion.js";
 import { Button } from "../components/ui/button.js";
 import { Toaster } from "../components/ui/sonner.js";
 import {
-  useMachineView,
-  type MachineViewController,
-  type UseMachineViewOptions,
-} from "./use-machine-view.js";
+  useMachineGraph,
+  type MachineGraphController,
+  type UseMachineGraphOptions,
+} from "./use-machine-graph.js";
 import { DirectionScope, useResolvedDirection, type Dir } from "../lib/direction.js";
 import { MachineInspector, MachineInspectorSheet } from "./machine-inspector.js";
 import {
@@ -38,10 +38,10 @@ import { viewportDuration } from "./machine-viewport.js";
 import { MachineToasterHost, useMachineToaster } from "../machine-shared/machine-toast.js";
 
 /**
- * Machine View: a statechart editor and simulator.
+ * Machine Graph: a statechart editor and simulator.
  *
- *   machine-view.tsx      shell: providers, key map, focus continuity, desktop/phone layout
- *   use-machine-view.ts   controller: document + history, layout, simulation, selection
+ *   machine-graph.tsx      shell: providers, key map, focus continuity, desktop/phone layout
+ *   use-machine-graph.ts   controller: document + history, layout, simulation, selection
  *   machine-canvas.tsx    React Flow canvas, palette, selection toolbar, viewport choreography
  *   machine-nodes.tsx     state / container / note / initial renderers
  *   machine-edges.tsx     transition edges, event chips, payload popover
@@ -57,11 +57,11 @@ import { MachineToasterHost, useMachineToaster } from "../machine-shared/machine
 /**
  * Props. The document follows React's value/default convention (see `MachineDocumentProps`):
  *
- *   <MachineView defaultDocument={doc} onDocumentChange={save} />           uncontrolled; save is notified
- *   <MachineView document={doc} onDocumentChange={(next) => setDoc(next)} /> controlled; pass it back to accept
- *   <MachineView document={serverDoc} readOnly />                          live read-only viewer
+ *   <MachineGraphView defaultDocument={doc} onDocumentChange={save} />           uncontrolled; save is notified
+ *   <MachineGraphView document={doc} onDocumentChange={(next) => setDoc(next)} /> controlled; pass it back to accept
+ *   <MachineGraphView document={serverDoc} readOnly />                          live read-only viewer
  */
-export type MachineViewProps = UseMachineViewOptions & {
+export type MachineGraphViewProps = UseMachineGraphOptions & {
   readonly className?: string;
   /** Optional extra toolbar content (e.g. an example picker) rendered at the start. */
   readonly toolbarStart?: React.ReactNode;
@@ -70,12 +70,12 @@ export type MachineViewProps = UseMachineViewOptions & {
 };
 
 /**
- * `Omit` that keeps a union a union. `MachineViewProps` is a union (controlled, read-only viewer,
+ * `Omit` that keeps a union a union. `MachineGraphViewProps` is a union (controlled, read-only viewer,
  * uncontrolled), and the built-in `Omit` flattens a union to its common keys, so the result no
- * longer spreads back onto `<MachineView>`. Wrappers use this instead:
+ * longer spreads back onto `<MachineGraphView>`. Wrappers use this instead:
  *
- *   function FramedMachine({ className, ...rest }: MachineViewProps) { … <MachineView {...rest} className={cn("…", className)} /> }
- *   function Bare(props: DistributiveOmit<MachineViewProps, "className" | "toolbarStart">) { return <MachineView {...props} />; }
+ *   function FramedMachine({ className, ...rest }: MachineGraphViewProps) { … <MachineGraphView {...rest} className={cn("…", className)} /> }
+ *   function Bare(props: DistributiveOmit<MachineGraphViewProps, "className" | "toolbarStart">) { return <MachineGraphView {...props} />; }
  */
 export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -87,15 +87,15 @@ export {
   countStates,
   stepCursor,
 } from "./machine-context.js";
-export type { MachineViewController };
-export type { MachineDocumentProps } from "./use-machine-view.js";
+export type { MachineGraphController };
+export type { MachineDocumentProps } from "./use-machine-graph.js";
 export type { DocumentChangeEvent, DocumentChangeHandler } from "./use-controlled-document.js";
 
-export function MachineView(props: MachineViewProps) {
+export function MachineGraphView(props: MachineGraphViewProps) {
   return (
     <MotionConfig reducedMotion="user">
       <ReactFlowProvider>
-        <MachineViewInner {...props} />
+        <MachineGraphInner {...props} />
       </ReactFlowProvider>
     </MotionConfig>
   );
@@ -137,7 +137,7 @@ const isTyping = (target: EventTarget | null) =>
  */
 function useFocusContinuity(
   root: React.RefObject<HTMLDivElement | null>,
-  mv: MachineViewController,
+  mv: MachineGraphController,
 ) {
   const last = React.useRef<{ el: HTMLElement; inInspector: boolean } | null>(null);
   const mvRef = React.useRef(mv);
@@ -212,7 +212,7 @@ function useFocusContinuity(
   React.useEffect(check);
 }
 
-function MachineViewInner(props: MachineViewProps) {
+function MachineGraphInner(props: MachineGraphViewProps) {
   const { className, toolbarStart, dir } = props;
   const root = React.useRef<HTMLDivElement>(null);
   const direction = useResolvedDirection(root, dir);
@@ -224,10 +224,10 @@ function MachineViewInner(props: MachineViewProps) {
     return box && box.width > 0 && box.height > 0 ? { width: box.width, height: box.height } : null;
   }, []);
   // Desktop notices go to this view's own toaster, anchored above its status bar (see ViewToaster).
-  const toasterId = `machine-view-${React.useId()}`;
+  const toasterId = `machine-graph-${React.useId()}`;
   // Phone notices go to this view's own touch toaster, under its toolbar (the tree does the same).
   const touch = useMachineToaster(root, { toolbar: "[data-mv-toolbar]" });
-  const mv = useMachineView(props, {
+  const mv = useMachineGraph(props, {
     compact,
     measureViewport,
     toasterId: compact ? undefined : toasterId,
@@ -376,7 +376,7 @@ function MachineViewInner(props: MachineViewProps) {
             ref={root}
             dir={dir}
             tabIndex={-1}
-            data-slot="machine-view"
+            data-slot="machine-graph"
             // Proposals waiting on a controlled host (styling and tests can key on it).
             data-pending={mv.pendingChanges > 0 || undefined}
             onKeyDownCapture={() =>
@@ -485,7 +485,7 @@ function ViewToaster({ id, direction }: { readonly id: string; readonly directio
   // The view is found from inside: the shell's own ref is attached only after this child's effects run.
   const anchor = React.useRef<HTMLSpanElement>(null);
   React.useLayoutEffect(() => {
-    const el = anchor.current?.closest<HTMLElement>('[data-slot="machine-view"]');
+    const el = anchor.current?.closest<HTMLElement>('[data-slot="machine-graph"]');
     if (!el) return;
     const measure = () => {
       const view = el.getBoundingClientRect();
@@ -569,7 +569,7 @@ class CanvasBoundary extends React.Component<
     return props.resetKey !== state.key ? { key: props.resetKey, error: null } : null;
   }
   componentDidCatch(error: Error) {
-    console.error(`[MachineView] ${this.props.label ?? "canvas"} crashed`, error);
+    console.error(`[MachineGraphView] ${this.props.label ?? "canvas"} crashed`, error);
   }
   render() {
     if (!this.state.error) return this.props.children;

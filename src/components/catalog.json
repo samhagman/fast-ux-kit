@@ -814,5 +814,59 @@
     "owner": "native",
     "status": "styled",
     "parts": ["Pagination"]
+  },
+  {
+    "name": "CodeBlock",
+    "exportName": "CodeBlock",
+    "category": "Code",
+    "description": "A listing with its file path, line numbers, marked lines and notes beside them.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["CodeBlock"]
+  },
+  {
+    "name": "Terminal",
+    "exportName": "Terminal",
+    "category": "Code",
+    "description": "A transcript where typed lines and output look different.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Terminal"]
+  },
+  {
+    "name": "FileTree",
+    "exportName": "FileTree",
+    "category": "Code",
+    "description": "Folders and files with connectors, notes and a marked entry.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["FileTree"]
+  },
+  {
+    "name": "KeyChord",
+    "exportName": "KeyChord",
+    "category": "Display",
+    "description": "Keycaps joined by plus for together and then for in sequence.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["KeyChord"]
+  },
+  {
+    "name": "Sparkline",
+    "exportName": "Sparkline",
+    "category": "Data display",
+    "description": "A word-sized line that always states its first and last value.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Sparkline"]
+  },
+  {
+    "name": "BarList",
+    "exportName": "BarList",
+    "category": "Data display",
+    "description": "Bars from a shared zero with each number written out.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["BarList"]
   }
 ]

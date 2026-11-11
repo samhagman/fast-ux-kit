@@ -1,4 +1,4 @@
-// Machine View contract tests. No test framework: `node --test` plus Vite's own SSR loader,
+// Machine Graph contract tests. No test framework: `node --test` plus Vite's own SSR loader,
 // so `@fux/core` and `@/` resolve exactly as in the app.
 //
 //   cd studio && node --test tests/
@@ -39,7 +39,7 @@ const rename = (d, label) => ({ ...d, machines: [{ ...d.machines[0], label }] })
 
 async function contract() {
   const core = await load("@fux/core");
-  const c = await load("/src/registry/machine-view/controlled-document.ts");
+  const c = await load("/src/registry/machine-graph/controlled-document.ts");
   return { ...core, ...c };
 }
 
@@ -213,10 +213,10 @@ test("uncontrolled: edits commit at once", async () => {
 test("two views on one page: unique SVG marker ids and node descriptions", async () => {
   const React = await import("react");
   const { renderToString } = await import("react-dom/server");
-  const { MachineView } = await load("/src/registry/machine-view/machine-view.tsx");
+  const { MachineGraphView } = await load("/src/registry/machine-graph/machine-graph.tsx");
   const { TooltipProvider } = await load("/src/components/ui/tooltip.tsx");
   const d = doc("Two views");
-  const view = () => React.createElement(MachineView, { defaultDocument: d });
+  const view = () => React.createElement(MachineGraphView, { defaultDocument: d });
   const html = renderToString(
     React.createElement(TooltipProvider, null, React.createElement("div", null, view(), view())),
   );
@@ -228,7 +228,7 @@ test("two views on one page: unique SVG marker ids and node descriptions", async
 });
 
 test("toolbar placement: pans to a clean slot instead of covering", async () => {
-  const { placeToolbar } = await load("/src/registry/machine-view/machine-viewport.ts");
+  const { placeToolbar } = await load("/src/registry/machine-graph/machine-viewport.ts");
   // A node hugging the band's top edge; the slot above it is outside the band, the slots
   // beside and below are covered by chips (obstacles).
   const scene = {
@@ -259,7 +259,7 @@ test("toolbar placement: pans to a clean slot instead of covering", async () => 
 });
 
 test("auto direction picks by resulting zoom, not graph shape", async () => {
-  const { pickDirection } = await load("/src/registry/machine-view/layout.ts");
+  const { pickDirection } = await load("/src/registry/machine-graph/layout.ts");
   assert.equal(pickDirection(1, 1), "LR", "both readable: left-to-right");
   assert.equal(pickDirection(0.95, 1), "LR", "LR readable wins even if TB is larger");
   assert.equal(pickDirection(0.6, 0.92), "TB", "only TB readable");
@@ -360,7 +360,7 @@ async function mountHost(
 
 async function documentHook() {
   const { useControlledDocument } = await load(
-    "/src/registry/machine-view/use-controlled-document.ts",
+    "/src/registry/machine-graph/use-controlled-document.ts",
   );
   const core = await load("@fux/core");
   return { useControlledDocument, ...core };
@@ -510,13 +510,15 @@ test("hook: switching between controlled and uncontrolled warns once in developm
   } finally {
     console.error = original;
   }
-  const switches = errors.filter((e) => e.includes("MachineView") && e.includes("changing from"));
+  const switches = errors.filter(
+    (e) => e.includes("MachineGraphView") && e.includes("changing from"),
+  );
   assert.equal(switches.length, 1, "one warning, not one per render");
   assert.match(switches[0], /controlled to uncontrolled/);
 });
 
-test("useMachineView: a vetoed add announces the refusal (never 'Added'); a late host selects the new state only once it exists", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: a vetoed add announces the refusal (never 'Added'); a late host selects the new state only once it exists", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const d = {
     version: 1,
     rootId: "m",
@@ -530,7 +532,7 @@ test("useMachineView: a vetoed add announces the refusal (never 'Added'); a late
       },
     ],
   };
-  const reject = await mountHost((s) => useMachineView(s), { initial: d, respond: () => false });
+  const reject = await mountHost((s) => useMachineGraph(s), { initial: d, respond: () => false });
   await act(async () => reject.hook.addConnected("a"));
   assert.equal(reject.hook.announcement.trim(), "Change was not accepted.");
   assert.equal(reject.hook.graph.nodes.length, 1);
@@ -545,7 +547,7 @@ test("useMachineView: a vetoed add announces the refusal (never 'Added'); a late
   assert.equal(reject.hook.announcement.trim(), "Change was not accepted.");
   await reject.unmount();
 
-  const late = await mountHost((s) => useMachineView(s), {
+  const late = await mountHost((s) => useMachineGraph(s), {
     initial: d,
     respond: (next, _m, set) => setTimeout(() => set(structuredClone(next)), 15),
   });
@@ -568,7 +570,7 @@ test("useMachineView: a vetoed add announces the refusal (never 'Added'); a late
   assert.match(late.hook.announcement, /^Undid add a state after A/);
   await late.unmount();
 
-  const listen = await mountHost((s) => useMachineView(s), { initial: d, controlled: false });
+  const listen = await mountHost((s) => useMachineGraph(s), { initial: d, controlled: false });
   await act(async () => listen.hook.addConnected("a"));
   assert.equal(listen.hook.graph.nodes.length, 2, "listener-only: the edit is kept");
   assert.equal(listen.record.proposals.length, 1);
@@ -650,7 +652,7 @@ test("machine-sim.css: simulation text tokens keep WCAG AA contrast on their sur
 
 test("overflowSides: content inside the pane but under the peek bar is hidden ('b'); a margin is not", async () => {
   const { overflowSides, OVERFLOW_MIN } = await load(
-    "/src/registry/machine-view/machine-viewport.ts",
+    "/src/registry/machine-graph/machine-viewport.ts",
   );
   // Phone incident: pane 390×815, peek bar from y≈755, so the band ends there. Resolved's
   // bottom is at 835: 20px past the pane (under the old 24px rule) but 80px under the band.
@@ -675,8 +677,8 @@ test("overflowSides: content inside the pane but under the peek bar is hidden ('
 
 /* ───────── Pending window: every command is built on the newest proposal ───────── */
 
-test("useMachineView, late host: two quick adds before the echo give NEXT then NEXT_2 (distinct ids), and a second Delete is a no-op", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph, late host: two quick adds before the echo give NEXT then NEXT_2 (distinct ids), and a second Delete is a no-op", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const d = {
     version: 1,
     rootId: "m",
@@ -693,7 +695,7 @@ test("useMachineView, late host: two quick adds before the echo give NEXT then N
       },
     ],
   };
-  const late = await mountHost((s) => useMachineView(s), {
+  const late = await mountHost((s) => useMachineGraph(s), {
     initial: d,
     respond: (next, _m, set) => setTimeout(() => set(structuredClone(next)), 15),
   });
@@ -730,10 +732,10 @@ test("useMachineView, late host: two quick adds before the echo give NEXT then N
   await late.unmount();
 });
 
-test("useMachineView: a veto is visible (one warning notice), not only announced", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: a veto is visible (one warning notice), not only announced", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const notices = [];
-  const view = await mountHost((s) => useMachineView(s), {
+  const view = await mountHost((s) => useMachineGraph(s), {
     initial: doc("v0"),
     respond: () => false,
     extra: { onNotice: (n) => notices.push(n) },
@@ -743,8 +745,8 @@ test("useMachineView: a veto is visible (one warning notice), not only announced
   await view.unmount();
 });
 
-test("useMachineView: `document` without `onDocumentChange` is read-only (nothing could ever be accepted)", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: `document` without `onDocumentChange` is read-only (nothing could ever be accepted)", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   await domEnv();
   const errors = [];
   const original = console.error;
@@ -752,7 +754,7 @@ test("useMachineView: `document` without `onDocumentChange` is read-only (nothin
   let hook;
   try {
     function Bare() {
-      hook = useMachineView({ document: doc("v0") });
+      hook = useMachineGraph({ document: doc("v0") });
       return null;
     }
     const root = createRoot(window.document.createElement("div"));
@@ -773,7 +775,7 @@ test("useMachineView: `document` without `onDocumentChange` is read-only (nothin
 
 test("hook: dev warnings for both props, neither prop, and a controlled host that never answers", async () => {
   const { useControlledDocument, UNANSWERED_WARNING_MS, DEV } = await load(
-    "/src/registry/machine-view/use-controlled-document.ts",
+    "/src/registry/machine-graph/use-controlled-document.ts",
   );
   const { commitMachineHistory } = await load("@fux/core");
   assert.equal(DEV, true, "tests run as a development build");
@@ -823,7 +825,8 @@ test("hook: dev warnings for both props, neither prop, and a controlled host tha
     console.error = original;
     window.setTimeout = realSetTimeout;
   }
-  const has = (text) => errors.filter((e) => e.includes("MachineView") && e.includes(text)).length;
+  const has = (text) =>
+    errors.filter((e) => e.includes("MachineGraphView") && e.includes(text)).length;
   assert.equal(has("both `document` and `defaultDocument`"), 1, "both");
   assert.equal(has("pass `defaultDocument` (uncontrolled) or `document`"), 1, "none");
   assert.equal(has("has not been answered"), 1, "unanswered");
@@ -833,8 +836,8 @@ test("hook: dev warnings for both props, neither prop, and a controlled host tha
 
 test("CommitInput: a refusal elsewhere keeps a draft being typed; the refused field (even focused) snaps back", async () => {
   await domEnv();
-  const { CommitInput } = await load("/src/registry/machine-view/inspector-fields.tsx");
-  const { MachineContext } = await load("/src/registry/machine-view/machine-context.ts");
+  const { CommitInput } = await load("/src/registry/machine-graph/inspector-fields.tsx");
+  const { MachineContext } = await load("/src/registry/machine-graph/machine-context.ts");
   const container = window.document.createElement("div");
   window.document.body.append(container);
   const root = createRoot(container);
@@ -900,8 +903,8 @@ test("CommitInput: a refusal elsewhere keeps a draft being typed; the refused fi
 
 test("CommitInput, late host: Enter commits, typing goes on, the late echo keeps the newer text (and an idle field still follows the document)", async () => {
   await domEnv();
-  const { CommitInput } = await load("/src/registry/machine-view/inspector-fields.tsx");
-  const { MachineContext } = await load("/src/registry/machine-view/machine-context.ts");
+  const { CommitInput } = await load("/src/registry/machine-graph/inspector-fields.tsx");
+  const { MachineContext } = await load("/src/registry/machine-graph/machine-context.ts");
   const container = window.document.createElement("div");
   window.document.body.append(container);
   const root = createRoot(container);
@@ -994,7 +997,9 @@ test("CommitInput, late host: Enter commits, typing goes on, the late echo keeps
 
 test("CommitInput / NodeSelect read-only: values are focusable read-only text (selectable, copyable), never disabled inputs", async () => {
   await domEnv();
-  const { CommitInput, NodeSelect } = await load("/src/registry/machine-view/inspector-fields.tsx");
+  const { CommitInput, NodeSelect } = await load(
+    "/src/registry/machine-graph/inspector-fields.tsx",
+  );
   const container = window.document.createElement("div");
   window.document.body.append(container);
   const root = createRoot(container);
@@ -1062,8 +1067,8 @@ test("CommitInput / NodeSelect read-only: values are focusable read-only text (s
 
 /* ───────── Controlled read-only viewer: `document` + `readOnly`, no handler ───────── */
 
-test("useMachineView: `document` + `readOnly` is a quiet live viewer (no warning; a new prop renders)", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: `document` + `readOnly` is a quiet live viewer (no warning; a new prop renders)", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   await domEnv();
   const errors = [];
   const original = console.error;
@@ -1074,7 +1079,7 @@ test("useMachineView: `document` + `readOnly` is a quiet live viewer (no warning
     function Viewer() {
       const [document, set] = React.useState(doc("v0"));
       setDocument = set;
-      hook = useMachineView({ document, readOnly: true });
+      hook = useMachineGraph({ document, readOnly: true });
       return null;
     }
     const root = createRoot(window.document.createElement("div"));
@@ -1089,7 +1094,7 @@ test("useMachineView: `document` + `readOnly` is a quiet live viewer (no warning
     console.error = original;
   }
   assert.deepEqual(
-    errors.filter((e) => e.includes("MachineView")),
+    errors.filter((e) => e.includes("MachineGraphView")),
     [],
     "read-only on purpose: no dev warning",
   );
@@ -1105,28 +1110,28 @@ test("types: `document` + `readOnly` (or `editable={false}`) compiles without `o
     root,
   );
   // A virtual file inside src/ (path aliases resolve as in the app); nothing is written to disk.
-  const probe = path.join(root, "src", "__machine-view-type-probe.tsx");
+  const probe = path.join(root, "src", "__machine-graph-type-probe.tsx");
   const source = [
     'import type { MachineDocument } from "@fux/core";',
-    'import { MachineView, type DistributiveOmit, type MachineViewProps } from "@samhagman/fast-ux-kit/machine-view";',
+    'import { MachineGraphView, type DistributiveOmit, type MachineGraphViewProps } from "@samhagman/fast-ux-kit/machine-graph";',
     "declare const doc: MachineDocument;",
-    "export const viewer = <MachineView document={doc} readOnly />;",
-    "export const controlled = <MachineView document={doc} onDocumentChange={() => {}} />;",
-    "export const controlledReadOnly = <MachineView document={doc} onDocumentChange={() => {}} readOnly />;",
-    "export const uncontrolled = <MachineView defaultDocument={doc} readOnly />;",
-    "export const editableFalse = <MachineView document={doc} editable={false} />;",
+    "export const viewer = <MachineGraphView document={doc} readOnly />;",
+    "export const controlled = <MachineGraphView document={doc} onDocumentChange={() => {}} />;",
+    "export const controlledReadOnly = <MachineGraphView document={doc} onDocumentChange={() => {}} readOnly />;",
+    "export const uncontrolled = <MachineGraphView defaultDocument={doc} readOnly />;",
+    "export const editableFalse = <MachineGraphView document={doc} editable={false} />;",
     "// @ts-expect-error editable={true} is not a viewer: it still needs onDocumentChange",
-    "export const editableTrue = <MachineView document={doc} editable />;",
-    "export const Wrapper = (props: DistributiveOmit<MachineViewProps, 'className'>) => <MachineView {...props} className=\"h-full\" />;",
+    "export const editableTrue = <MachineGraphView document={doc} editable />;",
+    "export const Wrapper = (props: DistributiveOmit<MachineGraphViewProps, 'className'>) => <MachineGraphView {...props} className=\"h-full\" />;",
     "export const wrapped = <Wrapper document={doc} readOnly />;",
     "// @ts-expect-error the wrapper keeps the union: a bare document still needs a handler",
     "export const wrappedBare = <Wrapper document={doc} />;",
     "// @ts-expect-error a controlled document needs onDocumentChange, or readOnly to say read-only on purpose",
-    "export const unhandled = <MachineView document={doc} />;",
+    "export const unhandled = <MachineGraphView document={doc} />;",
     "// @ts-expect-error readOnly={false} is not a viewer: it still needs onDocumentChange",
-    "export const notViewer = <MachineView document={doc} readOnly={false} />;",
+    "export const notViewer = <MachineGraphView document={doc} readOnly={false} />;",
     "// @ts-expect-error both value and default",
-    "export const both = <MachineView document={doc} defaultDocument={doc} readOnly />;",
+    "export const both = <MachineGraphView document={doc} defaultDocument={doc} readOnly />;",
   ].join("\n");
   const host = ts.createCompilerHost(config.options);
   const getSourceFile = host.getSourceFile.bind(host);
@@ -1156,12 +1161,12 @@ test("types: `document` + `readOnly` (or `editable={false}`) compiles without `o
 
 /* ───────── Copy: announcements and notices read as sentences ───────── */
 
-test("useMachineView: a start through an initial pseudo-state announces 'Simulation started — now in …' (never an empty event name)", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: a start through an initial pseudo-state announces 'Simulation started — now in …' (never an empty event name)", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const { machineLabCases } = await load("/src/demo/machine-lab-data.ts");
   const incident = machineLabCases.find((c) => c.id === "incident");
   assert.ok(incident, "the incident example exists");
-  const view = await mountHost((s) => useMachineView({ ...s, runtime: incident.options }), {
+  const view = await mountHost((s) => useMachineGraph({ ...s, runtime: incident.options }), {
     controlled: false,
     initial: incident.document,
   });
@@ -1179,8 +1184,8 @@ test("useMachineView: a start through an initial pseudo-state announces 'Simulat
   await view.unmount();
 });
 
-test("useMachineView: a direct start names the starting state, and a blocked guard reads like the tree ('DECIDE blocked — guard approved is false')", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: a direct start names the starting state, and a blocked guard reads like the tree ('DECIDE blocked — guard approved is false')", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const d = {
     version: 1,
     rootId: "m",
@@ -1201,7 +1206,7 @@ test("useMachineView: a direct start names the starting state, and a blocked gua
   };
   const notices = [];
   const runtime = { guards: { approved: (_ctx, event) => event.payload?.approved === true } };
-  const view = await mountHost((s) => useMachineView({ ...s, runtime }), {
+  const view = await mountHost((s) => useMachineGraph({ ...s, runtime }), {
     controlled: false,
     initial: d,
     extra: { onNotice: (n) => notices.push(n) },
@@ -1222,8 +1227,8 @@ test("useMachineView: a direct start names the starting state, and a blocked gua
   await view.unmount();
 });
 
-test("useMachineView: playing a scenario leads with its name and the state it starts in", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: playing a scenario leads with its name and the state it starts in", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const d = {
     version: 1,
     rootId: "m",
@@ -1243,7 +1248,7 @@ test("useMachineView: playing a scenario leads with its name and the state it st
   const scenarios = [
     { id: "s", label: "Happy path", events: [{ type: "GO" }], expectedActiveIds: ["b"] },
   ];
-  const view = await mountHost((s) => useMachineView(s), {
+  const view = await mountHost((s) => useMachineGraph(s), {
     controlled: false,
     initial: d,
     extra: { scenarios },
@@ -1258,8 +1263,8 @@ test("useMachineView: playing a scenario leads with its name and the state it st
   await view.unmount();
 });
 
-test("useMachineView: an eventless step after a real event is announced under that event", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: an eventless step after a real event is announced under that event", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const d = {
     version: 1,
     rootId: "m",
@@ -1280,15 +1285,15 @@ test("useMachineView: an eventless step after a real event is announced under th
       },
     ],
   };
-  const view = await mountHost((s) => useMachineView(s), { controlled: false, initial: d });
+  const view = await mountHost((s) => useMachineGraph(s), { controlled: false, initial: d });
   await act(async () => view.hook.start());
   await act(async () => view.hook.sendEvent("GO"));
   assert.equal(view.hook.announcement.replace(/\u00a0/g, "").trim(), "GO fired — now in C");
   await view.unmount();
 });
 
-test("useMachineView: delete and run-all copy ('…, 1 nested state and 2 transitions', '1 of 1 passed')", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: delete and run-all copy ('…, 1 nested state and 2 transitions', '1 of 1 passed')", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   const d = {
     version: 1,
     rootId: "m",
@@ -1314,7 +1319,7 @@ test("useMachineView: delete and run-all copy ('…, 1 nested state and 2 transi
   const scenarios = [
     { id: "s1", label: "Goes in", events: [{ type: "IN" }], expectedActiveIds: ["p", "k"] },
   ];
-  const view = await mountHost((s) => useMachineView(s), {
+  const view = await mountHost((s) => useMachineGraph(s), {
     controlled: false,
     initial: d,
     extra: { onNotice: (n) => notices.push(n), scenarios },
@@ -1333,8 +1338,8 @@ test("useMachineView: delete and run-all copy ('…, 1 nested state and 2 transi
   await view.unmount();
 });
 
-test("useMachineView: `document` + `editable={false}` is the same quiet viewer as `readOnly`", async () => {
-  const { useMachineView } = await load("/src/registry/machine-view/use-machine-view.ts");
+test("useMachineGraph: `document` + `editable={false}` is the same quiet viewer as `readOnly`", async () => {
+  const { useMachineGraph } = await load("/src/registry/machine-graph/use-machine-graph.ts");
   await domEnv();
   const errors = [];
   const original = console.error;
@@ -1342,7 +1347,7 @@ test("useMachineView: `document` + `editable={false}` is the same quiet viewer a
   let hook;
   try {
     function Viewer() {
-      hook = useMachineView({ document: doc("v0"), editable: false });
+      hook = useMachineGraph({ document: doc("v0"), editable: false });
       return null;
     }
     const root = createRoot(window.document.createElement("div"));
@@ -1353,7 +1358,7 @@ test("useMachineView: `document` + `editable={false}` is the same quiet viewer a
     console.error = original;
   }
   assert.deepEqual(
-    errors.filter((e) => e.includes("MachineView")),
+    errors.filter((e) => e.includes("MachineGraphView")),
     [],
     "editable={false} is read-only on purpose: no dev warning",
   );

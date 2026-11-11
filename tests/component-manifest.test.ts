@@ -3,7 +3,7 @@ import test from "node:test";
 import * as Components from "../src/components/index.js";
 
 test("all manifest parts resolve to supported public exports or compound members", () => {
-  assert.equal(Components.componentManifest.length, 86);
+  assert.equal(Components.componentManifest.length, 92);
   for (const entry of Components.componentManifest) {
     assert.ok(entry.exportName in Components, `${entry.name} has a public export`);
     assert.ok(entry.parts.length > 0, `${entry.name} declares its parts`);

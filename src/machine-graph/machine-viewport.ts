@@ -33,7 +33,7 @@ export function occluderInsets(dom: HTMLElement, sheetInset = 0): Insets {
   const W = box.width,
     H = box.height;
   const inset = { top: 0, right: 0, bottom: 0, left: 0 };
-  const scope = dom.closest("[data-slot=machine-view]") ?? dom;
+  const scope = dom.closest("[data-slot=machine-graph]") ?? dom;
   for (const el of scope.querySelectorAll<HTMLElement>(
     "[data-mv-occluder], .react-flow__minimap",
   )) {
@@ -87,7 +87,7 @@ export function overflowSides(content: Rect, band: Band, min = OVERFLOW_MIN): st
 /** Canvas-local rects of the floating controls (palette, Fit, peek bar, minimap): what content should not sit under. */
 export function occluderRects(dom: HTMLElement): Rect[] {
   const box = dom.getBoundingClientRect();
-  const scope = dom.closest("[data-slot=machine-view]") ?? dom;
+  const scope = dom.closest("[data-slot=machine-graph]") ?? dom;
   const out: Rect[] = [];
   for (const el of scope.querySelectorAll<HTMLElement>(
     "[data-mv-occluder], .react-flow__minimap",
