@@ -1,5 +1,5 @@
 /**
- * The touch toast, shared by Machine View and Machine Tree: one sentence, at most one action,
+ * The touch toast, shared by Machine Graph and Machine Tree: one sentence, at most one action,
  * and a close button, each a 44px target on coarse pointers (sonner's built-in action and close
  * buttons are 24 and 20 px). Shown at the top so it never covers a phone's run controls, peek
  * bar or sheet. `persistent` keeps it until used, closed or replaced. Same `id` replaces in place.
@@ -135,7 +135,7 @@ export interface MachineToasterHostState {
 }
 
 /**
- * A per-instance toaster, shared by Machine View (phone shell) and Machine Tree. The instance
+ * A per-instance toaster, shared by Machine Graph (phone shell) and Machine Tree. The instance
  * renders its own sonner `<Toaster id>` (`MachineToasterHost`) offset below its own toolbar
  * (`toolbar`, a selector inside `rootRef`), so the toolbar stays reachable under a persistent toast
  * and nothing lands on the host page's own header. Nothing is written to the page: two

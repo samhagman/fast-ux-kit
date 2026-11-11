@@ -1,5 +1,5 @@
 /**
- * Simulation emphasis, the value half of `machine-sim.css` (shared by Machine View and Machine
+ * Simulation emphasis, the value half of `machine-sim.css` (shared by Machine Graph and Machine
  * Tree). Put the result on the element that represents a state as `data-sim={...}` and read the
  * `--sim-*` tokens with a design fallback, e.g. `text-[color:var(--sim-text,var(--muted-foreground))]`.
  *

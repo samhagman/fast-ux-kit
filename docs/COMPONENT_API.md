@@ -1,7 +1,7 @@
 # Component API
 
 Import components from `@samhagman/fast-ux-kit/components` and load
-`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 86 canonical
+`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 92 canonical
 families. `componentManifest` provides each family's name, category, description,
 interaction owner and exported parts.
 
@@ -118,7 +118,10 @@ storage. `FileUpload` adds a local selected-file list.
 `SignaturePad` supports pointer drawing and typed entry, with controlled value,
 clear, undo and export. Browser canvas operations remain client-side.
 
-`Pagination` uses `count`, `pageSize`, `page` and `onPageChange`. `Timer` supports
+`Pagination` uses `count`, `pageSize`, `page` and `onPageChange`. With many pages,
+each "…" gap is a button that opens a field for typing the exact page; in `compact`
+mode the "Page 2 of 12" readout does the same. `jumpLabel` and `goLabel` name that
+field and its button. `Timer` supports
 start, pause and reset. `Clipboard` handles explicit copying. `DownloadTrigger`
 provides a validated download link. `QrCode` renders an encoded SVG.
 

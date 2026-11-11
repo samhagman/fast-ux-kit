@@ -1,5 +1,5 @@
 /**
- * One vocabulary for both machine components (Machine View and Machine Tree): the sentences a
+ * One vocabulary for both machine components (Machine Graph and Machine Tree): the sentences a
  * simulation says (live region, toast, footer notice), counts, and the key caps. Pure: no React,
  * no DOM, so the copy can be tested headlessly and the two components can never drift apart.
  *

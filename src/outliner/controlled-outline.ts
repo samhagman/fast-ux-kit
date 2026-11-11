@@ -11,7 +11,7 @@ import type { OutlineItem, OutlineItemData } from "./types.js";
 /**
  * The outliner's document contract, as a pure state machine (no React) so it can be tested
  * directly. It follows React's `value` / `defaultValue` / `onValueChange` convention and
- * Machine View's echo rules (`machine-view/controlled-document.ts`):
+ * Machine Graph's echo rules (`machine-graph/controlled-document.ts`):
  *
  *   uncontrolled  `defaultValue`: the outliner owns the document and its undo history. Edits
  *                 commit at once; `onValueChange` is a pure notification (autosave).

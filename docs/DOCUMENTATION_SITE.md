@@ -1,8 +1,14 @@
 # Studio and component gallery
 
 The Studio is the local documentation and demonstration app in `studio/`. It
-contains a searchable gallery for all 86 component families plus the outliner,
-state-machine canvas and machine hierarchy views.
+has three catalog sections plus the outliner, state-machine canvas and machine
+hierarchy views.
+
+| Section        | What it holds                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| Foundations    | Type, colour, space and motion tokens shared by both component sets                                       |
+| App Components | A searchable gallery of the 92 families for building applications                                         |
+| Editorial UI   | 35 forms for explaining on a page, by atom, molecule and organism, and one sample article built from them |
 
 The overview introduces the kit and links to each live tool. The shared shell
 uses the same quiet surfaces, compact type and focus treatment as the outliner,
@@ -20,8 +26,8 @@ npm run dev
 ```
 
 The development server uses `http://127.0.0.1:5180`. Open `#/components`,
-`#/outliner`, `#/machine-view` or `#/machine-tree` to select a surface.
-The root and `#/overview` open the overview. Earlier `#machine-view`,
+`#/outliner`, `#/machine-graph` or `#/machine-tree` to select a surface.
+The root and `#/overview` open the overview. Earlier `#/machine-view`,
 `#machine-tree-view` and outliner lab bookmarks continue to open their tool.
 
 ```sh

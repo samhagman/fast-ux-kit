@@ -1,5 +1,5 @@
 /**
- * Focus moved by a component itself, shared by Machine View and Machine Tree.
+ * Focus moved by a component itself, shared by Machine Graph and Machine Tree.
  *
  *  - `createFocusHandoff()` marks the focus call as the component's own: handlers read
  *    `handoff.active` to tell it from a user's Tab or arrow key, so a hand-off never starts a

@@ -19,7 +19,11 @@ try {
   for (const required of [
     "dist/core/index.js",
     "dist/components/index.js",
+    "dist/editorial/index.js",
+    "dist/editorial/index.d.ts",
+    "dist/editorial.css",
     "dist/outliner/index.d.ts",
+    "dist/machine-graph/index.js",
     "dist/machine-view/index.js",
     "dist/machine-tree/index.js",
     "dist/library.css",
@@ -70,8 +74,10 @@ import { renderToString } from 'react-dom/server';
 import { validateOutline, createOutlineEditorState, reduceOutlineEditor } from '@samhagman/fast-ux-kit/core';
 import { Button, ColorPicker, DatePicker, componentManifest } from '@samhagman/fast-ux-kit/components';
 import { Outliner, OutlinerWorkspace, type OutlineItem, type OutlineWorkspaceSnapshot } from '@samhagman/fast-ux-kit/outliner';
-import { MachineView } from '@samhagman/fast-ux-kit/machine-view';
+import { MachineGraphView } from '@samhagman/fast-ux-kit/machine-graph';
+import { MachineView as DeprecatedMachineView, type MachineViewProps } from '@samhagman/fast-ux-kit/machine-view';
 import { MachineTree } from '@samhagman/fast-ux-kit/machine-tree';
+import { Article, ArticleBody, CodeBlock, Figure, MarginNote, editorialManifest, tokenizeCode } from '@samhagman/fast-ux-kit/editorial';
 import { createMachineSnapshot, type MachineDocument } from '@samhagman/fast-ux-kit/machine';
 import * as legacyReader from '@samhagman/fast-ux-kit/react';
 import * as rich from '@samhagman/fast-ux-kit/rich';
@@ -82,8 +88,8 @@ const state = reduceOutlineEditor(createOutlineEditorState(nodes), {type:'text',
 assert.equal(state.nodes[0]?.text,'Two');
 const machine: MachineDocument = {version:1,rootId:'main',machines:[{id:'main',label:'Consumer machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
 assert.deepEqual(createMachineSnapshot(machine).activeIds,['idle']);
-assert.equal(componentManifest.length,86);
-for (const entry of [OutlinerWorkspace, MachineView, MachineTree, legacyReader.OutlineEditor, rich, root]) assert.ok(entry);
+assert.equal(componentManifest.length,92);
+for (const entry of [OutlinerWorkspace, MachineGraphView, MachineTree, legacyReader.OutlineEditor, rich, root]) assert.ok(entry);
 const acceptWorkspace = (event: OutlineWorkspaceSnapshot) => event.documents;
 assert.equal(typeof acceptWorkspace,'function');
 assert.match(renderToString(<Button>Save</Button>),/Save/);
@@ -91,7 +97,16 @@ assert.match(renderToString(<ColorPicker label="Accent" defaultValue="#225544"/>
 assert.match(renderToString(<DatePicker label="Due"/>),/Due/);
 assert.match(renderToString(<Outliner defaultValue={nodes}/>),/One/);
 assert.match(renderToString(<MachineTree document={machine}/>),/Consumer machine/);
-assert.match(renderToString(<MachineView defaultDocument={machine}/>),/Consumer machine/);
+assert.match(renderToString(<MachineGraphView defaultDocument={machine}/>),/Consumer machine/);
+// The old entry and names still resolve to the renamed component.
+assert.equal(DeprecatedMachineView, MachineGraphView);
+const oldProps: MachineViewProps = { defaultDocument: machine };
+assert.ok(oldProps);
+assert.equal(editorialManifest.length,35);
+assert.equal(tokenizeCode('const a = 1','ts')[0]?.[0]?.kind,'keyword');
+const page = renderToString(<Article><ArticleBody><p>Body<MarginNote>Aside</MarginNote></p><Figure caption="What to notice"><CodeBlock code={'const a = 1'} language="ts" filename="a.ts"/></Figure></ArticleBody></Article>);
+assert.match(page,/What to notice/);
+assert.doesNotMatch(page,/ style=/);
 console.log('Public entries, declarations and server rendering pass.');
 `,
   );
@@ -123,19 +138,19 @@ import { renderToString } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 import { Button } from '@samhagman/fast-ux-kit/components';
 import { Outliner } from '@samhagman/fast-ux-kit/outliner';
-import { MachineView } from '@samhagman/fast-ux-kit/machine-view';
+import { MachineGraphView } from '@samhagman/fast-ux-kit/machine-graph';
 import { MachineTree } from '@samhagman/fast-ux-kit/machine-tree';
 import { Outliner as Reader, RichContent } from '@samhagman/fast-ux-kit/react';
 import { importMarkdownDocument } from '@samhagman/fast-ux-kit/rich';
 const nodes=[{id:'one',text:'Hydration note'}];
-const machine={version:1,rootId:'main',machines:[{id:'main',label:'Hydration machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
+const machine={version:1,rootId:'main',machines:[{id:'main',label:'Hydration machine',initialId:'idle',regions:{work:{label:'Working'}},nodes:[{id:'idle',kind:'atomic',label:'Idle'},{id:'run',kind:'atomic',label:'Running',region:'work'},{id:'retry',kind:'atomic',label:'Retrying',region:'work'},{id:'done',kind:'final',label:'Done'}],transitions:[{id:'go',sourceId:'idle',targetId:'run',event:'GO'},{id:'skip',sourceId:'idle',targetId:'done',event:'SKIP'},{id:'fail',sourceId:'run',targetId:'retry',event:'FAIL'},{id:'again',sourceId:'retry',targetId:'run',event:'AGAIN'},{id:'ok',sourceId:'run',targetId:'done',event:'OK'}]}]};
 let clicks=0;
 const views=[
  h(Button,{onClick:()=>clicks++},'Hydrated button'),
  h(Reader,{nodes}),
  h(RichContent,{document:importMarkdownDocument('# Hydration rich text')}),
  h(Outliner,{defaultValue:nodes,readOnly:true}),
- h(MachineView,{defaultDocument:machine,readOnly:true}),
+ h(MachineGraphView,{defaultDocument:machine,readOnly:true}),
  h(MachineTree,{document:machine}),
 ];
 const html=views.map((view,index)=>'<div id="root-'+index+'">'+renderToString(view)+'</div>').join('');
@@ -161,11 +176,11 @@ assert.equal(clicks,1); assert.deepEqual(errors,[]);
 assert.match(document.body.textContent,/Hydration note/);
 assert.match(document.body.textContent,/Hydration machine/);
 await act(async()=>roots.forEach(root=>root.unmount())); dom.window.close();
-for(const name of ['core','components','outliner','machine','machine-view','machine-tree','react','rich']) await import('@samhagman/fast-ux-kit/'+name);
+for(const name of ['core','components','editorial','outliner','machine','machine-graph','machine-view','machine-tree','react','rich']) await import('@samhagman/fast-ux-kit/'+name);
 for(const name of ['aria','ark','components/aria']) {
  await assert.rejects(import('@samhagman/fast-ux-kit/'+name),{code:'ERR_PACKAGE_PATH_NOT_EXPORTED'});
 }
-for(const name of ['styles.css','components.css','tokens.css','outliner.css','machine.css','machine-view.css','machine-tree.css']) assert.ok(import.meta.resolve('@samhagman/fast-ux-kit/'+name).endsWith('.css'));
+for(const name of ['styles.css','components.css','editorial.css','tokens.css','outliner.css','machine.css','machine-graph.css','machine-view.css','machine-tree.css']) assert.ok(import.meta.resolve('@samhagman/fast-ux-kit/'+name).endsWith('.css'));
 console.log('Hydration, retired-entry rejection and compiled style resolution pass.');
 `,
   );

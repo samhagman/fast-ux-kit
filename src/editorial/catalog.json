@@ -1,0 +1,288 @@
+[
+  {
+    "name": "Term",
+    "exportName": "Term",
+    "level": "atom",
+    "job": "Explain a word at first use without a lookup.",
+    "description": "The term, then a compact gloss set in the same line.",
+    "parts": ["Term"]
+  },
+  {
+    "name": "Sparkline",
+    "exportName": "Sparkline",
+    "level": "atom",
+    "job": "Show the shape of a small series inside a sentence.",
+    "description": "A word-sized line that always states its first and last value.",
+    "parts": ["Sparkline"],
+    "app": true
+  },
+  {
+    "name": "KeyChord",
+    "exportName": "KeyChord",
+    "level": "atom",
+    "job": "Tell the reader what to press.",
+    "description": "Keycaps joined by plus for together and then for in sequence.",
+    "parts": ["KeyChord"],
+    "app": true
+  },
+  {
+    "name": "Literal",
+    "exportName": "Literal",
+    "level": "atom",
+    "job": "Keep an exact identifier exact.",
+    "description": "Monospace for names where case and punctuation matter.",
+    "parts": ["Literal"]
+  },
+  {
+    "name": "DatedValue",
+    "exportName": "DatedValue",
+    "level": "atom",
+    "job": "Stop an old number from reading as current.",
+    "description": "A value with the date it was true attached to it.",
+    "parts": ["DatedValue"]
+  },
+  {
+    "name": "StageGlyph",
+    "exportName": "StageGlyph",
+    "level": "atom",
+    "job": "Say how far along something is.",
+    "description": "A glyph that fills by stage, always beside its word.",
+    "parts": ["StageGlyph"]
+  },
+  {
+    "name": "Marker",
+    "exportName": "Marker",
+    "level": "atom",
+    "job": "Tie a place in a figure to the sentence about it.",
+    "description": "A small numbered dot used in both places.",
+    "parts": ["Marker"]
+  },
+  {
+    "name": "DropCap",
+    "exportName": "DropCap",
+    "level": "atom",
+    "job": "Mark where a piece begins.",
+    "description": "An opening paragraph with a raised initial.",
+    "parts": ["DropCap"]
+  },
+  {
+    "name": "Kicker",
+    "exportName": "Kicker",
+    "level": "atom",
+    "job": "Say what kind of thing this is before the headline.",
+    "description": "A small sentence-case line above the title.",
+    "parts": ["Kicker"]
+  },
+  {
+    "name": "Playback",
+    "exportName": "Playback",
+    "level": "atom",
+    "job": "Let a reader pause anything that moves on its own.",
+    "description": "A play and pause button with one dot per step.",
+    "parts": ["Playback"]
+  },
+  {
+    "name": "Choice",
+    "exportName": "Choice",
+    "level": "atom",
+    "job": "Pick one of a few options in a figure.",
+    "description": "A row of native radios styled as a segmented control.",
+    "parts": ["Choice"]
+  },
+  {
+    "name": "Range",
+    "exportName": "Range",
+    "level": "atom",
+    "job": "Change one number in a figure.",
+    "description": "A native slider with its value written beside it.",
+    "parts": ["Range"]
+  },
+  {
+    "name": "Action",
+    "exportName": "Action",
+    "level": "atom",
+    "job": "Do the one thing a figure is about.",
+    "description": "A small button in a quiet or strong tone.",
+    "parts": ["Action"]
+  },
+  {
+    "name": "Figure",
+    "exportName": "Figure",
+    "level": "molecule",
+    "job": "Show something and say what to notice.",
+    "description": "A body, an automatic number, a full-sentence caption and a credit.",
+    "parts": ["Figure"]
+  },
+  {
+    "name": "MarginNote",
+    "exportName": "MarginNote",
+    "level": "molecule",
+    "job": "Keep a tangent near the sentence it belongs to.",
+    "description": "A numbered note in the margin that folds under its paragraph on a narrow page.",
+    "parts": ["MarginNote"]
+  },
+  {
+    "name": "Aside",
+    "exportName": "Aside",
+    "level": "molecule",
+    "job": "Set a small block beside a section.",
+    "description": "A margin block for a fact sheet, a small figure or a note.",
+    "parts": ["Aside"]
+  },
+  {
+    "name": "PullQuote",
+    "exportName": "PullQuote",
+    "level": "molecule",
+    "job": "Give a second way into the piece.",
+    "description": "One sentence from the body, enlarged, with a link back to its context.",
+    "parts": ["PullQuote"]
+  },
+  {
+    "name": "Abstract",
+    "exportName": "Abstract",
+    "level": "molecule",
+    "job": "State the whole piece before the body.",
+    "description": "Two or three sentences set apart, like a paper's abstract.",
+    "parts": ["Abstract"]
+  },
+  {
+    "name": "FactSheet",
+    "exportName": "FactSheet",
+    "level": "molecule",
+    "job": "Describe one thing through named properties.",
+    "description": "Aligned label and value pairs that stack in a margin.",
+    "parts": ["FactSheet"]
+  },
+  {
+    "name": "CodeBlock",
+    "exportName": "CodeBlock",
+    "level": "molecule",
+    "job": "Show real code and explain the lines that matter.",
+    "description": "A listing with its file path, line numbers, marked lines and notes beside them.",
+    "parts": ["CodeBlock"],
+    "app": true
+  },
+  {
+    "name": "Terminal",
+    "exportName": "Terminal",
+    "level": "molecule",
+    "job": "Separate what a reader types from what comes back.",
+    "description": "A transcript where typed lines and output look different.",
+    "parts": ["Terminal"],
+    "app": true
+  },
+  {
+    "name": "FileTree",
+    "exportName": "FileTree",
+    "level": "molecule",
+    "job": "Show where things live.",
+    "description": "Folders and files with connectors, notes and a marked entry.",
+    "parts": ["FileTree"],
+    "app": true
+  },
+  {
+    "name": "SourceResult",
+    "exportName": "SourceResult",
+    "level": "molecule",
+    "job": "Show a small input becoming a visible output.",
+    "description": "The literal source beside what it renders to.",
+    "parts": ["SourceResult"]
+  },
+  {
+    "name": "Compare",
+    "exportName": "Compare",
+    "level": "molecule",
+    "job": "Set two things with a shared frame side by side.",
+    "description": "Two labelled columns under matching rules.",
+    "parts": ["Compare", "Compare.Side", "CompareSide"]
+  },
+  {
+    "name": "Ledger",
+    "exportName": "Ledger",
+    "level": "molecule",
+    "job": "Lay out a decision with its costs.",
+    "description": "Aligned rows of constraint, choice and cost that stack on a narrow page.",
+    "parts": ["Ledger"]
+  },
+  {
+    "name": "Procedure",
+    "exportName": "Procedure",
+    "level": "molecule",
+    "job": "Give steps whose order matters.",
+    "description": "Numbered actions ending in a check the reader can see.",
+    "parts": ["Procedure"]
+  },
+  {
+    "name": "Pipeline",
+    "exportName": "Pipeline",
+    "level": "molecule",
+    "job": "Show the stages something moves through.",
+    "description": "Boxes in order with one line each, across or down as space allows.",
+    "parts": ["Pipeline"]
+  },
+  {
+    "name": "Chronoline",
+    "exportName": "Chronoline",
+    "level": "molecule",
+    "job": "Make unequal gaps in time look unequal.",
+    "description": "Numbered events on a measured scale with a key underneath.",
+    "parts": ["Chronoline"]
+  },
+  {
+    "name": "BarList",
+    "exportName": "BarList",
+    "level": "molecule",
+    "job": "Compare a few magnitudes.",
+    "description": "Bars from a shared zero with each number written out.",
+    "parts": ["BarList"],
+    "app": true
+  },
+  {
+    "name": "Citation",
+    "exportName": "Citation",
+    "level": "molecule",
+    "job": "Keep a claim and its source distinct.",
+    "description": "The claim with its named source set directly beneath.",
+    "parts": ["Citation"]
+  },
+  {
+    "name": "Article",
+    "exportName": "Article",
+    "level": "organism",
+    "job": "Hold a piece of writing.",
+    "description": "A reading column with a margin, numbering figures and notes automatically.",
+    "parts": ["Article", "ArticleBody", "ArticleSection"]
+  },
+  {
+    "name": "ArticleHeader",
+    "exportName": "ArticleHeader",
+    "level": "organism",
+    "job": "Open the piece.",
+    "description": "Kicker, headline, deck and a ruled byline.",
+    "parts": ["ArticleHeader"]
+  },
+  {
+    "name": "Explorable",
+    "exportName": "Explorable",
+    "level": "organism",
+    "job": "Let a reader poke a small working model.",
+    "description": "A stage, a few controls and a sentence that changes with them.",
+    "parts": ["Explorable"]
+  },
+  {
+    "name": "CodeWalkthrough",
+    "exportName": "CodeWalkthrough",
+    "level": "organism",
+    "job": "Walk through a listing a few lines at a time.",
+    "description": "Code beside steps that mark their lines, advancing on their own with a pause control.",
+    "parts": ["CodeWalkthrough"]
+  },
+  {
+    "name": "StatusReport",
+    "exportName": "StatusReport",
+    "level": "organism",
+    "job": "End honestly.",
+    "description": "What works today, what does not yet, and where to get it.",
+    "parts": ["StatusReport"]
+  }
+]

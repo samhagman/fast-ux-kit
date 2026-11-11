@@ -1,13 +1,13 @@
 # Supplied machine observations
 
-The polished `MachineView` and `MachineTree` accept the same `MachineInspectionProps`.
+The polished `MachineGraphView` and `MachineTree` accept the same `MachineInspectionProps`.
 Portable types and ingestion helpers come from `/machine` or `/core`. React action
 types and `inspectionFrameKey` are exported by both polished view entries.
 `MachineDocument` stays version 1. These APIs add no workflow engine or transport.
 
 ```tsx
 import { applyMachineInspectionUpdate } from "@samhagman/fast-ux-kit/machine";
-import { MachineView } from "@samhagman/fast-ux-kit/machine-view";
+import { MachineGraphView } from "@samhagman/fast-ux-kit/machine-graph";
 
 const next = applyMachineInspectionUpdate(session, {
   id: "delivery-42",
@@ -43,7 +43,7 @@ const next = applyMachineInspectionUpdate(session, {
   ],
 });
 
-<MachineView
+<MachineGraphView
   document={document}
   readOnly
   inspectionSession={next}

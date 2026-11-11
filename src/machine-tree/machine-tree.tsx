@@ -75,7 +75,7 @@ import { MachineTreeToolbar } from "./machine-tree-toolbar.js";
  *   machine-tree-toolbar.tsx     breadcrumb, find, fold-all, diagnostics
  *   machine-tree-goto.tsx        the ⌘K palette (states, transitions, send)
  *   machine-tree-panel.tsx       side panel: Details, Code (and the phone sheet's body)
- *   (phone sheet)                machine-shared/machine-sheet.tsx, shared with Machine View
+ *   (phone sheet)                machine-shared/machine-sheet.tsx, shared with Machine Graph
  *   machine-tree-simulation.tsx  the Simulation tab and the footer run controls
  */
 export { useMachineTree } from "./machine-tree-controller.js";

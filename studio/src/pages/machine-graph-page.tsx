@@ -3,11 +3,11 @@ import type { MachineDocument } from "@samhagman/fast-ux-kit/core";
 import { machineLabCases } from "@/demo/machine-lab-data";
 import { MachineObservationDemo } from "@/demo/machine-observation-demo";
 import {
-  MachineView,
+  MachineGraphView,
   type DistributiveOmit,
   type DocumentChangeHandler,
-  type MachineViewProps,
-} from "@samhagman/fast-ux-kit/machine-view";
+  type MachineGraphViewProps,
+} from "@samhagman/fast-ux-kit/machine-graph";
 import { Button } from "@samhagman/fast-ux-kit/components/ui/button";
 import {
   Select,
@@ -34,7 +34,7 @@ type Host = "listen" | "clone" | "late" | "reject";
 const HOSTS: readonly Host[] = ["listen", "clone", "late", "reject"];
 const LATE_MS = 600;
 
-export function MachineViewPage() {
+export function MachineGraphPage() {
   const [caseId, setCaseId] = React.useState(
     () =>
       machineLabCases.find(
@@ -63,9 +63,9 @@ export function MachineViewPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-background/60 px-4">
-        <h1 className="text-ui font-semibold">Machine View</h1>
+        <h1 className="text-ui font-semibold">Machine Graph</h1>
         <span className="font-mono text-[11px] text-muted-foreground max-sm:hidden">
-          registry/machine-view
+          registry/machine-graph
         </span>
         {host && (
           <span data-demo-host={host} className="font-mono text-[10.5px] text-muted-foreground">
@@ -120,11 +120,11 @@ export function MachineViewPage() {
         {inspectDemo ? (
           <MachineObservationDemo dir={dir} />
         ) : viewer ? (
-          <MachineView key={caseId} document={served} {...shared} readOnly />
+          <MachineGraphView key={caseId} document={served} {...shared} readOnly />
         ) : host === "clone" || host === "late" || host === "reject" ? (
-          <ControlledMachineView key={caseId} mode={host} initial={lab.document} {...shared} />
+          <ControlledMachineGraph key={caseId} mode={host} initial={lab.document} {...shared} />
         ) : (
-          <MachineView
+          <MachineGraphView
             key={caseId}
             defaultDocument={lab.document}
             onDocumentChange={host === "listen" ? () => setSaves((n) => n + 1) : undefined}
@@ -136,14 +136,14 @@ export function MachineViewPage() {
   );
 }
 
-function ControlledMachineView({
+function ControlledMachineGraph({
   mode,
   initial,
   ...rest
 }: {
   readonly mode: "clone" | "late" | "reject";
   readonly initial: MachineDocument;
-} & DistributiveOmit<MachineViewProps, "document" | "defaultDocument" | "onDocumentChange">) {
+} & DistributiveOmit<MachineGraphViewProps, "document" | "defaultDocument" | "onDocumentChange">) {
   const [document, setDocument] = React.useState(initial);
   const timers = React.useRef(new Set<number>());
   React.useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
@@ -156,7 +156,7 @@ function ControlledMachineView({
     }, LATE_MS);
     timers.current.add(timer);
   };
-  return <MachineView {...rest} document={document} onDocumentChange={onDocumentChange} />;
+  return <MachineGraphView {...rest} document={document} onDocumentChange={onDocumentChange} />;
 }
 
 /** A "server" edit for the live viewer demo: revision n renames the root machine (rev 0 is the example as is). */

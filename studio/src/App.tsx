@@ -8,6 +8,8 @@ import {
   Monitor,
   Moon,
   Network,
+  Newspaper,
+  Palette,
   Sun,
   Workflow,
 } from "lucide-react";
@@ -22,23 +24,43 @@ const OverviewPage = React.lazy(() =>
 const ComponentsPage = React.lazy(() =>
   import("@/pages/components-page").then((module) => ({ default: module.ComponentsPage })),
 );
+const EditorialPage = React.lazy(() =>
+  import("@/pages/editorial-page").then((module) => ({ default: module.EditorialPage })),
+);
+const FoundationsPage = React.lazy(() =>
+  import("@/pages/foundations-page").then((module) => ({ default: module.FoundationsPage })),
+);
 const OutlinerPage = React.lazy(() =>
   import("@/pages/outliner-page").then((module) => ({ default: module.OutlinerPage })),
 );
-const MachineViewPage = React.lazy(() =>
-  import("@/pages/machine-view-page").then((module) => ({ default: module.MachineViewPage })),
+const MachineGraphPage = React.lazy(() =>
+  import("@/pages/machine-graph-page").then((module) => ({ default: module.MachineGraphPage })),
 );
 const MachineTreePage = React.lazy(() =>
   import("@/pages/machine-tree-page").then((module) => ({ default: module.MachineTreePage })),
 );
 
-type Route = "overview" | "components" | "outliner" | "machine-view" | "machine-tree";
+type Route =
+  | "overview"
+  | "foundations"
+  | "components"
+  | "editorial"
+  | "outliner"
+  | "machine-graph"
+  | "machine-tree";
 
 const ROUTES: readonly { id: Route; label: string; icon: typeof ListTree; hint: string }[] = [
   { id: "overview", label: "Overview", icon: House, hint: "Start here" },
-  { id: "components", label: "Components", icon: Grid2X2, hint: "Component catalog" },
+  { id: "foundations", label: "Foundations", icon: Palette, hint: "Type, colour, space, motion" },
+  { id: "components", label: "App Components", icon: Grid2X2, hint: "Controls for applications" },
+  {
+    id: "editorial",
+    label: "Editorial UI",
+    icon: Newspaper,
+    hint: "Forms for explaining on a page",
+  },
   { id: "outliner", label: "Outliner", icon: ListTree, hint: "Structured writing" },
-  { id: "machine-view", label: "Machine View", icon: Workflow, hint: "Statechart canvas" },
+  { id: "machine-graph", label: "Machine Graph", icon: Workflow, hint: "Statechart canvas" },
   { id: "machine-tree", label: "Machine Tree", icon: Network, hint: "State hierarchy" },
 ];
 
@@ -48,6 +70,8 @@ function useRoute(): Route {
     const hash = window.location.hash.replace(/^#\/?/, "");
     if (!hash) return "overview";
     if (["machine-tree-view"].includes(hash)) return "machine-tree";
+    // Machine View was renamed; its old bookmarks still open the page.
+    if (hash === "machine-view" || hash.startsWith("machine-view/")) return "machine-graph";
     if (
       ["outline", "editor", "outliner-lab", "outline-search-lab", "outline-note-lab"].includes(hash)
     )
@@ -166,9 +190,11 @@ export function App() {
               className="h-full"
             >
               {route === "overview" && <OverviewPage />}
+              {route === "foundations" && <FoundationsPage />}
               {route === "components" && <ComponentsPage />}
+              {route === "editorial" && <EditorialPage />}
               {route === "outliner" && <OutlinerPage />}
-              {route === "machine-view" && <MachineViewPage />}
+              {route === "machine-graph" && <MachineGraphPage />}
               {route === "machine-tree" && <MachineTreePage />}
             </motion.div>
           </AnimatePresence>

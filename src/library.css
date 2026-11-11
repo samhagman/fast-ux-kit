@@ -9,6 +9,7 @@
 @import "./components/overlays-media.css";
 @import "./components/specialized.css";
 @import "./components/color-date.css";
+@import "./editorial/editorial.css";
 @import "@xyflow/react/dist/style.css";
 @import "katex/dist/katex.min.css";
 @import "react-easy-crop/react-easy-crop.css";
@@ -18,7 +19,7 @@
 @import "./outliner/outliner-settings.css";
 @import "./outliner/outliner-views.css";
 @import "./outliner/outliner.css";
-@import "./machine-view/machine-view.css";
+@import "./machine-graph/machine-graph.css";
 @import "./machine-tree/machine-tree.css";
 @import "./machine-shared/machine-sim.css";
 @import "./react/editor.css";

@@ -92,7 +92,7 @@ after(async () => {
 });
 
 test("every canonical family has one working gallery fixture", () => {
-  assert.equal(catalog.length, 86);
+  assert.equal(catalog.length, 92);
   assert.deepEqual(
     Object.keys(componentFixtures).sort(),
     catalog.map((entry) => entry.name).sort(),
@@ -169,18 +169,18 @@ for (const entry of catalog) {
 
 test("the gallery is one scrolling page: every family's card, filtered by search, reached from the index", async () => {
   const view = render(createElement(ComponentsPage));
-  assert.ok(view.getByRole("heading", { name: "Component library" }));
+  assert.ok(view.getByRole("heading", { name: "App components" }));
   assert.equal(
     view.container.querySelectorAll("[data-family]").length,
-    86,
+    92,
     "the index lists every family",
   );
   assert.equal(
     view.container.querySelectorAll("article[id^=family-]").length,
-    86,
+    92,
     "one card per family",
   );
-  assert.equal(view.getAllByRole("tab").length, 14, "one tab per category");
+  assert.equal(view.getAllByRole("tab").length, 16, "one tab per category");
   await act(async () => {
     fireEvent.change(view.getByRole("searchbox"), { target: { value: "ColorWheel" } });
   });

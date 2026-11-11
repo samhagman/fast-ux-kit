@@ -1,7 +1,7 @@
 import type { MachineGraph, MachineIssue, MachineNode, MachineTransition } from "../core/index.js";
 
 /**
- * Structural advice the core validator does not flag, shared by Machine View (Issues tab) and
+ * Structural advice the core validator does not flag, shared by Machine Graph (Issues tab) and
  * Machine Tree (row marks + Diagnostics) so both components warn about the same things in the
  * same words. Pure; no React.
  *

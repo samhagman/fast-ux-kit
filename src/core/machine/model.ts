@@ -58,6 +58,22 @@ export function validateMachineDocument(value: unknown): MachineIssue[] {
     const target = { machineId };
     if (machineIds.has(machineId)) add("duplicate-machine", "Machine IDs must be unique.", target);
     machineIds.add(machineId);
+    if (raw.regions !== undefined) {
+      const options = record(raw.regions) ? Object.values(raw.regions) : [undefined];
+      if (
+        !options.every(
+          (entry) =>
+            record(entry) &&
+            (entry.label === undefined || typeof entry.label === "string") &&
+            (entry.collapsed === undefined || typeof entry.collapsed === "boolean"),
+        )
+      )
+        add(
+          "invalid-regions",
+          "regions must map each region name to an optional label and collapsed flag.",
+          target,
+        );
+    }
     if (raw.nodes.length > 2000 || raw.transitions.length > 5000) {
       add("graph-limit", "A graph supports at most 2,000 nodes and 5,000 transitions.", target);
       continue;
@@ -92,6 +108,8 @@ export function validateMachineDocument(value: unknown): MachineIssue[] {
       for (const key of ["parentId", "initialId", "machineId", "attachedToId"] as const)
         if (n[key] !== undefined && !text(n[key]))
           add("empty-reference", `${key} must be a nonempty ID or omitted.`, loc);
+      if (n.region !== undefined && !text(n.region))
+        add("invalid-node-field", "region must be a nonempty name or omitted.", loc);
       for (const key of ["entry", "exit", "tags"] as const)
         if (n[key] !== undefined && (!Array.isArray(n[key]) || !n[key]!.every(text)))
           add("invalid-node-field", `${key} must contain nonempty names.`, loc);

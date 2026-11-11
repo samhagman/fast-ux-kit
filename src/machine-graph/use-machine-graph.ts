@@ -7,7 +7,10 @@ import {
   undoMachineHistory,
   validateMachineDocument,
   explainMachineEvent,
+  machineEventInputs,
+  machineEventOptions,
   previewMachineEvent,
+  type MachineEventOption,
   type MachineEventPreview,
   type MachineCommand,
   type MachineDirection,
@@ -22,6 +25,7 @@ import { machineToast, type MachineToaster } from "../machine-shared/machine-toa
 import { describeBlocked, describeSend, describeStart } from "../machine-shared/machine-copy.js";
 import { structuralIssues } from "../machine-shared/machine-issues.js";
 import {
+  machineEvent,
   runMachineScenario,
   useMachineSimulation,
   type ScenarioStep,
@@ -46,7 +50,7 @@ import {
 } from "../machine-shared/use-machine-inspection.js";
 
 /**
- * Machine View controller.
+ * Machine Graph controller.
  *
  *  - Document: every edit is a core `MachineCommand` (or an atomic batch of them) applied
  *    through `applyMachineCommand` and committed as ONE bounded-history step.
@@ -109,7 +113,7 @@ export type MachineDocumentProps =
       readonly onDocumentChange?: DocumentChangeHandler;
     };
 
-export type UseMachineViewOptions = MachineDocumentProps &
+export type UseMachineGraphOptions = MachineDocumentProps &
   MachineInspectionProps & {
     readonly defaultMode?: MachineMode;
     readonly layoutWorker?: MachineLayoutWorkerOptions;
@@ -219,7 +223,7 @@ export interface ScenarioOutcome {
 }
 
 /** Host chrome facts the controller needs but the document does not carry. */
-export interface MachineViewHost {
+export interface MachineGraphHost {
   /** Narrow container (phone shell): regions stack and auto layout assumes a tall viewport. */
   readonly compact?: boolean;
   /** The canvas size before React Flow has measured it, so "auto" direction scores the real space. */
@@ -233,7 +237,7 @@ export interface MachineViewHost {
   readonly touchToast?: MachineToaster["show"];
 }
 
-export function useMachineView(options: UseMachineViewOptions, host: MachineViewHost = {}) {
+export function useMachineGraph(options: UseMachineGraphOptions, host: MachineGraphHost = {}) {
   const compact = !!host.compact;
   const { runtime } = options;
   // A controlled document with no `onDocumentChange` can never accept an edit: read-only.
@@ -723,17 +727,63 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
     announce(sentence);
   };
 
-  const sendEvent = (type: string) => {
+  /**
+   * Known inputs for each event, tried against the live snapshot: what can be sent and where it
+   * leads. This is what makes a guarded event usable without knowing the payload its guard reads.
+   */
+  const optionsCache = React.useMemo(
+    () => new Map<string, readonly MachineEventOption[]>(),
+    // The cache is per snapshot: any step, edit or runtime change starts it fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [snapshot, sim.cursor, document, graph, runtime, options.scenarios],
+  );
+  const eventOptions = (type: string): readonly MachineEventOption[] => {
+    if (!snapshot || sim.cursor !== null || snapshot.status !== "running") return [];
+    let list = optionsCache.get(type);
+    if (!list) {
+      list = machineEventOptions(
+        document,
+        graph,
+        snapshot,
+        type,
+        machineEventInputs(type, { runtime, scenarios: options.scenarios }),
+        runtime,
+      );
+      optionsCache.set(type, list);
+    }
+    return list;
+  };
+  /**
+   * Transitions the typed payload leaves blocked but a known input would take. They are available,
+   * just not with one bare click: the view offers the inputs instead of sending.
+   */
+  const candidates = React.useMemo(() => {
+    const offered = new Set<string>();
+    for (const id of sim.candidates.blocked) {
+      const event = graph.transitions.find((t) => t.id === id)?.event;
+      if (event && eventOptions(event).some((option) => option.preview?.transitionIds.includes(id)))
+        offered.add(id);
+    }
+    return { ...sim.candidates, offered };
+    // eventOptions reads the cache above, which shares these dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim.candidates, graph, optionsCache]);
+
+  /**
+   * Sends `type`. With `input`, that exact payload goes (a chosen known input); without it, the
+   * custom payload the person typed.
+   */
+  const sendEvent = (type: string, input?: { readonly payload?: unknown }) => {
     if (!sim.snapshot) return null;
-    if (!sim.payload.ok) {
+    if (!input && !sim.payload.ok) {
       notify({ message: `${sim.payload.error}. Fix it to send ${type}.`, tone: "error" });
       announce(`${type} not sent: payload is not valid JSON`);
       return null;
     }
-    const payload = sim.payload.value;
+    const payload = input ? input.payload : sim.payload.ok ? sim.payload.value : undefined;
     const before = sim.snapshot;
     pendingPayload.current = payload;
-    const result = sim.send(type);
+    const result = sim.send(input ? machineEvent(type, payload) : type);
     if (result && !result.changed) {
       pendingPayload.current = undefined;
       recordBlock(type, before, payload, "manual");
@@ -1151,7 +1201,8 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
           ? inspection.leafIds
           : new Set<string>()
         : sim.leafIds,
-    candidates: sim.candidates,
+    candidates,
+    eventOptions,
     scenarios: options.scenarios ?? [],
     playScenario,
     runAllScenarios,
@@ -1185,7 +1236,7 @@ export function useMachineView(options: UseMachineViewOptions, host: MachineView
   };
 }
 
-export type MachineViewController = ReturnType<typeof useMachineView>;
+export type MachineGraphController = ReturnType<typeof useMachineGraph>;
 export type { DocumentChangeMeta, DocumentChangeReason } from "./controlled-document.js";
 
 /** A short past-tense-ready description of a command batch, for "Undid …" announcements. */

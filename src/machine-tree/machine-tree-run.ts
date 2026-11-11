@@ -25,7 +25,7 @@ import {
   previewEvent,
   reasonOf,
   routeStateOf,
-  scenarioPayloads,
+  knownPayloads,
   scenarioReport,
   stepSentence,
   type MachineTreeFix,
@@ -52,7 +52,7 @@ export interface SimulationCtx {
   /** The tree's reading of the run, as every row sees it. */
   readonly view: SimView;
   readonly scenarios: readonly MachineScenario[];
-  /** Every distinct scenario payload: the editor's quick picks and the source of one-tap fixes. */
+  /** Every known payload (host-declared, then scenarios): the editor's quick picks and the source of one-tap fixes. */
   readonly payloads: readonly MachineTreeFix[];
   /** The notice for the frame on screen (cleared by any frame change). */
   readonly notice: TreeNotice | null;
@@ -111,7 +111,12 @@ export function useSimulationController(
       : snapshot.trace.at(-1)
     : undefined;
   const payloadValue = sim.payload.ok ? sim.payload.value : undefined;
-  const payloads = React.useMemo(() => scenarioPayloads(scenarios), [scenarios]);
+  const payloads = React.useMemo(
+    () => knownPayloads(rootGraph, scenarios, runtimeRef.current),
+    // The runtime is read through its ref, like every other host callback here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rootGraph, scenarios],
+  );
   // Host guards run here once per snapshot + payload, never per row render.
   const { reasons, fixes } = React.useMemo(
     () =>
@@ -262,7 +267,7 @@ export function useSimulationController(
     if (fix && !fixOnScreen)
       toast.show("mt-reason", text, {
         persistent: true,
-        action: { label: `Try ${fix.text}`, onClick: () => applyFix(fix, rowId) },
+        action: { label: `Try ${fix.label}`, onClick: () => applyFix(fix, rowId) },
       });
     else toast.show("mt-reason", text, { duration });
   };

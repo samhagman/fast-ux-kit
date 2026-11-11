@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowRight,
   Ban,
+  Braces,
   CircleCheck,
   CircleX,
   ListChecks,
@@ -16,16 +17,16 @@ import {
 import { cn } from "../lib/utils.js";
 import { motionTokens } from "../lib/motion.js";
 import { Button } from "../components/ui/button.js";
-import { Textarea } from "../components/ui/textarea.js";
-import { Label } from "../components/ui/label.js";
 import { plural, useMachine } from "./machine-context.js";
 import { Section } from "./inspector-fields.js";
+import { EventChoices } from "./event-choices.js";
 import { MachineValue } from "../machine-shared/machine-inspection-panel.js";
 
 /** Run tab: start, the current configuration, events to send, payload, context, scenarios. */
 export function RunPanel() {
   const mv = useMachine();
-  const payloadId = React.useId();
+  /** Unguarded events that have their custom payload editor open. */
+  const [customFor, setCustomFor] = React.useState<readonly string[]>([]);
   if (!mv.snapshot)
     return (
       <div className="grid gap-4">
@@ -51,15 +52,28 @@ export function RunPanel() {
         <Scenarios />
       </div>
     );
-  // One row per event type; its transitions' guards and actions ride along on a second line, so
+  // One entry per event type; its transitions' guards and actions ride along on a second line, so
   // whatever a collapsed canvas chip hid behind "…" is readable here (on touch, a chip tap sends).
-  const events = new Map<string, { enabled: boolean; targets: string[]; details: string[] }>();
+  //
+  // An event is sent one of two ways. If nothing about it needs an input, it is a single row and
+  // one click. If a guard decides it, or the specification knows payloads for it, it is a group
+  // that lists those known inputs, each already tried against the live state.
+  const events = new Map<
+    string,
+    { enabled: boolean; guarded: boolean; targets: string[]; details: string[] }
+  >();
   const labelOf = (id: string) => mv.graph.nodes.find((n) => n.id === id)?.label ?? id;
   for (const t of mv.graph.transitions) {
     if (!t.event || (!mv.candidates.enabled.has(t.id) && !mv.candidates.blocked.has(t.id)))
       continue;
-    const entry = events.get(t.event) ?? { enabled: false, targets: [], details: [] };
-    entry.enabled ||= mv.candidates.enabled.has(t.id);
+    const entry = events.get(t.event) ?? {
+      enabled: false,
+      guarded: false,
+      targets: [],
+      details: [],
+    };
+    entry.enabled ||= mv.candidates.enabled.has(t.id) || mv.candidates.offered.has(t.id);
+    entry.guarded ||= !!t.guard;
     entry.targets.push(labelOf(t.targetId));
     events.set(t.event, entry);
   }
@@ -80,7 +94,6 @@ export function RunPanel() {
       if (detail) entry.details.push(several ? `${detail} → ${labelOf(t.targetId)}` : detail);
     }
   }
-  const invalid = !mv.sim.payload.ok;
   // Current configuration grouped by region: leaf chips under their nearest container.
   const groups = new Map<string, string[]>();
   for (const id of mv.leafIds) {
@@ -127,28 +140,19 @@ export function RunPanel() {
       </Section>
       <Section title="Send event">
         {events.size ? (
-          <div className="grid gap-1">
-            {[...events].map(([type, info], index) => (
-              <button
-                key={type}
-                type="button"
-                data-mv-focus-fallback={index === 0 ? "" : undefined}
-                disabled={invalid}
-                onClick={() => mv.sendEvent(type)}
-                aria-describedby={invalid ? `${payloadId}-error` : undefined}
-                className={cn(
-                  "group flex min-h-8 items-center gap-2 rounded-md border px-2.5 py-1 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-50 coarse:min-h-11",
-                  info.enabled
-                    ? "border-signal/35 hover:border-signal hover:bg-signal-muted"
-                    : "border-dashed hover:border-foreground/30 hover:bg-muted/50",
-                )}
-              >
-                <Zap
-                  className={cn(
-                    "size-3.5 shrink-0",
-                    info.enabled ? "text-signal" : "text-muted-foreground",
-                  )}
-                />
+          <div className="grid gap-1.5">
+            {[...events].map(([type, info], index) => {
+              const options = mv.eventOptions(type);
+              const choose =
+                info.guarded ||
+                options.length > 1 ||
+                options.some((option) => option.payload !== undefined);
+              const targets = (
+                <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
+                  <bdi>{[...new Set(info.targets)].join(", ")}</bdi>
+                </span>
+              );
+              const heading = (
                 <span className="grid min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="shrink-0 font-mono text-[11.5px] font-semibold">{type}</span>
@@ -156,9 +160,7 @@ export function RunPanel() {
                       aria-hidden
                       className="size-3 shrink-0 text-muted-foreground rtl:-scale-x-100"
                     />
-                    <span className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground">
-                      <bdi>{[...new Set(info.targets)].join(", ")}</bdi>
-                    </span>
+                    {targets}
                   </span>
                   {info.details.length > 0 && (
                     <span className="truncate font-mono text-[10px] leading-3.5 text-muted-foreground">
@@ -166,13 +168,75 @@ export function RunPanel() {
                     </span>
                   )}
                 </span>
-                {!info.enabled && (
-                  <span className="shrink-0 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                    blocked
-                  </span>
-                )}
-              </button>
-            ))}
+              );
+              const zap = (
+                <Zap
+                  className={cn(
+                    "size-3.5 shrink-0",
+                    info.enabled ? "text-signal" : "text-muted-foreground",
+                  )}
+                />
+              );
+              if (choose)
+                return (
+                  <div
+                    key={type}
+                    role="group"
+                    aria-label={`Send ${type}`}
+                    data-mv-event={type}
+                    className={cn(
+                      "grid gap-1.5 rounded-md border p-1.5",
+                      info.enabled ? "border-signal/25" : "border-dashed",
+                    )}
+                  >
+                    <div className="flex min-h-6 items-center gap-2 px-1">
+                      {zap}
+                      {heading}
+                      {!info.enabled && (
+                        <span className="shrink-0 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                          blocked
+                        </span>
+                      )}
+                    </div>
+                    <EventChoices event={type} />
+                  </div>
+                );
+              const custom = customFor.includes(type);
+              return (
+                <div key={type} data-mv-event={type} className="grid gap-1.5">
+                  <div className="flex items-stretch gap-1">
+                    <button
+                      type="button"
+                      data-mv-focus-fallback={index === 0 ? "" : undefined}
+                      // The bare event: whatever is typed in a custom payload is sent only from there.
+                      onClick={() => mv.sendEvent(type, {})}
+                      className="group flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-signal/35 px-2.5 py-1 text-start transition-colors hover:border-signal hover:bg-signal-muted coarse:min-h-11"
+                    >
+                      {zap}
+                      {heading}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Send ${type} with a custom payload`}
+                      aria-expanded={custom}
+                      title="Custom payload"
+                      onClick={() =>
+                        setCustomFor(
+                          custom ? customFor.filter((t) => t !== type) : [...customFor, type],
+                        )
+                      }
+                      className={cn(
+                        "grid w-8 shrink-0 place-items-center rounded-md border text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground coarse:w-11",
+                        custom && "bg-muted/60 text-foreground",
+                      )}
+                    >
+                      <Braces className="size-3.5" />
+                    </button>
+                  </div>
+                  {custom && <EventChoices event={type} customOnly />}
+                </div>
+              );
+            })}
           </div>
         ) : mv.snapshot.status === "done" ? (
           <div className="flex items-center justify-between gap-2 rounded-md border border-success/30 bg-success/8 px-2.5 py-1.5">
@@ -214,28 +278,6 @@ export function RunPanel() {
             </motion.div>
           )}
         </AnimatePresence>
-        {events.size > 0 && (
-          <div className="mt-2 grid gap-1">
-            <Label htmlFor={payloadId} className="text-[11.5px] font-normal text-muted-foreground">
-              Event payload (JSON, optional)
-            </Label>
-            <Textarea
-              id={payloadId}
-              name="run-payload"
-              placeholder="{ }"
-              value={mv.sim.payloadText}
-              onChange={(event) => mv.sim.setPayloadText(event.target.value)}
-              className="min-h-12 resize-none font-mono text-[11.5px]"
-              aria-invalid={invalid}
-              aria-describedby={invalid ? `${payloadId}-error` : undefined}
-            />
-            {invalid && (
-              <span id={`${payloadId}-error`} className="text-[11px] text-destructive">
-                {(mv.sim.payload as { error: string }).error}. Events can't be sent until it parses.
-              </span>
-            )}
-          </div>
-        )}
       </Section>
       <Section title="Context">
         <MachineValue value={mv.snapshot.context} label="Local context" />

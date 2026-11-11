@@ -1,4 +1,4 @@
-/* ───────── Simulation emphasis (shared by Machine View and Machine Tree) ─────────
+/* ───────── Simulation emphasis (shared by Machine Graph and Machine Tree) ─────────
  *
  * One rule set for "how does a state look while a simulation runs". Put `data-sim` on the
  * element that represents a state (a canvas node, a tree row):

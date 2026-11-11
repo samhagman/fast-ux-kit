@@ -1,12 +1,12 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   CircleDot,
-  CornerDownRight,
   ExternalLink,
   FastForward,
   History,
@@ -16,7 +16,14 @@ import {
   TriangleAlert,
   Zap,
 } from "lucide-react";
-import { type MachineTreeRow, type MachineTreeVisibleRow } from "../core/index.js";
+import {
+  type MachineFlow,
+  type MachineFlowLanding,
+  type MachineFlowRoute,
+  type MachineFlowStep,
+  type MachineTreeRow,
+  type MachineTreeVisibleRow,
+} from "../core/index.js";
 import { cn } from "../lib/utils.js";
 import { motionTokens } from "../lib/motion.js";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover.js";
@@ -37,6 +44,18 @@ import {
 import { useTreeNavigation } from "./machine-tree-navigation.js";
 import { useTreeSimulation } from "./machine-tree-run.js";
 import { FLAG, useRowFlags, useTree } from "./machine-tree-store.js";
+import {
+  ArrivalNotes,
+  FlowSteps,
+  Landing,
+  LeafDots,
+  LookInside,
+  RouteConnector,
+  SummaryRoute,
+  flowIsWhole,
+  summaryText,
+  useLookInside,
+} from "./machine-tree-flow.js";
 import { useModKey } from "../lib/platform.js";
 import { simStateOf, type SimState } from "../machine-shared/machine-sim.js";
 
@@ -80,9 +99,10 @@ export function MachineTreeCanvas() {
           </span>
         </div>
       )}
-      <div className="relative flex min-h-0 flex-1">
+      <LookInside>
         <div
           ref={ctl.scrollerRef}
+          data-mt-canvas=""
           className="min-w-0 flex-1 overflow-auto bg-canvas"
           style={{
             backgroundImage:
@@ -98,7 +118,12 @@ export function MachineTreeCanvas() {
             aria-describedby={ctl.helpId}
             onKeyDown={ctl.onTreeKeyDown}
             onClick={(event) => event.target === event.currentTarget && ctl.select(null)}
-            className="grid min-h-full content-start gap-8 p-4 sm:p-6"
+            className={cn(
+              "relative grid min-h-full content-start gap-8 p-4 sm:p-6",
+              // A flow outline is as wide as the machine is: the canvas scrolls rather than squeezing
+              // lanes and columns into the window. A search's wrapping list fits the window instead.
+              !ctl.searching && "w-max min-w-full",
+            )}
             style={covered ? { paddingBottom: `calc(${covered} + 1rem)` } : undefined}
           >
             {roots.map((id, index) =>
@@ -186,7 +211,7 @@ export function MachineTreeCanvas() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </LookInside>
     </div>
   );
 }
@@ -520,7 +545,11 @@ export const MachineSection = React.memo(function MachineSection({
   );
 });
 
-/** A sibling group: state cells flow and wrap; a parallel's regions sit side by side as columns. */
+/**
+ * A sibling group. States are drawn as a flow outline (machine-tree-flow) in the order the machine
+ * moves through them. A parallel's lanes sit side by side as columns instead, and a filtered tree
+ * (a search) falls back to cells that wrap: a flow with states missing would misstate what leads where.
+ */
 export function Children({
   parent,
   parallel,
@@ -528,8 +557,10 @@ export function Children({
   readonly parent: MachineTreeRow;
   readonly parallel?: boolean;
 }) {
-  const { visible } = useTree();
+  const { visible, searching, flowOf } = useTree();
   const states = parent.childIds.filter((id) => visible.get(id)?.kind === "node");
+  const found = parallel || searching ? undefined : flowOf(parent.id);
+  const flow = found && flowIsWhole(found, visible) ? found : undefined;
   // Recovered transitions (missing source) hang off the machine itself.
   const orphans =
     parent.kind === "machine"
@@ -539,15 +570,20 @@ export function Children({
     <>
       <div
         role="group"
+        data-mt-flow={flow ? "" : undefined}
         className={cn(
-          parallel
-            ? "flex items-stretch max-md:flex-col"
-            : "flex flex-wrap items-start gap-x-2.5 gap-y-3",
+          flow
+            ? "flex flex-col items-start"
+            : parallel
+              ? "flex items-stretch max-md:flex-col"
+              : "flex flex-wrap items-start gap-x-2.5 gap-y-3",
         )}
       >
-        {states.map((id) => (
-          <StateCell key={id} id={id} region={parallel} />
-        ))}
+        {flow ? (
+          <FlowSteps steps={flow.steps} flow={flow} />
+        ) : (
+          states.map((id) => <StateCell key={id} id={id} lane={parallel} />)
+        )}
       </div>
       {orphans.length > 0 && (
         <RouteList ids={orphans} label={`${parent.label} unattached transitions`} />
@@ -558,10 +594,19 @@ export function Children({
 
 export const StateCell = React.memo(function StateCell({
   id,
-  region,
+  lane,
+  step,
+  flow,
+  lead,
 }: {
   readonly id: string;
-  readonly region?: boolean | undefined;
+  /** One lane of a parallel state: a column inside its parent, not another box. */
+  readonly lane?: boolean | undefined;
+  /** Where the flow outline places this state and its routes. */
+  readonly step?: MachineFlowStep | undefined;
+  readonly flow?: MachineFlow | undefined;
+  /** How the spine arrives: the state above leads straight here, or routes from elsewhere meet here. */
+  readonly lead?: "linked" | "met" | undefined;
 }) {
   const { visible, projected, collapsed, searching, links, rows, first, issues, layoutEpoch } =
     useTree();
@@ -571,6 +616,19 @@ export const StateCell = React.memo(function StateCell({
   const container = row.childIds.some((c) => projected.get(c)?.kind === "node");
   const open = container && (searching || !collapsed.has(id));
   const routes = row.childIds.filter((c) => visible.get(c)?.kind === "transition");
+  const forked = !!step?.columns.length;
+  // Routes that leave from inside this box are drawn under it; a screen reader gets them as words.
+  const fromInside = step
+    ? [
+        ...step.side,
+        ...(container && !open ? step.exits : []),
+        ...step.main,
+        ...step.columns.flatMap((c) => c.routes),
+      ]
+        .filter((route) => route.inside)
+        .slice(0, 6)
+        .map((route) => summaryText(route, rows, links))
+    : [];
   const leaf = row.active && !row.activeDescendant;
   const contains = row.activeDescendant;
   const parts = [
@@ -600,20 +658,30 @@ export const StateCell = React.memo(function StateCell({
   ].filter(Boolean);
   const item = useItemProps(row, flags, parts.join(", "), {
     expanded: container ? open : undefined,
-    description: node.description ?? "",
+    description: [
+      node.description ?? "",
+      fromInside.length ? `Routes from inside: ${fromInside.join("; ")}` : "",
+    ]
+      .filter(Boolean)
+      .join(". "),
   });
   return (
     <motion.div
       {...item}
+      data-lead={lead}
+      data-forked={forked || undefined}
       layout="position"
       layoutDependency={layoutEpoch}
       transition={{ layout: motionTokens.layout }}
       className={cn(
-        "flex min-w-0 max-w-full flex-col",
-        region
-          ? // Region columns: dashed dividers between them (a top rule once they stack on phones).
-            "min-w-[12rem] grow basis-auto border-dashed border-border px-3 first:ps-0 last:pe-0 [&:not(:first-child)]:border-s max-md:min-w-0 max-md:basis-auto max-md:px-0 max-md:[&:not(:first-child)]:border-s-0 max-md:[&:not(:first-child)]:border-t max-md:[&:not(:first-child)]:pt-2 max-md:[&:not(:last-child)]:pb-2"
-          : "w-max",
+        forked ? "min-w-0" : "flex min-w-0 flex-col",
+        searching && "max-w-full",
+        lane
+          ? // Lane columns: dashed dividers between them (a top rule once they stack on phones).
+            "min-w-[12rem] shrink-0 grow basis-auto border-dashed border-border px-3 first:ps-0 last:pe-0 [&:not(:first-child)]:border-s max-md:min-w-0 max-md:basis-auto max-md:px-0 max-md:[&:not(:first-child)]:border-s-0 max-md:[&:not(:first-child)]:border-t max-md:[&:not(:first-child)]:pt-2 max-md:[&:not(:last-child)]:pb-2"
+          : forked
+            ? ""
+            : "w-max",
       )}
     >
       <StateBlock
@@ -621,11 +689,17 @@ export const StateCell = React.memo(function StateCell({
         flags={flags}
         container={container}
         open={open}
-        region={region}
+        lane={lane}
         leaf={leaf}
         contains={contains}
+        flow={flow}
+        natural={!!step}
       />
-      {routes.length > 0 && <RouteList ids={routes} label={`${row.label} transitions`} />}
+      {step ? (
+        <StepRoutes row={row} step={step} routes={routes} folded={container && !open} />
+      ) : (
+        routes.length > 0 && <RouteList ids={routes} label={`${row.label} transitions`} />
+      )}
     </motion.div>
   );
 });
@@ -635,19 +709,28 @@ export function StateBlock({
   flags,
   container,
   open,
-  region,
+  lane,
   leaf,
   contains,
+  flow,
+  natural,
 }: {
   readonly row: MachineTreeVisibleRow;
   readonly flags: number;
   readonly container: boolean;
   readonly open: boolean;
-  readonly region?: boolean | undefined;
+  readonly lane?: boolean | undefined;
   readonly leaf: boolean;
   readonly contains: boolean;
+  /** The flow this state is a step of: who else arrives here. */
+  readonly flow?: MachineFlow | undefined;
+  /** Take the card's own width: in the flow outline a card is not stretched to its longest route. */
+  readonly natural?: boolean | undefined;
 }) {
-  const { toggle, searching, sim, links, rows, follow, rootMachineId, query, issues } = useTree();
+  const { toggle, searching, sim, links, rows, follow, rootMachineId, query, issues, coarse } =
+    useTree();
+  // Resting the pointer on a shut box floats its inside over the canvas (machine-tree-flow).
+  const look = useLookInside(row.id, container && !open && !searching && !coarse);
   const { inspectionMachineId, presentation: descriptions } = useTree();
   const presentation = descriptions?.nodes?.[row.elementId];
   const node = row.node!;
@@ -692,21 +775,21 @@ export function StateBlock({
   const simState: SimState = simStateOf({ leaf, ancestor: contains, simulating });
   // Every state that can hold the run reserves the live dot's slot while a run is on, so a send moves
   // the dot without resizing two cards (and reflowing a parallel's columns).
-  const dotSlot = leaf || (simulating && !container && !region && !pseudo);
+  const dotSlot = leaf || (simulating && !container && !lane && !pseudo);
   const header = (
     <div
       className={cn(
         "group/head flex items-center gap-2 transition-colors",
-        region ? "min-h-7 rounded-md px-1 coarse:min-h-11" : "min-h-9 px-2.5 py-1 coarse:min-h-11",
-        container && open && !region && "border-b border-hairline",
+        lane ? "min-h-7 rounded-md px-1 coarse:min-h-11" : "min-h-9 px-2.5 py-1 coarse:min-h-11",
+        container && open && !lane && "border-b border-hairline",
         // Folded: the hidden-count / active chips wrap under the label on a narrow screen instead of squeezing it.
         container && !open && "flex-wrap gap-y-1",
         // Current search match: tint the header, not another frame around the enclosure.
         isMatch &&
-          (region
+          (lane
             ? "bg-[color-mix(in_oklab,var(--warning)_14%,transparent)]"
             : "rounded-t-[9px] bg-[color-mix(in_oklab,var(--warning)_12%,transparent)]"),
-        isMatch && !region && !(container && open) && "rounded-b-[9px]",
+        isMatch && !lane && !(container && open) && "rounded-b-[9px]",
       )}
     >
       {container && (
@@ -723,14 +806,6 @@ export function StateBlock({
               "size-3.5 transition-transform duration-150 ease-[var(--ease-standard)] rtl:-scale-x-100",
               open && "rotate-90 rtl:-rotate-90",
             )}
-          />
-        </span>
-      )}
-      {row.initial && !pseudo && (
-        <span title="Initial state" className="inline-flex shrink-0 items-center">
-          <CornerDownRight
-            aria-hidden
-            className="size-3.5 text-[color:var(--sim-icon,var(--muted-foreground))] rtl:-scale-x-100"
           />
         </span>
       )}
@@ -753,10 +828,14 @@ export function StateBlock({
       <span
         dir="auto"
         title={row.label}
+        data-mt-toggle={container ? "" : undefined}
+        // The name opens and shuts a box, as its chevron does. The click carries on to select it too.
+        onClick={container ? () => toggle(row.id) : undefined}
         className={cn(
           "line-clamp-2 min-w-0 leading-5 tracking-[-0.005em] break-words",
-          region
-            ? // A region's name is a quiet column caption; it reads as a name only while the run is in it.
+          container && "cursor-pointer",
+          lane
+            ? // A lane's name is a quiet column caption; it reads as a name only while the run is in it.
               cn(
                 "text-[12px] font-medium",
                 simState === "active" || simState === "ancestor"
@@ -771,12 +850,13 @@ export function StateBlock({
       </span>
       <IssueMark messages={issues.get(row.id)} />
       {/* Kind badge sits beside the label, not at the far edge of a wide header. */}
-      {(presentation?.kindLabel || parallel || (node.kind === "compound" && !region)) && (
+      {(presentation?.kindLabel || parallel || (node.kind === "compound" && !lane)) && (
         <span
           className={cn(
             "shrink-0 font-mono text-[9.5px] tracking-wider text-[color:var(--sim-tag,var(--muted-foreground))] uppercase",
             // Compounds are obvious from their enclosure; reveal the badge on header hover/focus only.
             node.kind === "compound" &&
+              !row.region &&
               "opacity-0 transition-opacity group-hover/head:opacity-100 coarse:hidden",
           )}
         >
@@ -805,20 +885,40 @@ export function StateBlock({
           matched {matchedVia}
         </span>
       )}
-      {container && !open && (
-        <span className="ms-auto flex shrink-0 items-center gap-1">
-          {hiddenLeaves.length > 0 && (
-            <HiddenActive
-              leaves={hiddenLeaves}
-              pingKey={sim.pingKey}
-              entered={hiddenLeaves.some((leaf) => sim.entered.has(leaf.elementId))}
-            />
-          )}
-          <span className="rounded-[4px] bg-muted px-1 font-mono text-[10px] leading-4 text-[color:var(--sim-tag,var(--muted-foreground))] tabular-nums">
-            <bdi>{hiddenCount(row, rows)}</bdi>
-          </span>
-        </span>
+    </div>
+  );
+  // A shut box is a black box with a status line: where the run is inside it, or how much is in there.
+  const status = container && !open && (
+    <div
+      data-mt-status=""
+      className={cn(
+        "flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] leading-4",
+        lane ? "px-1 pb-1" : "border-t border-hairline px-2.5 py-1",
       )}
+    >
+      {hiddenLeaves.length > 0 && (
+        <HiddenActive
+          leaves={hiddenLeaves}
+          pingKey={sim.pingKey}
+          entered={hiddenLeaves.some((leaf) => sim.entered.has(leaf.elementId))}
+        />
+      )}
+      {hiddenLeaves.length === 1 &&
+        hiddenLeaves[0]!.node?.tags?.map((tag) => (
+          <span
+            key={tag}
+            dir="auto"
+            className="shrink-0 rounded-[4px] border border-hairline px-1 text-[10px] text-[color:var(--sim-tag,var(--muted-foreground))]"
+          >
+            {tag}
+          </span>
+        ))}
+      <span className="text-[color:var(--sim-tag,var(--muted-foreground))] tabular-nums">
+        <bdi>{hiddenCount(row, rows)}</bdi>
+      </span>
+      <span className="ms-auto">
+        <LeafDots box={row} />
+      </span>
     </div>
   );
   return (
@@ -826,11 +926,16 @@ export function StateBlock({
       data-mt-face
       data-active={leaf}
       data-sim={simState}
-      data-region={region || undefined}
+      data-lane={lane || undefined}
+      data-region={row.region ? "" : undefined}
+      data-shut={container && !open ? "" : undefined}
+      data-look={look ? "" : undefined}
+      {...look}
       className={cn(
-        "relative w-full transition-[border-color,background-color,box-shadow,outline-color] duration-200",
-        region
-          ? // A region is a column inside its parallel, not another box.
+        "relative transition-[border-color,background-color,box-shadow,outline-color] duration-200",
+        natural ? "w-fit max-w-full" : "w-full",
+        lane
+          ? // A lane is a column inside its parallel, not another box.
             cn("rounded-md", isSelected && "outline outline-1 outline-foreground/20")
           : cn(
               // Border and fill come from the shared sim tokens while a run is on (active, ancestor,
@@ -840,6 +945,8 @@ export function StateBlock({
                 ? "bg-[var(--sim-surface,color-mix(in_oklab,var(--foreground)_1.5%,var(--card)))]"
                 : "min-w-40 bg-[var(--sim-surface,var(--card))]",
               pseudo && "border-dashed bg-transparent",
+              // A declared region is a drawing aid, not a state: a dashed edge says so.
+              row.region && "border-dashed",
               final && "mt-final",
               // The live leaf's glow (stronger in dark, where the 7% tint all but disappears).
               leaf && "shadow-[0_0_0_2px_color-mix(in_oklab,var(--signal)_8%,transparent)]",
@@ -857,7 +964,7 @@ export function StateBlock({
       )}
     >
       {/* The live leaf's rail: the one solid signal stroke on screen, kept under any dry-run ghost. */}
-      {leaf && !region && <span aria-hidden className="mt-rail" />}
+      {leaf && !lane && <span aria-hidden className="mt-rail" />}
       {/* Dry-run tag: absolutely placed so a preview never reflows the tree. */}
       {flags & FLAG.ghostEnter ? (
         // A glyph, not a word: an event can be literally named NEXT. The row's name says "would be entered".
@@ -878,6 +985,8 @@ export function StateBlock({
         </span>
       ) : null}
       {header}
+      {status}
+      <ArrivalNotes row={row} flow={flow} />
       {hasBody && (
         <div className="space-y-1 border-t border-hairline px-2.5 pt-1.5 pb-2">
           {presentation?.activities?.slice(0, 4).map((activity) => (
@@ -940,13 +1049,100 @@ export function StateBlock({
             transition={motionTokens.base}
             className="overflow-hidden"
           >
-            <div className={region ? "pt-1.5" : "p-2.5"}>
+            <div className={lane ? "pt-1.5" : "p-2.5"}>
               <Children parent={row} parallel={parallel} />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+/**
+ * A flow step's routes, each where the outline places it: side routes with their landing, then
+ * either the routes that carry on down the spine or one list per column head.
+ */
+function StepRoutes({
+  row,
+  step,
+  routes,
+  folded,
+}: {
+  readonly row: MachineTreeVisibleRow;
+  readonly step: MachineFlowStep;
+  /** The state's own transition rows that are on screen. */
+  readonly routes: readonly string[];
+  readonly folded: boolean;
+}) {
+  const shown = new Set(routes);
+  const placed = new Set(
+    [...step.side, ...step.main, ...step.columns.flatMap((column) => column.routes)].flatMap(
+      (route) => (route.inside ? [] : route.transitionRowIds),
+    ),
+  );
+  const side = [...step.side, ...(folded ? step.exits : [])];
+  // A route the plan does not place (it cannot happen for a whole flow) is still listed, plainly.
+  const loose = routes.filter((id) => !placed.has(id));
+  const forked = step.columns.length > 0;
+  const more = forked || step.main.length > 0;
+  const label = `${row.label} transitions`;
+  const entries = (list: readonly MachineFlowRoute[], connector: "elbow" | "none", open: boolean) =>
+    list.flatMap((route, index) => {
+      const last = index === list.length - 1 && !open;
+      if (route.inside)
+        return [
+          <SummaryRoute
+            key={route.transitionRowIds[0]}
+            box={row}
+            route={route}
+            connector={connector}
+            last={last}
+          />,
+        ];
+      const id = route.transitionRowIds[0]!;
+      return shown.has(id)
+        ? [
+            <RouteRow
+              key={id}
+              id={id}
+              last={last}
+              landing={route.landing}
+              exact={route.exact}
+              connector={connector}
+            />,
+          ]
+        : [];
+    });
+  return (
+    <>
+      {(side.length > 0 || loose.length > 0) && (
+        <ul role="group" aria-label={label} data-mt-routes="side" className="ms-3.5 mt-0.5">
+          {entries(side, "elbow", more || loose.length > 0)}
+          {loose.map((id, index) => (
+            <RouteRow key={id} id={id} last={index === loose.length - 1 && !more} />
+          ))}
+        </ul>
+      )}
+      {forked
+        ? step.columns.map((column, index) => (
+            <ul
+              key={index}
+              role="group"
+              aria-label={label}
+              data-mt-routes="head"
+              data-mt-first={index === 0 ? "" : undefined}
+              style={{ "--mt-col": index + 1 } as React.CSSProperties}
+            >
+              {entries(column.routes, "none", true)}
+            </ul>
+          ))
+        : step.main.length > 0 && (
+            <ul role="group" aria-label={label} data-mt-routes="main" className="ms-3.5">
+              {entries(step.main, "none", true)}
+            </ul>
+          )}
+    </>
   );
 }
 
@@ -969,9 +1165,18 @@ export function RouteList({
 export const RouteRow = React.memo(function RouteRow({
   id,
   last,
+  landing,
+  exact,
+  connector = "elbow",
 }: {
   readonly id: string;
   readonly last: boolean;
+  /** In the flow outline: how this route lands (the plain list just points at its target). */
+  readonly landing?: MachineFlowLanding | undefined;
+  /** It lands on the state drawn next, not on a state inside it: position already says where it goes. */
+  readonly exact?: boolean | undefined;
+  /** "none": the list it sits in draws the spine itself. */
+  readonly connector?: "elbow" | "none" | undefined;
 }) {
   const {
     visible,
@@ -1004,13 +1209,14 @@ export const RouteRow = React.memo(function RouteRow({
   const blocked = state === "blocked";
   const reason = reasonOf(row, state, sim);
   // While simulating, routes that can't fire recede through the shared `data-sim="inactive"` tokens
-  // (colour, not opacity: text stays ≥ 4.5:1), as Machine View's chips do; blocked routes stay legible
+  // (colour, not opacity: text stays ≥ 4.5:1), as Machine Graph's chips do; blocked routes stay legible
   // because their reason is the point. A search's context rows recede to the plain muted colour.
   // An errored run dims nothing (its states keep design colours too).
   const inactive = state === "inactive" && !taken && sim.live;
   const recede = inactive || (searching && row.context && !(flags & FLAG.spotlight));
   const event = t.event || "";
   const targetLabel = target?.label ?? t.targetId;
+  const quiet = landing === "next" && exact === true && !!target;
   const matchedVia = searching
     ? hiddenMatch(
         row,
@@ -1039,7 +1245,7 @@ export const RouteRow = React.memo(function RouteRow({
     // Only a blocked route says why in its name, without repeating the event ("blocked: guard ready is
     // false"); an inactive one is just aria-disabled (Enter explains).
     blocked ? `blocked: ${shortReason(reason, t.event)}` : "",
-    blocked && sim.fixes.has(t.id) ? `fix: send with ${sim.fixes.get(t.id)![0]!.text}` : "",
+    blocked && sim.fixes.has(t.id) ? `fix: send with ${sim.fixes.get(t.id)![0]!.label}` : "",
     taken ? "just taken" : "",
     // Transition-level diagnostics (a missing target, a nested transition) are named like a state's.
     issues.get(id)?.length ? `diagnostic: ${issues.get(id)!.join(" ")}` : "",
@@ -1098,33 +1304,25 @@ export const RouteRow = React.memo(function RouteRow({
         if (focusEvent.target === focusEvent.currentTarget)
           setPreview(canPreview && !handoff.active ? event : null, "key");
       }}
-      onBlur={(blurEvent) =>
-        blurEvent.target === blurEvent.currentTarget && canPreview && setPreview(null)
-      }
-      onPointerEnter={(pointer) =>
-        canPreview && pointer.pointerType === "mouse" && setPreview(event, "pointer")
-      }
-      onPointerLeave={() => canPreview && setPreview(null)}
+      onBlur={(blurEvent) => {
+        if (blurEvent.target !== blurEvent.currentTarget) return;
+        if (canPreview) setPreview(null);
+      }}
+      onPointerEnter={(pointer) => {
+        if (pointer.pointerType !== "mouse") return;
+        if (canPreview) setPreview(event, "pointer");
+      }}
+      onPointerLeave={() => {
+        if (canPreview) setPreview(null);
+      }}
       // Content-wide (not cell-wide): the row's hit box is what it shows, so its middle is the route, not blank space.
       className={cn(
         "group/route relative flex w-fit max-w-full min-h-6 items-center ps-4 coarse:min-h-11",
         sendsOnClick && "cursor-pointer",
       )}
     >
-      {/* Branch connector: a quarter-round from the owning block down into each route. */}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute start-0 top-0 h-3 w-3 rounded-es-[6px] border-s border-b coarse:h-[22px]",
-          enabled || taken ? "border-signal/60" : "border-border",
-        )}
-      />
-      {!last && (
-        <span
-          aria-hidden
-          className="absolute start-0 top-3 bottom-0 border-s border-border coarse:top-[22px]"
-        />
-      )}
+      {/* An elbow off the owning block down into the route, or the spine itself running past it. */}
+      <RouteConnector connector={connector} last={last} live={enabled || taken} />
       {/* Hang-indent grid: the event sits in column one; guard → target / actions wrap in column two,
           so a continuation line starts under the guard, never under the event badge. */}
       <div
@@ -1193,15 +1391,20 @@ export const RouteRow = React.memo(function RouteRow({
               [<Highlight text={t.guard} />]
             </span>
           )}
-          <ArrowRight
-            aria-hidden
-            className="size-3 shrink-0 self-center text-[color:var(--sim-icon,color-mix(in_oklab,var(--muted-foreground)_70%,transparent))] rtl:rotate-180"
-          />
+          {quiet ? null : landing ? (
+            <Landing landing={landing} />
+          ) : (
+            <ArrowRight
+              aria-hidden
+              className="size-3 shrink-0 self-center text-[color:var(--sim-icon,color-mix(in_oklab,var(--muted-foreground)_70%,transparent))] rtl:rotate-180"
+            />
+          )}
           {/* Not a nested button: the treeitem owns activation (→ then Enter, or ⌘Enter); pointers click it. */}
           <span
             tabIndex={-1}
             data-substop
             dir="auto"
+            title={quiet ? targetLabel : undefined}
             // The peek is a hover/keyboard preview: a tap has no hover-out, so touch (and pointer focus)
             // never raises one, and a click that sends clears it.
             onPointerEnter={(pointer) =>
@@ -1233,15 +1436,23 @@ export const RouteRow = React.memo(function RouteRow({
               "cursor-pointer rounded-[3px] text-start break-words underline underline-offset-[3px] transition-colors outline-none focus-visible:outline-2 focus-visible:outline-ring",
               !target
                 ? "text-[color-mix(in_oklab,var(--warning)_62%,var(--foreground))] decoration-warning/50"
-                : sendsOnClick
-                  ? // Part of the Send button, not a link: plain text, no link colour (⌘-click still opens it).
-                    "text-foreground no-underline"
-                  : recede
-                    ? "text-[color:var(--sim-tag,var(--muted-foreground))] decoration-border hover:text-signal hover:decoration-signal"
-                    : "text-signal decoration-signal/30 hover:decoration-signal",
+                : quiet
+                  ? // Position already says where it goes: the stop stays for the keyboard, quietly.
+                    "inline-flex self-center text-[color:var(--sim-icon,color-mix(in_oklab,var(--muted-foreground)_70%,transparent))] no-underline hover:text-foreground"
+                  : sendsOnClick
+                    ? // Part of the Send button, not a link: plain text, no link colour (⌘-click still opens it).
+                      "text-foreground no-underline"
+                    : recede
+                      ? "text-[color:var(--sim-tag,var(--muted-foreground))] decoration-border hover:text-signal hover:decoration-signal"
+                      : "text-signal decoration-signal/30 hover:decoration-signal",
             )}
           >
-            <Highlight text={targetLabel} />
+            {quiet ? (
+              // The route leads to the state drawn right below: its place says where it goes.
+              <ArrowDown aria-hidden className="size-3" />
+            ) : (
+              <Highlight text={targetLabel} />
+            )}
           </span>
           {t.actions?.length ? (
             <span className="text-[color:var(--sim-tag,var(--muted-foreground))]">

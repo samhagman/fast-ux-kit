@@ -16,6 +16,7 @@ import {
   type MachineTransition,
   type MachineTreeRow,
   type MachineTreeVisibleRow,
+  machineEventInputs,
 } from "../core/index.js";
 import {
   machineEvent,
@@ -42,6 +43,8 @@ export function kindLabel(row: MachineTreeRow, parent: MachineTreeRow | undefine
   if (row.kind === "machine") return "Machine";
   if (row.kind === "transition")
     return row.transition?.event ? "Transition" : "Automatic transition";
+  // A declared region is a drawing aid: a named box around some states, not a state itself.
+  if (row.region) return "Region";
   switch (row.node?.kind) {
     case "parallel":
       return "Parallel";
@@ -136,29 +139,41 @@ export function scenarioReport(
   };
 }
 
-/** A payload that would let a blocked transition fire, taken from the host's scenarios. */
+/**
+ * A known payload for an event: one the host declared (`runtime.eventInputs`) or a scenario sends.
+ * It is the tree's name for the core's `MachineEventInput`, and comes from the same function
+ * Machine Graph uses, so both views offer the same inputs.
+ */
 export interface MachineTreeFix {
   readonly event: string;
   readonly payload: unknown;
+  /** The payload as a person would say it: "approved: true". */
+  readonly label: string;
   /** `JSON.stringify(payload)`, also what the payload editor receives. */
   readonly text: string;
 }
 
-/** Every distinct event payload the scenarios use, first event type wins. */
-export function scenarioPayloads(scenarios: readonly MachineScenario[]): readonly MachineTreeFix[] {
-  const seen = new Map<string, MachineTreeFix>();
-  for (const scenario of scenarios)
-    for (const event of scenario.events)
-      if (event.payload !== undefined) {
-        const text = JSON.stringify(event.payload);
-        if (!seen.has(`${event.type}\u0000${text}`))
-          seen.set(`${event.type}\u0000${text}`, {
-            event: event.type,
-            payload: event.payload,
-            text,
-          });
-      }
-  return [...seen.values()];
+/** Every known payload for every event the graph handles, host-declared first, then scenarios. */
+export function knownPayloads(
+  graph: MachineGraph,
+  scenarios: readonly MachineScenario[],
+  runtime: MachineRuntimeOptions | undefined,
+): readonly MachineTreeFix[] {
+  const events = [...new Set(graph.transitions.flatMap((t) => (t.event ? [t.event] : [])))];
+  return events.flatMap((event) =>
+    machineEventInputs(event, { scenarios, ...(runtime ? { runtime } : {}) }).flatMap((input) =>
+      input.payload === undefined
+        ? []
+        : [
+            {
+              event,
+              payload: input.payload,
+              label: input.label,
+              text: JSON.stringify(input.payload) ?? input.label,
+            },
+          ],
+    ),
+  );
 }
 
 /** Blocked routes → a sentence each, and the scenario payloads that the core says would unblock them. */
@@ -329,6 +344,8 @@ export function hiddenCount(
   const walk = (id: string, parallelParent: boolean) => {
     const child = rows.get(id);
     if (child?.kind !== "node" || child.node?.kind === "note") return;
+    // A declared region is not a state: count what is in it.
+    if (child.region) return child.childIds.forEach((id) => walk(id, false));
     if (parallelParent && child.node?.kind === "compound") regions++;
     else states++;
     for (const grandchild of child.childIds) walk(grandchild, child.node?.kind === "parallel");

@@ -15,7 +15,7 @@ import { Button } from "../components/ui/button.js";
 import { ScrollArea } from "../components/ui/scroll-area.js";
 
 /**
- * The phone inspector sheet, shared by Machine View and Machine Tree so the two can't drift.
+ * The phone inspector sheet, shared by Machine Graph and Machine Tree so the two can't drift.
  *
  * A plain, NON-modal bottom section (role="complementary"), not a dialog: no scrim, no focus
  * trap, no inert or aria-hidden anywhere, so the canvas or tree above it stays live for taps,

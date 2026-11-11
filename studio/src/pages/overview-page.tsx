@@ -22,9 +22,9 @@ const tools = [
     detail: "Rich notes · keyboard editing · undo & redo",
   },
   {
-    id: "machine-view",
+    id: "machine-graph",
     number: "02",
-    name: "Machine View",
+    name: "Machine Graph",
     icon: Workflow,
     description: "See the whole statechart. Inspect a running workflow or try a local simulation.",
     detail: "Live observations · pinned history · event previews",
@@ -60,8 +60,8 @@ export function OverviewPage() {
             <span className="text-muted-foreground">Room for real work.</span>
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-7 text-muted-foreground sm:text-base">
-            A compact React component library, an outliner, and two ways to explore state machines.
-            Shared styling and keyboard interactions throughout.
+            Compact app components, an editorial set for explaining things on a page, an outliner,
+            and two ways to explore state machines. One set of foundations under all of it.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <Button render={<a href="#/components" />} className="min-h-11 gap-2 px-4">
@@ -118,7 +118,7 @@ export function OverviewPage() {
                     </p>
                     <span className="ms-4 block text-muted-foreground/50">+ Add item</span>
                   </div>
-                ) : tool.id === "machine-view" ? (
+                ) : tool.id === "machine-graph" ? (
                   <div className="flex items-center justify-end">
                     <span className="rounded-md border px-3 py-2 text-foreground">Draft</span>
                     <span className="h-px w-6 bg-border" />

@@ -8,9 +8,9 @@ import {
   type MachineDocument,
   type MachineRuntimeOptions,
 } from "../src/core/machine/index.js";
-import { fitToBand, PHONE_READABLE } from "../src/machine-view/machine-viewport.js";
-import { useMachineView } from "../src/machine-view/use-machine-view.js";
-import { useDiagramFacts, useCanvasController } from "../src/machine-view/machine-context.js";
+import { fitToBand, PHONE_READABLE } from "../src/machine-graph/machine-viewport.js";
+import { useMachineGraph } from "../src/machine-graph/use-machine-graph.js";
+import { useDiagramFacts, useCanvasController } from "../src/machine-graph/machine-context.js";
 import { runMachineScenario } from "../src/machine-shared/use-machine-simulation.js";
 const { renderHook, act, cleanup } = await import("@testing-library/react");
 afterEach(cleanup);
@@ -71,7 +71,7 @@ test("canvas preview invalidates on payload changes and never invokes a live hos
       calls++;
     },
   };
-  const hook = renderHook(() => useMachineView(options));
+  const hook = renderHook(() => useMachineGraph(options));
   await act(async () => hook.result.current.start());
   await act(async () => hook.result.current.sim.setPayloadText('{"ok":true}'));
   const before = hook.result.current.snapshot;
@@ -152,7 +152,7 @@ test("diagram facts stay stable through work-only observations, and update when 
   };
   const hook = renderHook(
     ({ frame }) => {
-      const view = useMachineView({
+      const view = useMachineGraph({
         document: doc,
         readOnly: true,
         inspectionSession: { source: "committed", connection: "connected", frames: [frame] },
@@ -224,7 +224,7 @@ test("scenario inspection preserves the accepted frame's payload/time across lat
     ...result,
     steps: result.steps.map((s, i) => ({ ...s, timestamp: (i + 1) * 1000 })),
   };
-  const hook = renderHook(() => useMachineView({ document: doc, readOnly: true, runtime }));
+  const hook = renderHook(() => useMachineGraph({ document: doc, readOnly: true, runtime }));
   act(() =>
     hook.result.current.inspectScenario({
       result: captured,

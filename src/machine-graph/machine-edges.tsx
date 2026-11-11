@@ -17,15 +17,13 @@ import {
 // React Flow's own connection engine (a dependency of @xyflow/react, same version): our
 // reconnect anchors sit where the ROUTED path ends, not at the handle positions.
 import { XYHandle } from "@xyflow/system";
-import { Ban, Check, Play, Zap } from "lucide-react";
+import { Ban, Play, Zap } from "lucide-react";
 import type { MachineTransition } from "../core/index.js";
 import { cn } from "../lib/utils.js";
 import { ease, motionTokens } from "../lib/motion.js";
-import { Button } from "../components/ui/button.js";
 import { Kbd } from "../components/ui/kbd.js";
 import { useMediaQuery } from "../hooks/use-media-query.js";
 import { useShortcutLabel } from "../lib/platform.js";
-import { Textarea } from "../components/ui/textarea.js";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover.js";
 import {
   HEADER,
@@ -38,7 +36,8 @@ import {
 import { MachineValue } from "../machine-shared/machine-inspection-panel.js";
 import { useMachine, useDiagram } from "./machine-context.js";
 import { DragContext } from "./machine-nodes.js";
-import { describeBlocked, KEY } from "../machine-shared/machine-copy.js";
+import { KEY } from "../machine-shared/machine-copy.js";
+import { EventChoices } from "./event-choices.js";
 
 export type TransitionData = {
   readonly transition?: MachineTransition;
@@ -288,7 +287,9 @@ export function TransitionEdge({
     );
 
   const simulating = mv.mode === "simulate" && mv.simulating;
-  const enabled = !!transition && mv.candidates.enabled.has(transition.id);
+  // "Enabled" on the canvas means reachable now: with one bare click, or with a known input.
+  const offered = !!transition && mv.candidates.offered.has(transition.id);
+  const enabled = !!transition && (mv.candidates.enabled.has(transition.id) || offered);
   const blocked = !!transition && mv.candidates.blocked.has(transition.id);
   const taken = !!transition && mv.takenIds.includes(transition.id);
   const stroke =
@@ -347,6 +348,7 @@ export function TransitionEdge({
             selected={!!selected}
             simulating={simulating}
             enabled={enabled}
+            offered={offered}
             blocked={blocked}
             taken={taken}
           />
@@ -604,6 +606,7 @@ function EdgeChip({
   selected,
   simulating,
   enabled,
+  offered,
   blocked,
   taken,
 }: {
@@ -617,6 +620,8 @@ function EdgeChip({
   readonly selected: boolean;
   readonly simulating: boolean;
   readonly enabled: boolean;
+  /** Reachable only by choosing an input: the chip opens the choices instead of sending. */
+  readonly offered: boolean;
   readonly blocked: boolean;
   readonly taken: boolean;
 }) {
@@ -626,7 +631,9 @@ function EdgeChip({
   // while the payload flips the guard (blocked ↔ enabled) and closes only on send or dismiss.
   const [open, setOpen] = React.useState(false);
   const guarded = simulating && !!transition.guard && !!transition.event && (enabled || blocked);
+  // Blocked for a bare click. Either a known input passes (offered) or none does right now.
   const guardedBlock = guarded && blocked;
+  const refused = guardedBlock && !offered;
   React.useEffect(() => {
     if (!guarded) setOpen(false);
   }, [guarded]);
@@ -648,11 +655,13 @@ function EdgeChip({
     (fit === "event" && (!!transition.guard || !!transition.actions?.length)) ||
     (fit === "guard" && !!transition.actions?.length);
   const label = simulating
-    ? enabled
-      ? `Send ${transitionLabel(transition)}`
-      : guardedBlock
-        ? `${transition.event} is blocked. Opens the payload editor`
-        : `${transitionLabel(transition)}, not available now`
+    ? offered
+      ? `${transition.event} needs an input. Opens the choices`
+      : enabled
+        ? `Send ${transitionLabel(transition)}`
+        : guardedBlock
+          ? `${transition.event} is blocked. Opens the choices`
+          : `${transitionLabel(transition)}, not available now`
     : `Select transition ${transitionLabel(transition)}`;
   return (
     <Popover open={open && guarded} onOpenChange={setOpen}>
@@ -696,7 +705,7 @@ function EdgeChip({
               : "border-[color:var(--sim-border,var(--mv-node-border))] text-[color:var(--sim-tag,color-mix(in_oklab,var(--foreground)_85%,transparent))]",
             // Unavailable chips recede by colour (machine-sim.css), never by opacity: their text keeps ≥ 4.5:1.
             "bg-[var(--sim-surface,var(--surface))]",
-            guardedBlock && "cursor-pointer border-dashed hover:border-foreground/40",
+            refused && "cursor-pointer border-dashed hover:border-foreground/40",
             open && "ring-2 ring-ring/40",
             enabled &&
               "cursor-pointer border-signal/50 text-signal hover:bg-[color-mix(in_oklab,var(--signal)_14%,var(--surface))]",
@@ -736,7 +745,6 @@ function EdgeChip({
         <PayloadPopover
           event={transition.event!}
           guard={transition.guard!}
-          passes={enabled}
           onSent={() => setOpen(false)}
           onInteractOutside={(event) => {
             if (chipRef.current?.contains(event.target as globalThis.Node)) event.preventDefault();
@@ -751,40 +759,32 @@ function EdgeChip({
   );
 }
 
-/** Guarded event from the canvas: edit the payload and send without leaving the graph. */
+/** Guarded event from the canvas: choose an input and send without leaving the graph. */
 function PayloadPopover({
   event,
   guard,
-  passes,
   onSent,
   onInteractOutside,
   onCloseAutoFocus,
 }: {
   readonly event: string;
   readonly guard: string;
-  readonly passes: boolean;
   readonly onSent: () => void;
   readonly onInteractOutside: (event: Event) => void;
   readonly onCloseAutoFocus: (event: Event) => void;
 }) {
   const shortcut = useShortcutLabel();
   const mv = useMachine();
-  const id = React.useId();
-  const invalid = !mv.sim.payload.ok;
-  const sequence = mv.snapshot?.trace.at(-1)?.sequence;
-  const lastBlocked = mv.blocked.at(-1);
-  const refused = lastBlocked && lastBlocked.event === event && lastBlocked.after === sequence;
-  const send = () => {
-    const result = mv.sendEvent(event);
-    if (result?.changed) onSent();
-  };
+  const options = mv.eventOptions(event);
+  // Nothing known gets through right now, so say why before offering the same refusals.
+  const stuck = options.length > 0 && options.every((option) => !option.preview);
   return (
     <PopoverContent
       side="top"
       className="w-76 gap-2 p-3"
       onInteractOutside={onInteractOutside}
       onCloseAutoFocus={onCloseAutoFocus}
-      aria-label={`${event} payload`}
+      aria-label={`Send ${event}`}
     >
       <div className="flex items-center gap-1.5 text-[12px]">
         <Zap className="size-3.5 text-muted-foreground" />
@@ -793,58 +793,21 @@ function PayloadPopover({
           guarded by <span className="font-mono">{guard}</span>
         </span>
       </div>
-      <p
-        role="status"
-        className={cn(
-          "flex items-start gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] leading-4",
-          passes ? "bg-signal-muted text-signal" : "bg-muted/70 text-muted-foreground",
-        )}
-      >
-        {passes ? (
-          <Check className="mt-px size-3.5 shrink-0" />
-        ) : (
+      {stuck && (
+        <p
+          role="status"
+          className="flex items-start gap-1.5 rounded-md bg-muted/70 px-2 py-1.5 text-[11.5px] leading-4 text-muted-foreground"
+        >
           <Ban className="mt-px size-3.5 shrink-0" />
-        )}
-        <span>
-          {/* The shared sentences (machine-copy): the same words as the toast, live region and tree. */}
-          {passes
-            ? `${event} can fire — guard ${guard} passes now.`
-            : `${describeBlocked(event, mv.explainEvent(event))}.${refused ? " The last send was refused." : ""}`}
-        </span>
-      </p>
-      <MachineValue value={mv.snapshot?.context} label="Context" />
-      <label htmlFor={id} className="text-[11px] text-muted-foreground">
-        Event payload (JSON, optional)
-      </label>
-      <Textarea
-        id={id}
-        name="event-payload"
-        value={mv.sim.payloadText}
-        onChange={(e) => mv.sim.setPayloadText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !invalid) {
-            e.preventDefault();
-            send();
-          }
-        }}
-        aria-invalid={invalid}
-        aria-describedby={invalid ? `${id}-error` : undefined}
-        placeholder="{ }"
-        className="min-h-16 resize-none font-mono text-[11.5px]"
-      />
-      {invalid && (
-        <span id={`${id}-error`} className="text-[11px] text-destructive">
-          {(mv.sim.payload as { error: string }).error}
-        </span>
+          <span>No known input gets through this guard in the current state.</span>
+        </p>
       )}
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1 text-[10px] text-muted-foreground coarse:hidden">
-          <Kbd dir="ltr">{shortcut("mod", KEY.enter)}</Kbd> send <Kbd>{KEY.escape}</Kbd> close
-        </span>
-        <Button size="sm" disabled={invalid} onClick={send} className="coarse:ms-auto">
-          <Play /> Send {event}
-        </Button>
-      </div>
+      <EventChoices event={event} onSent={onSent} />
+      <MachineValue value={mv.snapshot?.context} label="Context" />
+      <span className="flex items-center gap-1 text-[10px] text-muted-foreground coarse:hidden">
+        <Kbd dir="ltr">{shortcut("mod", KEY.enter)}</Kbd> sends a custom payload{" "}
+        <Kbd>{KEY.escape}</Kbd> close
+      </span>
     </PopoverContent>
   );
 }

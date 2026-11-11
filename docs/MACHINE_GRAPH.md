@@ -1,15 +1,15 @@
-# Machine View
+# Machine Graph
 
-The polished canvas is `MachineView` from `@samhagman/fast-ux-kit/machine-view`.
+The polished canvas is `MachineGraphView` from `@samhagman/fast-ux-kit/machine-graph`.
 It uses shared shadcn-style controls and Base UI, React Flow for the canvas, and
-ELK for layout. Import `tokens.css` and `machine-view.css` for the supplied skin.
+ELK for layout. Import `tokens.css` and `machine-graph.css` for the supplied skin.
 
 ```tsx
-import { MachineView } from "@samhagman/fast-ux-kit/machine-view";
+import { MachineGraphView } from "@samhagman/fast-ux-kit/machine-graph";
 import "@samhagman/fast-ux-kit/tokens.css";
-import "@samhagman/fast-ux-kit/machine-view.css";
+import "@samhagman/fast-ux-kit/machine-graph.css";
 
-<MachineView document={document} readOnly inspectionSession={session} />;
+<MachineGraphView document={document} readOnly inspectionSession={session} />;
 ```
 
 Use `defaultDocument` for local editing, or `document` plus `onDocumentChange` for
@@ -27,7 +27,49 @@ Guards must be synchronous; actions must be pure context transformations. Hoveri
 or keyboard-focusing an enabled event deliberately computes a cached dry run;
 it never advances the current snapshot. Cache entries expire when the snapshot or
 payload changes. `runtime.guardDescriptions` may explain a blocked named guard.
-The kit never guesses a payload that would satisfy a guard.
+
+### Sending an event
+
+A guard is an opaque host function, so the view cannot read which payload it
+wants, and it never guesses one. It offers the inputs the specification already
+knows, each tried against the live snapshot:
+
+```
+SEND EVENT
+┌ DECLINE → Declined ────────────────────── { } ┐   nothing to choose: one click
+┌ DECIDE → Publishing          [approved] ──────┐
+│  ▶ approved: true              → Publishing   │   a known input that passes
+│  ⊘ approved: false                  blocked   │   a known input the guard refuses
+│     the reviewer has to approve               │   (still sendable, to watch it refuse)
+│  › Custom payload                             │   anything else, as JSON
+└───────────────────────────────────────────────┘
+```
+
+Known inputs come from two places, most authoritative first:
+
+| Source                | What it is                                                    |
+| --------------------- | ------------------------------------------------------------- |
+| `runtime.eventInputs` | Payloads the host declares per event type, next to its guards |
+| `scenarios`           | Every distinct payload a scenario sends with that event       |
+
+```ts
+runtime={{
+  guards: { approved: (_context, event) => event.payload?.approved === true },
+  guardDescriptions: { approved: () => "the reviewer has to approve" },
+  eventInputs: {
+    DECIDE: [
+      { label: "Approve", payload: { approved: true } },
+      { label: "Send back", payload: { approved: false } },
+    ],
+  },
+}}
+```
+
+An event with no guard and no known payload stays a single row. On the canvas, a
+transition that a known input would take is drawn as available, and its chip
+opens the same choices instead of sending a bare event that would be refused.
+The command palette lists one "Send" item per input. `machineEventInputs` and
+`machineEventOptions` in `/machine` are the pure functions behind this.
 
 The scoped command palette (toolbar button or Mod+K inside this view) separates
 navigation, view controls, and simulation execution. Looking up a state or
@@ -51,11 +93,12 @@ graph. Keep document identity stable when only runtime observations change.
 ## Legacy `/react` API
 
 The following reference describes the older `MachineView` exported from `/react`.
+It kept its name: only the `/machine-graph` workspace was renamed.
 Its `value`, `onChange`, `runtimeOptions`, render hooks, and controlled mode props
-belong to that older component. They are not the polished `/machine-view` props.
+belong to that older component. They are not the polished `/machine-graph` props.
 Both exports remain supported; they have different public interfaces.
 
-Machine View is a React statechart workspace with three deliberately separate jobs:
+The legacy `MachineView` is a React statechart workspace with three deliberately separate jobs:
 
 1. **Edit** a portable graph document, including hierarchy and referenced graphs.
 2. **Simulate** a bounded local model with trusted, pure callbacks.

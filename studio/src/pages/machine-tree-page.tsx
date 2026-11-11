@@ -90,7 +90,32 @@ function largeDocument(): MachineDocument {
   };
 }
 
+/**
+ * Release approval again, with its publish attempt declared as a region: a named box the tree draws
+ * shut until it is opened. Only the drawing differs; the machine runs exactly as the plain case does.
+ */
+const release = machineLabCases.find((lab) => lab.id === "release")!;
+const withRegion: MachineDocument = {
+  ...release.document,
+  machines: release.document.machines.map((graph) => ({
+    ...graph,
+    regions: { publishing: { label: "Publish attempt" } },
+    nodes: graph.nodes.map((node) =>
+      node.id === "release-publish" || node.id === "release-retry"
+        ? { ...node, region: "publishing" }
+        : node,
+    ),
+  })),
+};
+
 const synthetic: readonly TreeCase[] = [
+  {
+    id: "regions",
+    label: "Release approval, with a region",
+    document: withRegion,
+    options: release.options,
+    scenarios: release.scenarios,
+  },
   { id: "malformed", label: "Malformed import", document: malformed, options: {}, scenarios: [] },
   {
     id: "large",

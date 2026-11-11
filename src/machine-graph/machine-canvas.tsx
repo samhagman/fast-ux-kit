@@ -360,7 +360,11 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
     (changes: EdgeChange<FlowEdge>[]) => {
       for (const change of changes) {
         if (change.type !== "select" || !change.selected || change.id.startsWith("__")) continue;
-        if (mv.mode === "simulate" && mv.candidates.enabled.has(change.id)) continue;
+        if (
+          mv.mode === "simulate" &&
+          (mv.candidates.enabled.has(change.id) || mv.candidates.offered.has(change.id))
+        )
+          continue;
         mv.setSelection({ type: "transition", id: change.id });
       }
     },
@@ -549,9 +553,16 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
               mv.mode === "simulate" &&
               transition.event &&
               (mv.candidates.enabled.has(transition.id) || mv.candidates.blocked.has(transition.id))
-            )
-              mv.sendEvent(transition.event);
-            else mv.setSelection({ type: "transition", id: edge.id });
+            ) {
+              // The line itself was clicked: follow it. If it needs an input, use the known one
+              // that takes this very transition.
+              const input = mv.candidates.offered.has(transition.id)
+                ? mv
+                    .eventOptions(transition.event)
+                    .find((option) => option.preview?.transitionIds.includes(transition.id))
+                : undefined;
+              mv.sendEvent(transition.event, input && { payload: input.payload });
+            } else mv.setSelection({ type: "transition", id: edge.id });
           }}
           onNodeDoubleClick={(_, node) => {
             const data = node.data as { node?: MachineNode };
@@ -1407,7 +1418,7 @@ function Choreographer() {
     const m = mvRef.current;
     if (!dom) return [];
     const leaves = [...m.leafIds];
-    const enabled = [...m.candidates.enabled];
+    const enabled = [...m.candidates.enabled, ...m.candidates.offered];
     const taken = [...m.takenIds];
     const targets = enabled
       .map((tid) => m.graph.transitions.find((t) => t.id === tid)?.targetId)
@@ -1437,7 +1448,7 @@ function Choreographer() {
 
   // 1. Every simulation step (and replay scrub): follow the frontier.
   const frameKey = mv.snapshot
-    ? `${mv.machineId}:${mv.snapshot.trace.length}:${mv.cursor}:${mv.candidates.enabled.size}`
+    ? `${mv.machineId}:${mv.snapshot.trace.length}:${mv.cursor}:${mv.candidates.enabled.size}:${mv.candidates.offered.size}`
     : "";
   React.useEffect(() => {
     if (!frameKey || !dom) return;

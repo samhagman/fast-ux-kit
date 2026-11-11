@@ -123,11 +123,25 @@ export function useNavigationController(
     () => props.defaultSelectedId ?? null,
     (id) => props.onSelectedChange?.(id, id ? rows.get(id) : undefined),
   );
-  const [collapsed, setCollapsed] = useControllable<ReadonlySet<string>>(
+  // A region starts shut unless its machine says otherwise. That is a default, not a change: it
+  // applies only while the host leaves folding to the tree, and is never reported as one.
+  const regionDefaults = React.useMemo(
+    () => base.flowPlan.regions.filter((row) => row.region!.collapsed).map((row) => row.id),
+    [base.flowPlan],
+  );
+  const ownsFolds = props.collapsedIds === undefined && props.defaultCollapsedIds === undefined;
+  const [collapsed, setCollapsed, seedCollapsed] = useControllable<ReadonlySet<string>>(
     props.collapsedIds,
-    () => new Set(props.defaultCollapsedIds ?? []),
+    () => new Set(props.defaultCollapsedIds ?? regionDefaults),
     props.onCollapsedChange,
   );
+  const seenRegions = React.useRef<ReadonlySet<string>>(new Set(regionDefaults));
+  React.useLayoutEffect(() => {
+    // A new document can bring regions this tree has not shown yet: they start shut too.
+    const fresh = regionDefaults.filter((id) => !seenRegions.current.has(id));
+    seenRegions.current = new Set([...seenRegions.current, ...regionDefaults]);
+    if (ownsFolds && fresh.length) seedCollapsed((previous) => new Set([...previous, ...fresh]));
+  }, [regionDefaults, ownsFolds, seedCollapsed]);
   const [query, setQuery] = useControllable<string>(
     props.query,
     () => props.defaultQuery ?? "",

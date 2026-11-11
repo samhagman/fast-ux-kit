@@ -1,14 +1,15 @@
 # Architecture
 
-| Layer                | Responsibility                                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| `src/core`           | Portable document models, validation, immutable commands, search, policy and machine simulation |
-| `src/components`     | The 86-family shadcn/Base UI catalog and native compositions                                    |
-| `src/outliner`       | Structured writing, note editing, document navigation and host seams                            |
-| `src/machine-view`   | State-machine canvas, inspection and local simulation                                           |
-| `src/machine-tree`   | State-machine hierarchy and shared simulation integration                                       |
-| `src/react`          | Reader, editor and text-interaction surfaces                                                    |
-| Consumer application | Persistence, authentication, authorization, transport and domain policy                         |
+| Layer                | Responsibility                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/core`           | Portable document models, validation, immutable commands, search, policy and machine simulation    |
+| `src/components`     | The 92-family shadcn/Base UI catalog and native compositions                                       |
+| `src/editorial`      | Editorial UI: article layout, figures, notes, code and explorable frames. React and plain CSS only |
+| `src/outliner`       | Structured writing, note editing, document navigation and host seams                               |
+| `src/machine-graph`  | State-machine canvas, inspection and local simulation                                              |
+| `src/machine-tree`   | State-machine hierarchy and shared simulation integration                                          |
+| `src/react`          | Reader, editor and text-interaction surfaces                                                       |
+| Consumer application | Persistence, authentication, authorization, transport and domain policy                            |
 
 ## Interaction ownership
 

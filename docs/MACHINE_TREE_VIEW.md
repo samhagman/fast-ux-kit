@@ -1,7 +1,8 @@
 # Machine Tree
 
 The polished hierarchy view is `MachineTree` from
-`@samhagman/fast-ux-kit/machine-tree`. It uses wrapping nested blocks, shared
+`@samhagman/fast-ux-kit/machine-tree`. It draws each container's states as a flow
+outline, top to bottom in the order the machine moves through them, with shared
 shadcn-style controls and Base UI. It does not import the canvas or ELK.
 
 ```tsx
@@ -45,8 +46,104 @@ containers navigate the focus. Reveal can request leaving a focused container to
 show a target elsewhere, respecting controlled refusal. None of these operations
 edits the document or executes a workflow.
 
+### Flow outline
+
+A container's states are placed by how the machine moves through them, not by the
+order the document lists them in. Lines are borders: nothing is drawn over content.
+
+```
+┌ Review ┐                   a state, then the routes that leave it
+├───────────┬───────────┐    alternatives stand side by side; each label heads its column
+│ APPROVE   │ REJECT    │
+▼           ▼           │
+┌ Publishing┐ ┌ Rejected┐│
+└───────────┴───────────┘    columns that flow back close into the spine
+▼                            a solid arrowhead: the route above leads straight here
+┌ Done ┐
+```
+
+| What you see                    | What it means                                                   |
+| ------------------------------- | --------------------------------------------------------------- |
+| A state directly under an arrow | The route above leads there; that route shows no target         |
+| Columns                         | Alternatives. A column with no states is the direct route on    |
+| A dotted lead-in                | Nothing drawn above leads here; routes from elsewhere meet here |
+| `↓ joins`, `↑ joins`            | The route lands on a state other routes also reach              |
+| `↺ back to`                     | A loop to a state already passed                                |
+| `↗ out to`                      | The route leaves this container                                 |
+| `also from`, `routes meet here` | Under a state's name: who else arrives                          |
+| `↘ in from`                     | The state is entered from outside its box                       |
+| `EVENT from State` under a box  | A route that starts at a state inside that box                  |
+
+The first state drawn in a box is where it starts, so there is no separate start
+mark. A state's accessible name still says "initial" where the machine declares it.
+
+The DOM keeps the tree's own shape. A state's routes stay inside its tree item and
+sibling states stay siblings, so keyboard order is DOM order: a state, its routes,
+then the columns under it from the start side to the end side. A column's label is
+its source state's own route row, set over the column with CSS subgrid. In a host
+narrower than 520px the columns stack, each under a caption naming its routes.
+
+A search, a parallel state's lanes, and a container with duplicate ids or more than
+1,000 direct children use the plain wrapping list instead: a flow with states
+missing would misstate what leads where.
+
+### Regions
+
+A region is a named group of sibling states drawn as one box. It is for reading:
+it never changes how the machine runs, what can be sent, or any state's id.
+
+```ts
+const document: MachineDocument = {
+  version: 1,
+  rootId: "release",
+  machines: [
+    {
+      id: "release",
+      label: "Release approval",
+      nodes: [
+        { id: "publishing", label: "Publishing", kind: "atomic", region: "publish" },
+        { id: "retry", label: "Retry available", kind: "atomic", region: "publish" },
+      ],
+      transitions: [],
+      // Optional. The title defaults to the name as words; a region starts shut.
+      regions: { publish: { label: "Publish attempt", collapsed: true } },
+    },
+  ],
+};
+```
+
+States that share a `region` name under the same parent form one region. A name is
+local to its parent; `regions` options apply to that name wherever the graph uses it.
+A region is dropped, and its states drawn ungrouped, when it has fewer than two
+members, when its parent is a parallel state, or when a member is a note or an
+initial pseudo-state.
+
+A shut region is one dashed box with a status line: where the run is inside it, or
+how many states it holds. Routes that leave it are listed under it with the state
+each one starts from. Regions start shut when the tree owns folding; a host that
+passes `collapsedIds` or `defaultCollapsedIds` decides for itself, and a default is
+never reported through `onCollapsedChange`.
+
+Resting a mouse pointer on a shut box (a region, or any folded container) floats its
+inside over the canvas. The float is for looking: it is outside the tree, inert and
+hidden from assistive technology, and changes no fold and no selection. One click on
+it opens the box in place. A box too large for the canvas offers "Click to open"
+instead. The chevron and the name of a box both toggle it.
+
+A region is an extra row, not a state. `row.region` is set on it, its `node` is a
+stand-in that is not in the document, and it is left out of state counts. Every other
+row keeps the host's own `node` and `graph`. `planMachineTreeFlow` and
+`presentMachineTree` in `/machine` are the pure functions behind this. Machine Graph
+and the legacy `MachineTreeView` ignore regions.
+
+### Simulation
+
 The Simulation panel retains the existing dry-run previews, payload editor,
-verified scenario payload suggestions, and shared run controls. Reports include
+payload suggestions, and shared run controls. The suggestions (the one-tap "try"
+fixes on a blocked route) are the same known inputs Machine Graph offers: the
+host's `runtime.eventInputs` first, then every distinct payload a scenario sends,
+from `machineEventInputs` in `/machine`. See
+[Sending an event](MACHINE_GRAPH.md#sending-an-event). Reports include
 expected/actual active states and Inspect failure; inspecting a stored report
 does not rerun actions. Local history includes captured timestamps and bounded
 comparisons only between actually retained contexts.
@@ -62,7 +159,7 @@ which is a different, older component. Its `value`, expanded-ID controls and
 render hooks are not the polished `MachineTree` interface. Both remain supported.
 
 `MachineTreeView` is a read-only hierarchy-first React presentation of a
-`MachineDocument`. It is separate from the spatial `MachineView`, not a mode,
+`MachineDocument`. It is separate from the spatial `MachineGraphView`, not a mode,
 editor, actor-lifecycle tree, interpreter or universal runtime adapter.
 
 ```tsx

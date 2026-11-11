@@ -44,7 +44,7 @@ import {
 
 /**
  * Details / Simulation / Code. A side panel on desktop; on phones the shared non-modal
- * `MachineSheet` (machine-shared), the same sheet Machine View uses, so the two can't drift.
+ * `MachineSheet` (machine-shared), the same sheet Machine Graph uses, so the two can't drift.
  */
 export function MachineTreePanel() {
   const { document, scenarios, rootGraph, topology } = useTreeBase();
@@ -391,8 +391,18 @@ export function Details({
         )}
         {row.node && (
           <>
-            <dt>id</dt>
-            <dd>{row.node.id}</dd>
+            {row.region ? (
+              // A region has no id in the machine: it is a named box around some of its states.
+              <>
+                <dt>holds</dt>
+                <dd>{row.region.memberIds.length} states, for reading only</dd>
+              </>
+            ) : (
+              <>
+                <dt>id</dt>
+                <dd>{row.node.id}</dd>
+              </>
+            )}
             {row.node.tags?.length ? (
               <>
                 <dt>tags</dt>
@@ -667,7 +677,7 @@ function RouteStatus({
               className="font-mono text-[10.5px] coarse:h-11"
               onClick={() => applyFix(fix)}
             >
-              <Play className="fill-current" /> Try with {fix.text}
+              <Play className="fill-current" /> Try with {fix.label}
             </Button>
           ))}
         </div>
