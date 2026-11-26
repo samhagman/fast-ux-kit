@@ -13,10 +13,10 @@ function TaskPage({ onSend }: { readonly onSend?: () => void }) {
   return (
     <C.Stack gap="md" className="p-5">
       <C.Stack gap="xs">
-        <span className="text-xs text-muted-foreground">Waiting for you</span>
-        <h3 className="m-0 font-heading text-xl font-semibold tracking-tight">
+        <C.Eyebrow as="span">Waiting for you</C.Eyebrow>
+        <C.Heading level={3} size="section" className="m-0">
           Approve the travel request?
-        </h3>
+        </C.Heading>
       </C.Stack>
       <C.RadioGroup label="Your answer" options={answers} defaultValue="approve" />
       <C.Checkbox label="Tell me when it's booked" defaultChecked />
