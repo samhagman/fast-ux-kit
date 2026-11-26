@@ -1,7 +1,7 @@
 # Component API
 
 Import components from `@samhagman/fast-ux-kit/components` and load
-`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 92 canonical
+`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 93 canonical
 families. `componentManifest` provides each family's name, category, description,
 interaction owner and exported parts.
 
@@ -187,6 +187,30 @@ field and its button. `Timer` supports
 start, pause and reset. `Clipboard` handles explicit copying. `DownloadTrigger`
 provides a validated download link. `QrCode` renders an encoded SVG.
 
+## Code
+
+`CommandLine` shows one shell command in a monospace box with a Copy button at
+its inline end. `label` names the box. `prompt` draws a decorative prompt (`true`
+for `$`, or your own text) that is left out of the copy, out of a selection made
+by hand, and out of what assistive technology reads. A long command scrolls sideways inside the box under a thin
+scrollbar, and the button stays in view. The command always reads left to right;
+the box itself follows the page direction. After a copy the button shows
+`copiedLabel` for `resetDelay` milliseconds and a status region announces it. If
+the browser refuses, `failedLabel` is announced and the command is selected for a
+manual copy.
+
+```tsx
+import { CodeBlock, CommandLine } from "@samhagman/fast-ux-kit/components";
+
+<CommandLine label="Install command" command="npm install @example/notes" prompt />;
+<CodeBlock code={source} language="ts" filename="src/count.ts" copyable />;
+```
+
+`CodeBlock` takes `copyable` to add a Copy action to its header bar. It copies the
+listing as written, without line numbers, and announces the result the same way.
+`copyLabel`, `copiedLabel` and `failedLabel` name it in both components. The
+action renders disabled in server markup and becomes active after hydration.
+
 ## Terminal transcripts
 
 `Terminal` takes a transcript as text. A line that starts with the prompt and a
@@ -276,8 +300,10 @@ they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
 | Feedback      | `ProgressBar`, `Meter`, `Timer`, `Toast`                                                                                                  |
 | Files         | `DropZone`, `FileTrigger`, `DownloadTrigger`, `FileUpload`                                                                                |
 | Layout        | `Separator`, `Stack`, `Row`, `Panel`, `ScrollArea`, `Splitter`                                                                            |
-| Display       | `Avatar`, `Carousel`, `Marquee`                                                                                                           |
+| Display       | `Avatar`, `Carousel`, `Marquee`, `KeyChord`                                                                                               |
 | Media         | `ImageCropper`, `QrCode`, `SignaturePad`                                                                                                  |
+| Code          | `CodeBlock`, `Terminal`, `CommandLine`, `FileTree`                                                                                        |
+| Data display  | `Sparkline`, `BarList`                                                                                                                    |
 
 The Studio's `#/components` page contains an executable example for every
 family. The exported TypeScript declarations define the complete prop and event

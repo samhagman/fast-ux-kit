@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cx } from "./atoms.js";
 import { tokenizeCode } from "./tokenize.js";
+import { useCopy } from "../hooks/use-copy.js";
 import {
   terminalRows,
   terminalTones,
@@ -179,6 +180,14 @@ export interface CodeBlockProps extends Omit<React.ComponentProps<"div">, "child
   readonly notes?: readonly CodeNote[];
   /** Hide line numbers on short snippets. */
   readonly plain?: boolean;
+  /** Add a Copy action to the header bar. It copies the listing as written, without line numbers. */
+  readonly copyable?: boolean;
+  /** The Copy action's text and accessible name. */
+  readonly copyLabel?: string;
+  /** Shown on the action and announced after a successful copy. */
+  readonly copiedLabel?: string;
+  /** Announced when the browser refuses the copy. The listing is selected instead. */
+  readonly failedLabel?: string;
 }
 /** A real listing with its file path, and notes on the lines that matter set beside it. */
 export function CodeBlock({
@@ -190,11 +199,17 @@ export function CodeBlock({
   marked = [],
   notes = [],
   plain,
+  copyable,
+  copyLabel = "Copy",
+  copiedLabel = "Copied",
+  failedLabel = "Copy failed. The code is selected.",
   className,
   ...props
 }: CodeBlockProps) {
-  const lines = tokenizeCode(code.replace(/\n+$/, ""), language);
+  const source = code.replace(/\n+$/, "");
+  const lines = tokenizeCode(source, language);
   const flagged = new Set([...marked, ...notes.map((note) => note.line)]);
+  const listing = React.useRef<HTMLElement>(null);
   return (
     <div
       className={cx("fux-code", className)}
@@ -203,21 +218,31 @@ export function CodeBlock({
       data-noted={notes.length ? "" : undefined}
       {...props}
     >
-      {filename && (
+      {(filename || copyable) && (
         <div className="fux-code-head">
-          {href ? (
-            <a className="fux-code-file" href={href}>
-              {filename}
-            </a>
-          ) : (
-            <span className="fux-code-file">{filename}</span>
-          )}
+          {filename &&
+            (href ? (
+              <a className="fux-code-file" href={href}>
+                {filename}
+              </a>
+            ) : (
+              <span className="fux-code-file">{filename}</span>
+            ))}
           {language !== "text" && <span className="fux-code-lang">{language}</span>}
+          {copyable && (
+            <CodeCopy
+              source={source}
+              listing={listing}
+              copyLabel={copyLabel}
+              copiedLabel={copiedLabel}
+              failedLabel={failedLabel}
+            />
+          )}
         </div>
       )}
       <div className="fux-code-main">
         <pre className="fux-code-pre">
-          <code>
+          <code ref={listing}>
             {lines.map((tokens, index) => {
               const number = startLine + index;
               return (
@@ -261,6 +286,47 @@ export function CodeBlock({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The header bar's Copy action. Server markup holds it in place but disabled, so nothing shifts
+ * when the page hydrates and it never looks usable before it is. Both labels share one grid cell,
+ * so the button keeps the wider one's width.
+ */
+function CodeCopy({
+  source,
+  listing,
+  copyLabel,
+  copiedLabel,
+  failedLabel,
+}: {
+  readonly source: string;
+  readonly listing: React.RefObject<HTMLElement | null>;
+  readonly copyLabel: string;
+  readonly copiedLabel: string;
+  readonly failedLabel: string;
+}) {
+  const { status, copy, ready } = useCopy();
+  return (
+    <>
+      <span role="status" className="fux-visually-hidden">
+        {status === "copied" ? copiedLabel : status === "failed" ? failedLabel : ""}
+      </span>
+      <button
+        type="button"
+        className="fux-code-copy"
+        aria-label={copyLabel}
+        data-copied={status === "copied" ? "" : undefined}
+        disabled={!ready}
+        onClick={() => void copy(source, listing.current)}
+      >
+        <span className="fux-code-copy-labels" aria-hidden="true">
+          <span data-label="copy">{copyLabel}</span>
+          <span data-label="copied">{copiedLabel}</span>
+        </span>
+      </button>
+    </>
   );
 }
 

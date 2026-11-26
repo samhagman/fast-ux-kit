@@ -191,6 +191,13 @@ evaluated, and the tokenizer never drops or reorders a character.
 Long lines wrap with a hanging indent instead of scrolling sideways, so a line a
 note points at is never cut off, on a phone or beside its notes.
 
+`copyable` adds a Copy action at the end of the header bar, which then appears even
+without a `filename`. It copies the listing as written, without line numbers, and a
+status region announces the result. Server markup holds the action in place,
+disabled, and it becomes active after hydration. `copyLabel`, `copiedLabel` and
+`failedLabel` change its words. A single shell command reads better as the app
+catalog's `CommandLine`.
+
 The tokenizer is deliberately small, and it prefers leaving text plain to marking it
 wrongly. A keyword used as a member or an object key (`z.enum`, `{ from: 1 }`) stays
 plain, a quote that never closes on its line is treated as an apostrophe, and `#`
