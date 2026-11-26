@@ -430,7 +430,7 @@ text area, above or below the control, or around a control you label yourself.
 `ItemGroup` has the list role, so give each `Item` in it `role="listitem"`.
 
 The other files in the layer back a family, and the family is the one to use:
-`breadcrumb` (`Breadcrumbs`), `button` (`Button`), `calendar` (`Calendar`),
+`alert` (`Alert`), `breadcrumb` (`Breadcrumbs`), `button` (`Button`), `calendar` (`Calendar`),
 `checkbox` (`Checkbox`), `dialog` (`Dialog`), `drawer` (`Drawer`), `field` and
 `input` (`Field`, `Fieldset`), `hover-card` (`HoverCard`), `popover` (`Popover`),
 `progress` (`ProgressBar`), `resizable` (`Splitter`), `scroll-area`

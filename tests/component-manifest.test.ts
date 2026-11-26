@@ -52,6 +52,7 @@ test("families import from /components and primitives from their own components/
 
 // Every shadcn-layer file is either listed as a primitive or served by the family named here.
 const coveredBy: Readonly<Record<string, string | null>> = {
+  alert: "Alert",
   breadcrumb: "Breadcrumbs",
   button: "Button",
   calendar: "Calendar",
