@@ -14,7 +14,10 @@ const run = (command, args, cwd = fixture) =>
   });
 try {
   run("npm", ["run", "build"], root);
-  const packed = JSON.parse(run("npm", ["pack", "--json", "--pack-destination", fixture], root))[0];
+  // npm 11 and earlier print an array of packed packages; npm 12 prints an object keyed by name.
+  const report = JSON.parse(run("npm", ["pack", "--json", "--pack-destination", fixture], root));
+  const packed = Array.isArray(report) ? report[0] : Object.values(report)[0];
+  assert.ok(packed?.files, "npm pack --json reported no packed files");
   const paths = packed.files.map((file) => file.path);
   for (const required of [
     "dist/core/index.js",
