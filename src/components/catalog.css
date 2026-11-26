@@ -44,31 +44,54 @@
   outline: 1px solid var(--ring);
   outline-offset: 2px;
 }
+/* Layout: one gap scale for Stack, Row, Grid and Split, each step on a 4px grid apart from 2xs.
+   The step sets --fux-layout-gap, which Split also reads to know when to stack. */
+.fux-layout {
+  --fux-layout-gap: 1rem;
+  gap: var(--fux-layout-gap);
+}
+.fux-layout[data-gap="none"] {
+  --fux-layout-gap: 0px;
+}
+.fux-layout[data-gap="2xs"] {
+  --fux-layout-gap: 0.125rem;
+}
+.fux-layout[data-gap="xs"] {
+  --fux-layout-gap: 0.25rem;
+}
+.fux-layout[data-gap="sm"] {
+  --fux-layout-gap: 0.5rem;
+}
+.fux-layout[data-gap="sm-md"] {
+  --fux-layout-gap: 0.75rem;
+}
+.fux-layout[data-gap="md"] {
+  --fux-layout-gap: 1rem;
+}
+.fux-layout[data-gap="lg"] {
+  --fux-layout-gap: 1.5rem;
+}
+.fux-layout[data-gap="xl"] {
+  --fux-layout-gap: 2rem;
+}
+.fux-layout[data-gap="2xl"] {
+  --fux-layout-gap: 3rem;
+}
+/* A layout rendered as a list is spaced by its gap, not by bullets and an indent. */
+:is(ul, ol).fux-layout {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 .fux-stack {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
 }
+/* A Row's gap comes from the scale (`sm` unless asked); Toolbar, also .fux-row, sets its own. */
 .fux-row {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
-}
-.fux-stack[data-gap="none"] {
-  gap: 0;
-}
-.fux-stack[data-gap="xs"] {
-  gap: 0.25rem;
-}
-.fux-stack[data-gap="sm"] {
-  gap: 0.5rem;
-}
-.fux-stack[data-gap="lg"] {
-  gap: 1.5rem;
-}
-.fux-stack[data-gap="xl"] {
-  gap: 2rem;
 }
 .fux-stack[data-align="start"] {
   align-items: flex-start;
@@ -93,6 +116,58 @@
 }
 .fux-stack[data-wrap] {
   flex-wrap: wrap;
+}
+/* Grid: as many equal columns of at least --fux-grid-min as the grid's own width holds. min()
+   lets one column shrink to a container narrower than the minimum instead of overflowing it. */
+.fux-grid {
+  --fux-grid-min: 16rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--fux-grid-min), 100%), 1fr));
+}
+.fux-grid[data-align="start"] {
+  align-items: start;
+}
+.fux-grid[data-align="center"] {
+  align-items: center;
+}
+.fux-grid[data-align="end"] {
+  align-items: end;
+}
+.fux-grid[data-align="stretch"] {
+  align-items: stretch;
+}
+/* Split: the side keeps --fux-split-side and the main column takes the rest. The main column
+   will not be narrower than stackBelow minus the side and the gap, so the pair wraps onto two
+   lines exactly when the split itself is narrower than stackBelow: no media or container query,
+   so any threshold works and the split follows its own width. Wrapped, each part fills its line. */
+.fux-split {
+  --fux-split-side: 16rem;
+  --fux-split-stack-below: 40rem;
+  display: flex;
+  flex-wrap: wrap;
+}
+.fux-split-side {
+  flex: 1 1 var(--fux-split-side);
+  min-inline-size: 0;
+}
+.fux-split-main {
+  flex: 9999 1 0;
+  min-inline-size: min(
+    100%,
+    calc(var(--fux-split-stack-below) - var(--fux-split-side) - var(--fux-layout-gap))
+  );
+}
+.fux-split[data-align="start"] {
+  align-items: flex-start;
+}
+.fux-split[data-align="center"] {
+  align-items: center;
+}
+.fux-split[data-align="end"] {
+  align-items: flex-end;
+}
+.fux-split[data-align="stretch"] {
+  align-items: stretch;
 }
 .fux-panel {
   padding: 1rem;
