@@ -125,7 +125,7 @@ shows on the state's card and in full in the details panel.
 
 | Entry            | Purpose                                                   |
 | ---------------- | --------------------------------------------------------- |
-| `/components`    | The 100-family app component catalog                       |
+| `/components`    | The 100-family app component catalog                      |
 | `/editorial`     | Editorial UI: atoms, molecules and organisms for articles |
 | `/editorial.css` | The standalone stylesheet for Editorial UI                |
 | `/outliner`      | Outliner, document workspace, types and host seams        |
