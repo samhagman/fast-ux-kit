@@ -274,6 +274,36 @@ const workspace: C.TreeNode[] = [
     ],
   },
 ];
+const mailboxes: C.TreeNode[] = [
+  {
+    id: "inbox",
+    label: "Inbox",
+    badge: 12,
+    children: [
+      { id: "team", label: "Team updates and weekly planning notes", badge: 8 },
+      { id: "receipts", label: "Receipts", badge: 4 },
+    ],
+  },
+  { id: "drafts", label: "Drafts", badge: 2 },
+  { id: "spam", label: "Spam", badge: 31, disabled: true },
+];
+const reviews: C.TreeNode[] = [
+  {
+    id: "open",
+    label: "Open reviews",
+    badge: 3,
+    children: [
+      {
+        id: "layout",
+        label: "Layout pass",
+        badge: <span className="size-2 rounded-full bg-signal" />,
+        badgeLabel: "unread",
+      },
+      { id: "copy", label: "Copy edits", badge: 1, badgePlacement: "end" },
+    ],
+  },
+  { id: "done", label: "Done", badge: 9 },
+];
 const sections: C.TreeNode[] = [
   {
     id: "start",
@@ -288,13 +318,20 @@ const sections: C.TreeNode[] = [
     id: "guides",
     label: "Guides",
     icon: <LayoutListIcon />,
+    badge: 3,
     children: [
       { id: "forms", label: "Forms and validation", href: "#/components" },
       { id: "tables", label: "Data tables", href: "#/components" },
       { id: "theming", label: "Theming", href: "#/components", disabled: true },
     ],
   },
-  { id: "changelog", label: "Changelog", icon: <HistoryIcon />, href: "#/components" },
+  {
+    id: "changelog",
+    label: "Changelog",
+    icon: <HistoryIcon />,
+    href: "#/components",
+    badge: "New",
+  },
 ];
 
 const actions: C.MenuOption[] = [
@@ -550,6 +587,21 @@ export const collectionsFixtures: Readonly<Record<string, ComponentFixture>> = {
                 ],
               },
             ]}
+          />
+        </Variants>
+        <Variants title="With badges at the end and at the start" layout="grid">
+          <C.Tree
+            label="Mailboxes"
+            items={mailboxes}
+            defaultExpandedIds={["inbox"]}
+            defaultValue={["receipts"]}
+          />
+          <C.Tree
+            label="Reviews"
+            badgePlacement="start"
+            showIcons={false}
+            items={reviews}
+            defaultExpandedIds={["open"]}
           />
         </Variants>
       </div>

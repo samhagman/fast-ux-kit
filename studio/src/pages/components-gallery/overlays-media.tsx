@@ -1,4 +1,5 @@
-// Gallery demos: Toggles, overlays, layout surfaces, media and toasts (overlays.tsx, media.tsx).
+// Gallery demos: Toggles, overlays, layout surfaces, media, toasts and alerts (overlays.tsx,
+// media.tsx, ui/alert.tsx).
 import * as React from "react";
 import {
   AlignCenterIcon,
@@ -7,11 +8,14 @@ import {
   ArchiveIcon,
   BellIcon,
   BoldIcon,
+  CheckCircleIcon,
   CheckIcon,
+  CircleAlertIcon,
   CopyIcon,
   FileTextIcon,
   FilterIcon,
   FolderInputIcon,
+  InfoIcon,
   ItalicIcon,
   LinkIcon,
   Loader2Icon,
@@ -19,6 +23,7 @@ import {
   SearchIcon,
   SettingsIcon,
   StarIcon,
+  TriangleAlertIcon,
   UnderlineIcon,
   UserIcon,
   Undo2Icon,
@@ -414,7 +419,7 @@ export const overlaysMediaFixtures: Readonly<Record<string, ComponentFixture>> =
     [click("button", 'button[aria-pressed="true"]')],
   ),
   ToggleButtonGroup: example(
-    "Choose an alignment.",
+    "Choose an alignment. The highlight slides to the new choice; with several choices on, each one fades in and out.",
     (s) => (
       <>
         <C.ToggleButtonGroup defaultValue={["left"]} onValueChange={s.report}>
@@ -1290,6 +1295,117 @@ export const overlaysMediaFixtures: Readonly<Record<string, ComponentFixture>> =
     ),
     "button",
     [click("button", "[data-sonner-toast]", "Saved example")],
+  ),
+  Alert: example(
+    "A message that stays until the reader deals with it: what happened, then the next step. Errors interrupt; the other tones wait their turn.",
+    (s) => {
+      /** A demo link that reports instead of leaving the page. */
+      const step = (label: string, report: string) => (
+        <C.Link
+          href="#/components/Alert"
+          onClick={(event) => {
+            event.preventDefault();
+            s.report(report);
+          }}
+        >
+          {label}
+        </C.Link>
+      );
+      return (
+        <>
+          <C.Alert variant="error" icon={<CircleAlertIcon />}>
+            <C.AlertTitle>Sync stopped</C.AlertTitle>
+            <C.AlertDescription>
+              3 notes on this device have not reached the server. They are safe here until the
+              connection comes back.
+            </C.AlertDescription>
+            <C.AlertActions>
+              <C.Button size="sm" variant="outline" onClick={() => s.report("Retrying sync")}>
+                Try again
+              </C.Button>
+              {step("See what is waiting", "Opening the 3 waiting notes")}
+            </C.AlertActions>
+          </C.Alert>
+          <Variants title="Tones" layout="stack">
+            <C.Alert variant="info" icon={<InfoIcon />}>
+              <C.AlertTitle>This notebook is shared</C.AlertTitle>
+              <C.AlertDescription>
+                Changes you make here are visible to 4 people.
+              </C.AlertDescription>
+              <C.AlertActions>{step("Manage access", "Opening sharing settings")}</C.AlertActions>
+            </C.Alert>
+            <C.Alert variant="success" icon={<CheckCircleIcon />}>
+              <C.AlertTitle>Export finished</C.AlertTitle>
+              <C.AlertDescription>42 notes were written to field-notes.zip.</C.AlertDescription>
+              <C.AlertActions>
+                <C.Button size="sm" variant="outline" onClick={() => s.report("Downloading")}>
+                  Download
+                </C.Button>
+              </C.AlertActions>
+            </C.Alert>
+            <C.Alert variant="warning" icon={<TriangleAlertIcon />}>
+              <C.AlertTitle>Storage is 90% full</C.AlertTitle>
+              <C.AlertDescription>
+                Uploads stop at 100%. Archive old attachments to make room.
+              </C.AlertDescription>
+              <C.AlertActions>
+                {step("Review attachments", "Opening attachments, largest first")}
+              </C.AlertActions>
+            </C.Alert>
+          </Variants>
+          <Variants title="Title only, no icon" layout="stack">
+            <C.Alert variant="success">
+              <C.AlertTitle>Settings saved</C.AlertTitle>
+            </C.Alert>
+          </Variants>
+          <Variants title="Right to left" layout="stack">
+            <C.Alert variant="error" icon={<CircleAlertIcon />} dir="rtl" lang="ar">
+              <C.AlertTitle>توقفت المزامنة</C.AlertTitle>
+              <C.AlertDescription>
+                لم تصل ٣ ملاحظات من هذا الجهاز إلى الخادم بعد.
+              </C.AlertDescription>
+              <C.AlertActions>
+                <C.Button size="sm" variant="outline" onClick={() => s.report("إعادة المحاولة")}>
+                  أعد المحاولة
+                </C.Button>
+              </C.AlertActions>
+            </C.Alert>
+          </Variants>
+          {/* On a page of its own, the title is that page's h1. Here it sits under this card's headings. */}
+          <Variants title="Page size: a full-page refusal" layout="stack">
+            <C.Alert size="page" variant="error" icon={<CircleAlertIcon />}>
+              <C.AlertTitle asChild>
+                <h5>This link expired</h5>
+              </C.AlertTitle>
+              <C.AlertDescription>
+                Invitation links last 7 days. This one was sent on 3 March, so it no longer opens
+                the notebook.
+              </C.AlertDescription>
+              <C.AlertActions>
+                <C.Button size="sm" onClick={() => s.report("Asked the owner for a new link")}>
+                  Ask for a new link
+                </C.Button>
+                {step("Go to your notebooks", "Opening your notebooks")}
+              </C.AlertActions>
+            </C.Alert>
+            <C.Alert size="page" variant="info">
+              <C.AlertTitle asChild>
+                <h5>This task is already closed</h5>
+              </C.AlertTitle>
+              <C.AlertDescription>
+                Avery closed it on 12 February, after the seed order went out. It can be read but no
+                longer changed.
+              </C.AlertDescription>
+              <C.AlertActions>
+                {step("See what happened", "Opening the task history")}
+              </C.AlertActions>
+            </C.Alert>
+          </Variants>
+        </>
+      );
+    },
+    '[data-slot="alert"][role="alert"]',
+    [click('[data-slot="alert-actions"] button', ".fixture-status", "Retrying sync")],
   ),
   Tour: example(
     "Step through a short guided introduction.",

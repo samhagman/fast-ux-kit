@@ -467,6 +467,8 @@ export * from "./keymap.js";
 
 export * from "./hover.js";
 
+export * from "./json-inline.js";
+
 export * from "./outline-productivity.js";
 export * from "./outline-search.js";
 
@@ -496,3 +498,5 @@ export * from "./outliner/workspace.js";
 export * from "./outliner/library.js";
 
 export * from "./note-pages.js";
+
+export * from "./terminal.js";

@@ -207,6 +207,51 @@ test("small alternatives stand side by side; a long one stacks them all", () => 
   );
 });
 
+test("without side by side, the same alternatives stack: same spine, routes in the order the machine tries them", () => {
+  // A trial that is paid for, handed to sales, or runs out. Paying is reached twice, so it is on the spine.
+  const doc = machine(
+    [state("trial"), state("paying"), state("sales"), state("expired", { kind: "final" })],
+    routes(
+      "trial>paying:PAID",
+      "trial>sales:BIG_ACCOUNT",
+      "trial>expired:after 14d",
+      "sales>paying:CLOSED",
+    ),
+    { initialId: "trial" },
+  );
+  const model = buildMachineTree(doc);
+  const wide = planMachineTreeFlow(model);
+  const narrow = planMachineTreeFlow(model, { sideBySide: false });
+  const [columns, stacked] = [wide, narrow].map((p) => p.flows.get(root)!.steps[0]!);
+  assert.equal(columns!.stacked, false, "by default small alternatives stand side by side");
+  assert.equal(stacked!.stacked, true);
+  assert.deepEqual(
+    ids(narrow.flows.get(root)!.steps),
+    ids(wide.flows.get(root)!.steps),
+    "the same states are on the spine",
+  );
+  assert.deepEqual(
+    stacked!.columns.map((column) => ids(column.steps)),
+    [["sales"], ["expired"]],
+    "no direct-route column when stacked",
+  );
+  assert.deepEqual(stacked!.main[0]!.transitionRowIds, [route("t0")], "PAID carries on");
+  assert.deepEqual(
+    stacked!.sequence.map((segment) => segment.kind),
+    ["carry", "branch", "branch"],
+  );
+  assert.deepEqual(stacked!.sequence, columns!.sequence, "the routes are tried in the same order");
+  const listed = (p: typeof wide) =>
+    presentMachineTree(model, p).rows.find((r) => r.id === row("trial"))!.childIds;
+  assert.deepEqual(listed(narrow), [route("t0"), route("t1"), route("t2")]);
+  assert.deepEqual(listed(narrow), listed(wide));
+  // Asking for side by side is the default.
+  assert.equal(
+    planMachineTreeFlow(model, { sideBySide: true }).flows.get(root)!.steps[0]!.stacked,
+    false,
+  );
+});
+
 test("every state of a container lands in exactly one step, reachable or not", () => {
   const doc = machine(
     [state("a"), state("b"), state("island"), state("note", { kind: "note" }), state("c")],

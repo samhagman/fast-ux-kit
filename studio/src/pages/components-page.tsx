@@ -6,11 +6,12 @@ import { collectionsFixtures } from "./components-gallery/collections";
 import { datesColorsFixtures } from "./components-gallery/dates-colors";
 import { displayFixtures } from "./components-gallery/display";
 import { overlaysMediaFixtures } from "./components-gallery/overlays-media";
+import { primitiveFixtures } from "./components-gallery/primitives";
 import { specializedFixtures } from "./components-gallery/specialized";
 
 export type { ComponentFixture, FixtureAction } from "./components-gallery/fixture-kit";
 
-/** One demo per canonical family, gathered from each area's file. */
+/** One demo per canonical family and primitive, gathered from each area's file. */
 export const componentFixtures: Readonly<Record<string, ComponentFixture>> = {
   ...basicFixtures,
   ...collectionsFixtures,
@@ -18,7 +19,10 @@ export const componentFixtures: Readonly<Record<string, ComponentFixture>> = {
   ...overlaysMediaFixtures,
   ...specializedFixtures,
   ...displayFixtures,
+  ...primitiveFixtures,
 };
+const PRIMITIVES = C.componentManifest.filter((entry) => entry.layer === "primitive").length;
+const FAMILIES = C.componentManifest.length - PRIMITIVES;
 
 /** The families in catalog order, grouped by category. */
 const CATEGORIES = C.componentManifest.reduce<
@@ -69,7 +73,9 @@ export function ComponentsPage() {
   const groups = CATEGORIES.map((group) => ({
     ...group,
     entries: group.entries.filter((entry) =>
-      `${entry.name} ${entry.category} ${entry.description}`.toLowerCase().includes(needle),
+      `${entry.name} ${entry.category} ${entry.description} ${entry.layer}`
+        .toLowerCase()
+        .includes(needle),
     ),
   })).filter((group) => group.entries.length);
   const shown = groups.flatMap((group) => group.entries);
@@ -145,7 +151,7 @@ export function ComponentsPage() {
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">App components</h1>
           <span className="font-mono text-xs text-muted-foreground">
-            {C.componentManifest.length} families
+            {FAMILIES} families · {PRIMITIVES} primitives
           </span>
         </div>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
@@ -299,6 +305,7 @@ function FamilyCard({
     <article
       ref={ref}
       id={slug(entry.name)}
+      data-layer={entry.layer}
       aria-labelledby={`${slug(entry.name)}-title`}
       className={C.cn(
         "flex min-w-0 scroll-mt-4 flex-col rounded-xl border bg-card text-card-foreground shadow-xs",
@@ -317,7 +324,19 @@ function FamilyCard({
           </h3>
           <p className="mt-1 text-sm text-pretty text-muted-foreground">{entry.description}</p>
         </div>
-        <code className="font-mono text-[11px] text-muted-foreground">{entry.exportName}</code>
+        {entry.layer === "primitive" ? (
+          // A primitive comes from its own module, so the card says where to import it from.
+          <div className="flex min-w-0 flex-col items-start gap-1">
+            <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+              Primitive
+            </span>
+            <code className="font-mono text-[11px] break-all text-muted-foreground">
+              {entry.importPath}
+            </code>
+          </div>
+        ) : (
+          <code className="font-mono text-[11px] text-muted-foreground">{entry.exportName}</code>
+        )}
       </header>
       <div className="min-w-0 overflow-x-auto px-5 py-6" data-component-fixture={entry.name}>
         {near && fixture ? <fixture.Component /> : <div className="h-40" aria-hidden="true" />}

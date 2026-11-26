@@ -5,7 +5,8 @@ import { CalendarDate } from "@internationalized/date";
 
 export interface FixtureAction {
   target: string;
-  event: "click" | "input" | "key" | "focus" | "hover" | "file";
+  /** `context` is a right-click (the contextmenu event). */
+  event: "click" | "input" | "key" | "focus" | "hover" | "file" | "context";
   value?: string;
   expect: string;
   text?: string;

@@ -7,7 +7,7 @@ hierarchy views.
 | Section        | What it holds                                                                                             |
 | -------------- | --------------------------------------------------------------------------------------------------------- |
 | Foundations    | Type, colour, space and motion tokens shared by both component sets                                       |
-| App Components | A searchable gallery of the 92 families for building applications                                         |
+| App Components | A searchable gallery of the 94 families for building applications                                         |
 | Editorial UI   | 35 forms for explaining on a page, by atom, molecule and organism, and one sample article built from them |
 
 The overview introduces the kit and links to each live tool. The shared shell
@@ -45,6 +45,10 @@ live demo, grouped by category. Category tabs and a family index follow the
 scroll and jump to what they name, and `#/components/<Family>` links straight to
 a card. Search filters the cards and the index together. Each demo mounts as its
 card nears the view (or at once when jumped to).
+
+The catalog's primitives appear in their categories beside the families. Their
+cards are marked Primitive and show the `components/ui/<file>` path to import
+them from. Searching "primitive" lists them.
 
 Each family's demo lives in `studio/src/pages/components-gallery/`, one file per
 area, and `studio/src/pages/components-page.tsx` gathers them into the fixture

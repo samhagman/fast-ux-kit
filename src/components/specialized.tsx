@@ -41,7 +41,16 @@ import { Input } from "./ui/input.js";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.js";
 import { Progress } from "./ui/progress.js";
 import { buttonVariants } from "./ui/button.js";
+import { useCopy } from "../hooks/use-copy.js";
+import { useSlidingIndicator } from "../hooks/use-sliding-indicator.js";
 import { cn } from "../lib/utils.js";
+import {
+  inlineJson,
+  jsonLeaf,
+  type JsonInlinePart,
+  type JsonLeafKind,
+} from "../core/json-inline.js";
+import { scrollProgress } from "../core/scroll-progress.js";
 
 type ButtonVariant = NonNullable<React.ComponentProps<typeof Button>["variant"]>;
 type ButtonSize = NonNullable<React.ComponentProps<typeof Button>["size"]>;
@@ -411,6 +420,30 @@ export function Pagination({
 /* Clipboard and download                                                      */
 /* -------------------------------------------------------------------------- */
 
+/** The copy icon, which turns into a check while `copied`. */
+function CopyGlyph({
+  copied,
+  inlineStart = false,
+  className = "size-4",
+}: {
+  copied: boolean;
+  inlineStart?: boolean;
+  className?: string;
+}) {
+  const icon =
+    "absolute size-full motion-safe:transition-[opacity,transform] motion-safe:duration-150";
+  return (
+    <span
+      aria-hidden
+      data-icon={inlineStart ? "inline-start" : undefined}
+      className={cn("relative grid place-items-center", className)}
+    >
+      <Copy className={cn(icon, copied ? "scale-50 opacity-0" : "scale-100 opacity-100")} />
+      <Check className={cn(icon, copied ? "scale-100 opacity-100" : "scale-50 opacity-0")} />
+    </span>
+  );
+}
+
 export interface ClipboardProps {
   value: string;
   label?: string;
@@ -434,20 +467,7 @@ export function Clipboard({
   size,
   resetDelay = 2000,
 }: ClipboardProps) {
-  const [status, setStatus] = React.useState<"" | "copied" | "failed">("");
-  const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  React.useEffect(() => () => clearTimeout(timer.current), []);
-  async function copy() {
-    clearTimeout(timer.current);
-    try {
-      await navigator.clipboard.writeText(value);
-      setStatus("copied");
-    } catch (error) {
-      setStatus("failed");
-      onError?.(error instanceof Error ? error : new Error(String(error)));
-    }
-    timer.current = setTimeout(() => setStatus(""), resetDelay);
-  }
+  const { status, copy } = useCopy({ resetDelay, onError });
   const copied = status === "copied";
   return (
     <span data-slot="clipboard" className="inline-flex items-center gap-2">
@@ -456,27 +476,10 @@ export function Clipboard({
         size={size ?? (iconOnly ? "icon" : "default")}
         aria-label={iconOnly ? label : undefined}
         data-copied={copied || undefined}
-        onClick={copy}
+        onClick={() => void copy(value)}
         className={cn("shadow-xs", copied && "border-success/50 text-success")}
       >
-        <span
-          aria-hidden
-          data-icon={iconOnly ? undefined : "inline-start"}
-          className="relative grid size-4 place-items-center"
-        >
-          <Copy
-            className={cn(
-              "absolute size-4 motion-safe:transition-[opacity,transform] motion-safe:duration-150",
-              copied ? "scale-50 opacity-0" : "scale-100 opacity-100",
-            )}
-          />
-          <Check
-            className={cn(
-              "absolute size-4 motion-safe:transition-[opacity,transform] motion-safe:duration-150",
-              copied ? "scale-100 opacity-100" : "scale-50 opacity-0",
-            )}
-          />
-        </span>
+        <CopyGlyph copied={copied} inlineStart={!iconOnly} />
         {!iconOnly && label}
       </Button>
       <span
@@ -490,6 +493,124 @@ export function Clipboard({
         {status === "copied" ? copiedLabel : status === "failed" ? "Copy failed" : ""}
       </span>
     </span>
+  );
+}
+
+export interface CommandLineProps extends Omit<
+  React.ComponentProps<"div">,
+  "children" | "prompt" | "onError"
+> {
+  /** One shell command. It is copied exactly as given. */
+  command: string;
+  /** Names the box for assistive technology: "Install command". */
+  label: string;
+  /** A decorative prompt before the command; `true` draws `$`. It is never copied or announced. */
+  prompt?: boolean | string;
+  /** The button's text and accessible name. */
+  copyLabel?: string;
+  /** Shown on the button and announced after a successful copy. */
+  copiedLabel?: string;
+  /** Announced when the browser refuses the copy. The command is selected instead. */
+  failedLabel?: string;
+  /** How long the confirmation stays, in milliseconds. */
+  resetDelay?: number;
+  onError?: (error: Error) => void;
+}
+/**
+ * One shell command in a monospace box with a Copy button at its inline end.
+ *
+ *   ┌──────────────────────────────────────────┐
+ *   │ $ npm install @example/notes ⇢  [⧉ Copy] │
+ *   └──────────────────────────────────────────┘
+ *
+ * A long command scrolls sideways inside its track; the button stays where it is.
+ */
+export function CommandLine({
+  command,
+  label,
+  prompt = false,
+  copyLabel = "Copy",
+  copiedLabel = "Copied",
+  failedLabel = "Copy failed. The command is selected.",
+  resetDelay = 2000,
+  onError,
+  className,
+  ...props
+}: CommandLineProps) {
+  const { status, copy } = useCopy({ resetDelay, onError });
+  const copied = status === "copied";
+  const promptText = prompt === true ? "$" : prompt || "";
+  const track = React.useRef<HTMLDivElement>(null);
+  const text = React.useRef<HTMLElement>(null);
+  // A track that overflows becomes a tab stop, so the keyboard can scroll it. One that fits adds
+  // nothing to the tab order. Server markup is the fitting case until the browser measures.
+  const [overflowing, setOverflowing] = React.useState(false);
+  React.useEffect(() => {
+    const node = track.current;
+    if (!node) return;
+    const measure = () => setOverflowing(node.scrollWidth > node.clientWidth + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [command, promptText]);
+  // Both labels share one grid cell, so the button keeps the wider one's width and never jumps.
+  const buttonLabel = (value: string, shown: boolean) => (
+    <span data-label className={cn("[grid-area:1/1]", !shown && "invisible")}>
+      {value}
+    </span>
+  );
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      data-slot="command-line"
+      className={cn(
+        "fux-command-line flex min-h-10 max-w-full min-w-0 items-stretch rounded-lg border border-border bg-muted/50 font-mono text-sm text-foreground dark:bg-input/30",
+        className,
+      )}
+      {...props}
+    >
+      {/* Commands read left to right on any page; the box around them still follows the page. */}
+      <div
+        ref={track}
+        dir="ltr"
+        data-slot="command-line-scroll"
+        tabIndex={overflowing ? 0 : undefined}
+        className="fux-command-line-scroll flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden rounded-[inherit] px-3 py-1 whitespace-pre outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset"
+      >
+        {promptText && (
+          <span
+            aria-hidden="true"
+            data-slot="command-line-prompt"
+            className="me-[1ch] text-muted-foreground select-none"
+          >
+            {promptText}
+          </span>
+        )}
+        <code ref={text} data-slot="command-line-command" className="[font:inherit] select-text">
+          {command}
+        </code>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={copyLabel}
+        data-copied={copied || undefined}
+        onClick={() => void copy(command, text.current)}
+        className={cn("me-1 self-center font-sans", copied && "text-success hover:text-success")}
+      >
+        <CopyGlyph copied={copied} inlineStart className="size-3.5" />
+        <span aria-hidden className="grid justify-items-center">
+          {buttonLabel(copyLabel, !copied)}
+          {buttonLabel(copiedLabel, copied)}
+        </span>
+      </Button>
+      <span role="status" className="sr-only">
+        {status === "copied" ? copiedLabel : status === "failed" ? failedLabel : ""}
+      </span>
+    </div>
   );
 }
 
@@ -1204,33 +1325,20 @@ export function SegmentGroup({
   const [own, setOwn] = React.useState(defaultValue);
   const current = value ?? own;
   const group = React.useRef<HTMLDivElement>(null);
-  const [indicator, setIndicator] = React.useState<{ left: number; width: number } | null>(null);
-  React.useLayoutEffect(() => {
-    const root = group.current;
-    if (!root) return;
-    const measure = () => {
-      const active = root.querySelector<HTMLElement>("[data-pressed]");
-      // offsetLeft is physical and the indicator is positioned from the physical left edge,
-      // so the measured box lines up in both writing directions.
-      setIndicator((previous) => {
-        if (!active) return previous === null ? previous : null;
-        const next = { left: active.offsetLeft, width: active.offsetWidth };
-        return previous?.left === next.left && previous.width === next.width ? previous : next;
-      });
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [current, items, size, fullWidth]);
+  const indicator = React.useRef<HTMLSpanElement>(null);
+  const placed = useSlidingIndicator(
+    group,
+    ":scope > [data-pressed]",
+    [current, items, size, fullWidth],
+    indicator,
+  );
   const heights = { sm: "h-6 text-xs", default: "h-7 text-sm", lg: "h-8 text-sm" } as const;
   return (
     <ToggleGroup
       ref={group}
       aria-label={label}
       data-slot="segment-group"
-      data-ready={indicator ? "" : undefined}
+      data-ready={placed ? "" : undefined}
       className={cn(
         "group/seg relative isolate items-center gap-0 rounded-lg bg-muted p-[3px] text-muted-foreground",
         fullWidth ? "flex w-full" : "inline-flex w-fit",
@@ -1244,17 +1352,13 @@ export function SegmentGroup({
       }}
     >
       <span
+        ref={indicator}
         aria-hidden
         data-slot="segment-indicator"
         className={cn(
-          "pointer-events-none absolute start-0 top-[3px] bottom-[3px] -z-10 rounded-md bg-background shadow-sm ring-1 ring-foreground/5 motion-safe:transition-[transform,width] motion-safe:duration-200 motion-safe:ease-(--ease-standard) dark:bg-input/60",
-          !indicator && "hidden",
+          "fux-sliding-indicator bg-background shadow-sm ring-1 ring-foreground/5 dark:bg-input/60",
+          !placed && "hidden",
         )}
-        style={
-          indicator
-            ? { width: indicator.width, transform: `translateX(${indicator.left - 3}px)` }
-            : undefined
-        }
       />
       {items.map((item) => (
         <Toggle
@@ -1641,52 +1745,76 @@ export function NavigationMenu({
 /* JsonTreeView                                                                */
 /* -------------------------------------------------------------------------- */
 
-type JsonKind =
-  | "string"
-  | "number"
-  | "boolean"
-  | "null"
-  | "undefined"
-  | "bigint"
-  | "function"
-  | "symbol"
-  | "object"
-  | "array"
-  | "note";
+type JsonKind = JsonLeafKind | "object" | "array" | "note";
 interface JsonMeta {
   key: string;
   kind: JsonKind;
   /** The rendered value of a leaf, or a note such as "[Circular]". */
   text: string;
-  /** Entry count of an object or array. */
+  /** Entry count of an object or array; absent when counts are hidden. */
   size?: number;
   index?: boolean;
+  /** The parts of a small object or array drawn on its parent's row. */
+  inline?: readonly JsonInlinePart[];
 }
 function JsonLabel({ meta, fallback }: { meta: JsonMeta | undefined; fallback: string }) {
   if (!meta) return <>{fallback}</>;
-  const container = meta.kind === "object" || meta.kind === "array";
+  const container = !meta.inline && (meta.kind === "object" || meta.kind === "array");
   return (
     <span className="flex min-w-0 items-baseline gap-1.5 font-mono text-[13px] leading-5">
       <span data-json-part="key" data-index={meta.index || undefined}>
         {meta.key}
       </span>
       {container ? (
-        <span
-          data-json-part="count"
-          className="rounded-sm bg-muted px-1.5 text-2xs leading-4 tabular-nums"
-        >
-          {meta.kind === "array"
-            ? `${meta.size} ${meta.size === 1 ? "item" : "items"}`
-            : `${meta.size} ${meta.size === 1 ? "key" : "keys"}`}
-        </span>
+        meta.size !== undefined && (
+          <span
+            data-json-part="count"
+            className="rounded-sm bg-muted px-1.5 text-2xs leading-4 tabular-nums"
+          >
+            {meta.kind === "array"
+              ? `${meta.size} ${meta.size === 1 ? "item" : "items"}`
+              : `${meta.size} ${meta.size === 1 ? "key" : "keys"}`}
+          </span>
+        )
       ) : (
         <>
           <span aria-hidden data-json-part="colon">
             :
           </span>
-          <span data-json-kind={meta.kind} className="truncate" title={meta.text}>
-            {meta.text}
-          </span>
+          {meta.inline ? (
+            <span
+              data-json-part="inline"
+              data-json-kind={meta.kind}
+              // JSON syntax reads left to right; isolated, its brackets and quotes keep their
+              // order inside a right-to-left tree.
+              dir="ltr"
+              className="truncate"
+              title={meta.text}
+            >
+              {/* One text run names the row the same way in every engine; the coloured parts
+                  are the visible copy. */}
+              <span className="sr-only">{meta.text}</span>
+              <span aria-hidden>
+                {meta.inline.map((part, at) =>
+                  part.part === "space" ? (
+                    " "
+                  ) : part.part === "value" ? (
+                    <span key={at} data-json-kind={part.kind}>
+                      {part.text}
+                    </span>
+                  ) : (
+                    <span key={at} data-json-part={part.part}>
+                      {part.text}
+                    </span>
+                  ),
+                )}
+              </span>
+            </span>
+          ) : (
+            <span data-json-kind={meta.kind} className="truncate" title={meta.text}>
+              {meta.text}
+            </span>
+          )}
         </>
       )}
     </span>
@@ -1696,10 +1824,21 @@ export function JsonTreeView({
   value,
   label = "JSON",
   renderLabel,
+  showCounts = true,
+  inlineSmallValues = false,
   ...props
 }: Omit<React.ComponentProps<typeof Tree>, "items" | "label" | "value"> & {
   value: unknown;
   label?: string;
+  /** Show how many keys or items each object or array holds. Default true. */
+  showCounts?: boolean;
+  /**
+   * Draw an object or array with exactly one entry, whose value is a primitive or is itself
+   * such a value, on its parent's row as one leaf: `on: { SUBMIT: "review" }`. At most
+   * `JSON_INLINE_MAX_DEPTH` levels and `JSON_INLINE_MAX_LENGTH` characters; anything bigger
+   * stays expandable. The root row always stays expandable. Default false.
+   */
+  inlineSmallValues?: boolean;
 }) {
   const seen = new WeakSet<object>();
   const meta = new Map<string, JsonMeta>();
@@ -1708,38 +1847,41 @@ export function JsonTreeView({
       meta.set(path, { key: name, kind: "note", text: "maximum depth", index });
       return { id: path, label: `${name}: maximum depth` };
     }
-    if (value === null || typeof value !== "object") {
-      const text =
-        typeof value === "string"
-          ? JSON.stringify(value)
-          : typeof value === "bigint"
-            ? `${value}n`
-            : String(value);
-      meta.set(path, {
-        key: name,
-        kind: value === null ? "null" : (typeof value as JsonKind),
-        text,
-        index,
-      });
-      return { id: path, label: `${name}: ${text}` };
+    const leaf = jsonLeaf(value);
+    if (leaf) {
+      meta.set(path, { key: name, kind: leaf.kind, text: leaf.text, index });
+      return { id: path, label: `${name}: ${leaf.text}` };
     }
-    if (seen.has(value)) {
+    const object = value as object;
+    if (seen.has(object)) {
       meta.set(path, { key: name, kind: "note", text: "[Circular]", index });
       return { id: path, label: `${name}: [Circular]` };
     }
-    seen.add(value);
-    const entries = Object.entries(value);
-    const array = Array.isArray(value);
+    const inline = inlineSmallValues && depth > 0 ? inlineJson(object) : undefined;
+    if (inline) {
+      meta.set(path, {
+        key: name,
+        kind: inline.kind,
+        text: inline.text,
+        index,
+        inline: inline.parts,
+      });
+      return { id: path, label: `${name}: ${inline.text}` };
+    }
+    seen.add(object);
+    const entries = Object.entries(object);
+    const array = Array.isArray(object);
     meta.set(path, {
       key: name,
       kind: array ? "array" : "object",
       text: "",
-      size: entries.length,
+      size: showCounts ? entries.length : undefined,
       index,
     });
+    const count = array ? `[${entries.length}]` : `{${entries.length}}`;
     const result = {
       id: path,
-      label: `${name} ${array ? `[${entries.length}]` : `{${entries.length}}`}`,
+      label: showCounts ? `${name} ${count}` : name,
       children: entries.map(([key, entry]) =>
         nodes(
           entry,
@@ -1750,7 +1892,7 @@ export function JsonTreeView({
         ),
       ),
     };
-    seen.delete(value);
+    seen.delete(object);
     return result;
   }
   const root = nodes(value, "$", label);
@@ -1983,40 +2125,86 @@ export function Marquee({
   );
 }
 
-export function Carousel({ label, children }: { label: string; children: React.ReactNode }) {
+export interface CarouselProps {
+  label: string;
+  children: React.ReactNode;
+  /**
+   * Shows the "2 / 3" count beside the dots. When false the count is not drawn, and a visually
+   * hidden live region still announces "Slide 2 of 3" when the slide changes.
+   */
+  showCount?: boolean;
+}
+
+/** After the last scroll event, how long to wait before treating the scroll as settled. */
+const CAROUSEL_SETTLE_MS = 120;
+
+/**
+ * Where the viewport is scrolled to, in slides: 1.5 is halfway between the second and third.
+ * Slide offsets are measured from the first slide along the inline direction, and the scroll
+ * distance is direction-free (RTL scroll offsets run negative).
+ */
+function carouselScrollProgress(el: HTMLElement | null): number | undefined {
+  if (!el?.clientWidth || !el.children.length) return undefined;
+  const rtl = getComputedStyle(el).direction === "rtl";
+  const starts = Array.from(el.children, (child) => {
+    const box = child.getBoundingClientRect();
+    return rtl ? -box.right : box.left;
+  });
+  const first = starts[0]!;
+  return scrollProgress(
+    starts.map((start) => start - first),
+    Math.abs(el.scrollLeft),
+  );
+}
+
+const prefersReducedMotion = () =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+export function Carousel({ label, children, showCount = true }: CarouselProps) {
   const viewport = React.useRef<HTMLDivElement>(null);
+  const pill = React.useRef<HTMLSpanElement>(null);
+  const settleTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const slides = React.Children.toArray(children);
   const [ownActive, setActive] = React.useState(0);
   const active = Math.max(0, Math.min(ownActive, slides.length - 1));
+  React.useEffect(() => () => clearTimeout(settleTimer.current), []);
   function go(index: number) {
     const next = Math.max(0, Math.min(slides.length - 1, index));
     const child = viewport.current?.children[next] as HTMLElement | undefined;
+    // A settle still pending from an earlier scroll would read the old position.
+    clearTimeout(settleTimer.current);
+    // Pin the pill to where the viewport is now, so the new current slide does not pull it
+    // ahead before the smooth scroll starts.
+    placePill();
     child?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "instant"
-        : "smooth",
+      behavior: prefersReducedMotion() ? "instant" : "smooth",
       block: "nearest",
       inline: "start",
     });
     setActive(next);
   }
-  function readScroll() {
-    const el = viewport.current;
-    if (!el || !el.clientWidth) return;
-    const rtl = getComputedStyle(el).direction === "rtl";
-    const bounds = el.getBoundingClientRect();
-    const edge = rtl ? bounds.right : bounds.left;
-    let nearest = 0;
-    let distance = Infinity;
-    Array.from(el.children).forEach((child, index) => {
-      const box = child.getBoundingClientRect();
-      const delta = Math.abs((rtl ? box.right : box.left) - edge);
-      if (delta < distance) {
-        nearest = index;
-        distance = delta;
-      }
-    });
-    setActive(nearest);
+  /**
+   * The pill follows the scroll itself: its place is written straight to its style, without a
+   * render. Under reduced motion it stays on the current slide instead. Returns false when the
+   * viewport has no layout to read.
+   */
+  function placePill() {
+    const progress = carouselScrollProgress(viewport.current);
+    if (progress === undefined) return false;
+    if (prefersReducedMotion()) pill.current?.style.removeProperty("--fux-carousel-progress");
+    else pill.current?.style.setProperty("--fux-carousel-progress", String(progress));
+    return true;
+  }
+  function followScroll() {
+    if (!placePill()) return;
+    clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(settle, CAROUSEL_SETTLE_MS);
+  }
+  /** The current slide changes only once the scroll comes to rest, never on the way past. */
+  function settle() {
+    clearTimeout(settleTimer.current);
+    const progress = carouselScrollProgress(viewport.current);
+    if (progress !== undefined) setActive(Math.round(progress));
   }
   return (
     <section
@@ -2030,7 +2218,8 @@ export function Carousel({ label, children }: { label: string; children: React.R
         tabIndex={0}
         aria-label={`${label} slides`}
         className="fux-carousel-viewport flex snap-x snap-mandatory overflow-x-auto rounded-xl border border-border bg-card shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 dark:border-input"
-        onScroll={readScroll}
+        onScroll={followScroll}
+        onScrollEnd={settle}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
           const rtl = getComputedStyle(event.currentTarget).direction === "rtl";
@@ -2067,27 +2256,46 @@ export function Carousel({ label, children }: { label: string; children: React.R
           <ChevronLeft aria-hidden className="rtl:rotate-180" />
         </Button>
         <div role="group" aria-label="Choose slide" className="flex min-w-0 flex-1 justify-center">
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              type="button"
-              aria-label={`Go to slide ${index + 1}`}
-              aria-current={index === active ? "true" : undefined}
-              onClick={() => go(index)}
-              className="group/dot grid size-6 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
-            >
+          <div className="fux-carousel-dots relative flex">
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                aria-label={`Go to slide ${index + 1}`}
+                aria-current={index === active ? "true" : undefined}
+                onClick={() => go(index)}
+                className="group/dot grid size-(--fux-carousel-dot) place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
+              >
+                <span
+                  aria-hidden
+                  className="fux-carousel-dot size-2 rounded-full bg-border motion-safe:transition-colors motion-safe:duration-200 group-hover/dot:bg-muted-foreground"
+                />
+              </button>
+            ))}
+            {slides.length > 0 && (
               <span
+                ref={pill}
                 aria-hidden
-                className="h-2 w-2 rounded-full bg-border motion-safe:transition-[width,background-color] motion-safe:duration-200 group-hover/dot:bg-muted-foreground group-aria-[current]/dot:w-5 group-aria-[current]/dot:bg-primary"
+                data-slot="carousel-indicator"
+                className="fux-carousel-pill pointer-events-none absolute inset-y-0 my-auto h-2 rounded-full bg-primary"
+                style={{ "--fux-carousel-index": active } as React.CSSProperties}
               />
-            </button>
-          ))}
+            )}
+          </div>
         </div>
         <output
           aria-live="polite"
-          className="min-w-12 text-center text-xs text-muted-foreground tabular-nums"
+          className={
+            showCount
+              ? "min-w-12 text-center text-xs text-muted-foreground tabular-nums"
+              : "sr-only"
+          }
         >
-          {slides.length ? active + 1 : 0} / {slides.length}
+          {showCount
+            ? `${slides.length ? active + 1 : 0} / ${slides.length}`
+            : slides.length
+              ? `Slide ${active + 1} of ${slides.length}`
+              : ""}
         </output>
         <Button
           variant="outline"
