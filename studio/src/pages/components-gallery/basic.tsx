@@ -259,6 +259,41 @@ const LeadRow = ({ children }: { children: React.ReactNode }) => (
 const swatch = (width: string) => (
   <div className="h-6 rounded-md bg-muted ring-1 ring-border ring-inset" style={{ width }} />
 );
+/** The shared layout gap scale, in px. */
+const gapScale = [
+  ["none", 0],
+  ["2xs", 2],
+  ["xs", 4],
+  ["sm", 8],
+  ["sm-md", 12],
+  ["md", 16],
+  ["lg", 24],
+  ["xl", 32],
+  ["2xl", 48],
+] as const satisfies readonly (readonly [C.LayoutGap, number])[];
+const boards = [
+  ["Draft", 4],
+  ["Review", 2],
+  ["Approved", 11],
+  ["Scheduled", 6],
+  ["Published", 23],
+  ["Archived", 38],
+] as const;
+interface RecentInvoice {
+  id: string;
+  customer: string;
+  amount: string;
+}
+const recentInvoices: readonly RecentInvoice[] = [
+  { id: "INV-2041", customer: "Northwind", amount: "$1,240.00" },
+  { id: "INV-2040", customer: "Globex", amount: "$860.50" },
+  { id: "INV-2039", customer: "Initech", amount: "$3,075.00" },
+];
+const recentColumns: C.TableColumn<RecentInvoice>[] = [
+  { id: "id", label: "Invoice", isRowHeader: true, render: (row) => row.id },
+  { id: "customer", label: "Customer", render: (row) => row.customer },
+  { id: "amount", label: "Amount", numeric: true, render: (row) => row.amount },
+];
 
 export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
   Button: example(
@@ -854,9 +889,11 @@ export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
           <C.Switch label="Archive when finished" />
         </C.Stack>
         <Variants title="Gap scale" layout="grid">
-          {(["xs", "sm", "md", "lg", "xl"] as const).map((gap) => (
+          {gapScale.map(([gap, px]) => (
             <div key={gap} className="flex flex-col gap-2">
-              <span className="font-mono text-xs text-muted-foreground">gap=&quot;{gap}&quot;</span>
+              <span className="font-mono text-xs text-muted-foreground">
+                gap=&quot;{gap}&quot; · {px}px
+              </span>
               <C.Stack gap={gap}>
                 {swatch("100%")}
                 {swatch("100%")}
@@ -878,6 +915,13 @@ export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
               </C.Stack>
             </div>
           ))}
+        </Variants>
+        <Variants title="As a list" layout="stack">
+          <C.Stack as="ul" gap="sm-md" aria-label="Release checklist" className="text-sm">
+            <li>Run the checks on the exact snapshot</li>
+            <li>Record the results in the pull request</li>
+            <li>Ask the steward to confirm</li>
+          </C.Stack>
         </Variants>
       </>
     ),
@@ -929,9 +973,124 @@ export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
             </C.Row>
           ))}
         </Variants>
+        <Variants title="Gap scale, shared with Stack" layout="stack">
+          {gapScale.map(([gap, px]) => (
+            <C.Row key={gap} gap="md">
+              <span className="w-24 font-mono text-xs text-muted-foreground">
+                {gap} · {px}px
+              </span>
+              <C.Row gap={gap}>
+                {swatch("1.5rem")}
+                {swatch("1.5rem")}
+                {swatch("1.5rem")}
+              </C.Row>
+            </C.Row>
+          ))}
+        </Variants>
+        <Variants title="As navigation" layout="stack">
+          <C.Row as="nav" aria-label="Report sections" gap="sm-md" wrap>
+            {["Summary", "Revenue", "Costs", "Forecast"].map((section) => (
+              <C.Link key={section} href="#component-details">
+                {section}
+              </C.Link>
+            ))}
+          </C.Row>
+        </Variants>
       </>
     ),
     ".fux-row > button",
+  ),
+  Grid: example(
+    "Cards fill as many columns of at least 13rem as the grid is wide. Narrow the window to see them reflow.",
+    () => (
+      <>
+        <C.Grid min="13rem" gap="sm-md">
+          {boards.map(([title, count]) => (
+            <C.Panel key={title} padding="sm">
+              <C.Panel.Title>{title}</C.Panel.Title>
+              <C.Panel.Description>{count} documents</C.Panel.Description>
+            </C.Panel>
+          ))}
+        </C.Grid>
+        <Variants title="Sized by its own container, not the window" layout="stack">
+          <div className="w-full max-w-sm rounded-lg border border-dashed p-3">
+            <C.Grid min="8rem" gap="sm">
+              {boards.map(([title]) => (
+                <div key={title} className="rounded-md bg-muted px-3 py-2 text-sm">
+                  {title}
+                </div>
+              ))}
+            </C.Grid>
+          </div>
+        </Variants>
+        <Variants title="Alignment" layout="grid">
+          {(["stretch", "start"] as const).map((align) => (
+            <div key={align} className="flex flex-col gap-2">
+              <span className="font-mono text-xs text-muted-foreground">
+                align=&quot;{align}&quot;
+              </span>
+              <C.Grid min="6rem" gap="sm" align={align}>
+                <div className="rounded-md bg-muted p-2 text-sm">Short</div>
+                <div className="rounded-md bg-muted p-2 text-sm">
+                  A longer note that wraps onto more lines
+                </div>
+              </C.Grid>
+            </div>
+          ))}
+        </Variants>
+      </>
+    ),
+    ".fux-grid .fux-panel",
+  ),
+  Split: example(
+    "A side column beside the main one. Below 36rem of its own width the two stack, side first.",
+    () => (
+      <>
+        <C.Split side="12rem" stackBelow="36rem" gap="lg">
+          <C.Split.Side as="nav" aria-label="Guide sections">
+            <C.Stack as="ul" gap="xs" className="text-sm">
+              {["Install", "Configure", "Deploy", "Troubleshoot"].map((section) => (
+                <li key={section}>
+                  <C.Link href="#component-details">{section}</C.Link>
+                </li>
+              ))}
+            </C.Stack>
+          </C.Split.Side>
+          <C.Split.Main>
+            <C.Stack gap="sm">
+              <h4 className="m-0 text-base font-semibold tracking-tight">Install</h4>
+              <p className="m-0 text-sm text-muted-foreground">
+                Add the package, then load its stylesheet once at the root of the application.
+              </p>
+            </C.Stack>
+          </C.Split.Main>
+        </C.Split>
+        <Variants title="Side on the inline end" layout="stack">
+          <C.Split side="14rem" stackBelow="32rem" className="w-full">
+            <C.Split.Main>
+              <C.Panel>
+                <C.Panel.Title>Quarterly summary</C.Panel.Title>
+                <C.Panel.Description>Revenue rose 12% on the quarter.</C.Panel.Description>
+              </C.Panel>
+            </C.Split.Main>
+            <C.Split.Side as="aside" aria-label="Notes">
+              <C.Panel tone="quiet" padding="sm">
+                <p className="m-0 text-sm">Figures are unaudited until the 15th.</p>
+              </C.Panel>
+            </C.Split.Side>
+          </C.Split>
+        </Variants>
+        <Variants title="Stacked in a narrow container" layout="stack">
+          <div className="w-full max-w-xs rounded-lg border border-dashed p-3">
+            <C.Split side="8rem" stackBelow="24rem" gap="sm">
+              <C.Split.Side className="rounded-md bg-muted px-3 py-2 text-sm">Side</C.Split.Side>
+              <C.Split.Main className="rounded-md bg-muted px-3 py-2 text-sm">Main</C.Split.Main>
+            </C.Split>
+          </div>
+        </Variants>
+      </>
+    ),
+    ".fux-split nav a",
   ),
   Panel: example(
     "A neutral surface groups related information.",
@@ -949,6 +1108,46 @@ export const basicFixtures: Readonly<Record<string, ComponentFixture>> = {
             <div className="mt-3">
               <C.Meter label="Used" value={45} low={60} high={85} optimum={0} />
             </div>
+          </C.Panel>
+        </Variants>
+        <Variants title="Padding" layout="grid">
+          {(["sm", "md", "lg"] as const).map((padding) => (
+            <C.Panel key={padding} padding={padding}>
+              <C.Panel.Title>padding=&quot;{padding}&quot;</C.Panel.Title>
+              <C.Panel.Description>
+                {{ sm: "12px", md: "20px, the default", lg: "28px" }[padding]}
+              </C.Panel.Description>
+            </C.Panel>
+          ))}
+        </Variants>
+        <Variants title="Flush, with a table and a band header" layout="stack">
+          <C.Panel padding="none" className="w-full">
+            <C.Panel.Header tone="band" wrap>
+              <div>
+                <C.Panel.Title>Recent invoices</C.Panel.Title>
+                <C.Panel.Description>Paid and open, newest first.</C.Panel.Description>
+              </div>
+              <C.Button variant="outline" size="sm">
+                <DownloadIcon data-icon="inline-start" />
+                Export
+              </C.Button>
+            </C.Panel.Header>
+            <C.Table label="Recent invoices" rows={recentInvoices} columns={recentColumns} />
+            <C.Panel.Footer>
+              <C.Button variant="ghost" size="sm">
+                View all
+              </C.Button>
+            </C.Panel.Footer>
+          </C.Panel>
+        </Variants>
+        <Variants title="Top edge and quiet" layout="grid">
+          <C.Panel edge="top">
+            <C.Panel.Title>edge=&quot;top&quot;</C.Panel.Title>
+            <C.Panel.Description>A rule along the top, nothing else.</C.Panel.Description>
+          </C.Panel>
+          <C.Panel tone="quiet">
+            <C.Panel.Title>tone=&quot;quiet&quot;</C.Panel.Title>
+            <C.Panel.Description>A muted surface without a shadow.</C.Panel.Description>
           </C.Panel>
         </Variants>
       </>

@@ -102,7 +102,7 @@ after(async () => {
 });
 
 test("every canonical family and primitive has one working gallery fixture", () => {
-  assert.equal(catalog.length - primitives.length, 96);
+  assert.equal(catalog.length - primitives.length, 102);
   assert.equal(primitives.length, 11);
   assert.deepEqual(
     Object.keys(componentFixtures).sort(),
@@ -201,7 +201,7 @@ test("the gallery is one scrolling page: every family's card, filtered by search
     view.getByText("@samhagman/fast-ux-kit/components/ui/badge"),
     "a primitive card names the module to import it from",
   );
-  assert.equal(view.getAllByRole("tab").length, 16, "one tab per category");
+  assert.equal(view.getAllByRole("tab").length, 17, "one tab per category");
   await act(async () => {
     fireEvent.change(view.getByRole("searchbox"), { target: { value: "ColorWheel" } });
   });

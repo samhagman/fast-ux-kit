@@ -1053,8 +1053,61 @@ export function PinInput({
 // Layout
 // ---------------------------------------------------------------------------------------------
 
-export interface LayoutProps extends React.HTMLAttributes<HTMLDivElement> {
-  gap?: "none" | "xs" | "sm" | "md" | "lg" | "xl";
+/**
+ * The one spacing scale Stack, Row, Grid and Split share, in px: `none` 0, `2xs` 2, `xs` 4,
+ * `sm` 8, `sm-md` 12, `md` 16, `lg` 24, `xl` 32 and `2xl` 48. `sm-md` is the step between `sm`
+ * and `md`.
+ */
+export type LayoutGap = "none" | "2xs" | "xs" | "sm" | "sm-md" | "md" | "lg" | "xl" | "2xl";
+
+/** The elements a layout can render as. A `ul` or `ol` drops its bullets and keeps its role. */
+export type LayoutElement =
+  | "div"
+  | "section"
+  | "article"
+  | "nav"
+  | "aside"
+  | "header"
+  | "footer"
+  | "main"
+  | "form"
+  | "fieldset"
+  | "figure"
+  | "ul"
+  | "ol"
+  | "li";
+
+/** Props every layout part takes: the element to render as, its ref and ordinary DOM props. */
+export interface LayoutElementProps extends React.HTMLAttributes<HTMLElement> {
+  /** The element to render. Defaults to `div`. */
+  as?: LayoutElement;
+  ref?: React.Ref<HTMLElement>;
+}
+
+/** A CSS length: a string as given, or a number of pixels. */
+export type LayoutLength = string | number;
+const cssLength = (value: LayoutLength | undefined) =>
+  typeof value === "number" ? `${value}px` : value;
+
+/** Renders `as`, giving a list its role back (WebKit drops it from a list without bullets). */
+function renderAs({ as = "div", role, ...props }: LayoutElementProps) {
+  return React.createElement(as, {
+    ...props,
+    role: role ?? (as === "ul" || as === "ol" ? "list" : undefined),
+  });
+}
+
+function LayoutBox({ gap, className, ...props }: LayoutElementProps & { gap: LayoutGap }) {
+  return renderAs({
+    ...props,
+    className: cn("fux-layout", className),
+    "data-gap": gap,
+  } as LayoutElementProps);
+}
+
+export interface LayoutProps extends LayoutElementProps {
+  /** The space between items. Defaults to `md` (16px) in a Stack and `sm` (8px) in a Row. */
+  gap?: LayoutGap;
   align?: "start" | "center" | "end" | "stretch";
   justify?: "start" | "center" | "end" | "between";
   wrap?: boolean;
@@ -1069,10 +1122,10 @@ export function Stack({
   ...props
 }: LayoutProps) {
   return (
-    <div
+    <LayoutBox
       {...props}
+      gap={gap}
       className={cn("fux-stack", className)}
-      data-gap={gap}
       data-align={align}
       data-justify={justify}
       data-wrap={wrap || undefined}
@@ -1080,15 +1133,134 @@ export function Stack({
   );
 }
 
-export function Row({ className, align = "center", ...props }: LayoutProps) {
-  return <Stack {...props} align={align} className={cn("fux-row", className)} />;
+/** A horizontal Stack. Its items are centred and 8px apart (`gap="sm"`) unless asked. */
+export function Row({ className, align = "center", gap = "sm", ...props }: LayoutProps) {
+  return <Stack {...props} gap={gap} align={align} className={cn("fux-row", className)} />;
 }
 
-function PanelRoot({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div {...props} className={cn("fux-panel fux-surface", className)} />;
+export interface GridProps extends LayoutElementProps {
+  /** The narrowest a column may be. As many columns as fit the Grid's own width. Default `16rem`. */
+  min?: LayoutLength;
+  /** The space between rows and columns. Defaults to `md` (16px). */
+  gap?: LayoutGap;
+  /** Where items sit in their row's height. Defaults to `stretch`. */
+  align?: "start" | "center" | "end" | "stretch";
 }
-function PanelHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div {...props} className={cn("fux-panel-header", className)} />;
+
+/**
+ * Equal columns, as many of at least `min` as the Grid's own width holds; one column when it is
+ * narrower than `min`. When there are fewer items than columns would fit, they widen to share the
+ * row; a short last row keeps the column width.
+ */
+export function Grid({
+  min,
+  gap = "md",
+  align = "stretch",
+  className,
+  style,
+  ...props
+}: GridProps) {
+  return (
+    <LayoutBox
+      {...props}
+      gap={gap}
+      className={cn("fux-grid", className)}
+      data-align={align}
+      style={{ ...style, "--fux-grid-min": cssLength(min) } as React.CSSProperties}
+    />
+  );
+}
+
+export interface SplitProps extends LayoutElementProps {
+  /** The side column's width. Default `16rem`. */
+  side?: LayoutLength;
+  /** Below this width of the Split itself, the side and main stack in source order. Default `40rem`. */
+  stackBelow?: LayoutLength;
+  /** The space between the columns, and between them once stacked. Defaults to `md` (16px). */
+  gap?: LayoutGap;
+  /** Where the columns sit in the row's height. Defaults to `stretch`. */
+  align?: "start" | "center" | "end" | "stretch";
+}
+
+function SplitRoot({
+  side,
+  stackBelow,
+  gap = "md",
+  align = "stretch",
+  className,
+  style,
+  ...props
+}: SplitProps) {
+  return (
+    <LayoutBox
+      {...props}
+      gap={gap}
+      className={cn("fux-split", className)}
+      data-align={align}
+      style={
+        {
+          ...style,
+          "--fux-split-side": cssLength(side),
+          "--fux-split-stack-below": cssLength(stackBelow),
+        } as React.CSSProperties
+      }
+    />
+  );
+}
+function SplitSide({ className, ...props }: LayoutElementProps) {
+  return renderAs({ ...props, className: cn("fux-split-side", className) });
+}
+function SplitMain({ className, ...props }: LayoutElementProps) {
+  return renderAs({ ...props, className: cn("fux-split-main", className) });
+}
+
+/**
+ * A side column beside a main column that takes the rest, stacking when the Split itself is
+ * narrower than `stackBelow`. Source order places the side: put `Split.Side` first for the inline
+ * start (left in LTR, right in RTL), after `Split.Main` for the inline end. Stacked, the parts
+ * keep that order, so reading order and visual order always agree.
+ */
+export const Split = /* @__PURE__ */ Object.assign(SplitRoot, { Side: SplitSide, Main: SplitMain });
+
+export interface PanelProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * Inner padding: `sm` 12px, `md` 20px (the default) or `lg` 28px. `none` puts content flush
+   * with the frame: the header and footer span it edge to edge, and a Table placed directly
+   * inside drops its own frame.
+   */
+  padding?: "none" | "sm" | "md" | "lg";
+  /** `all` (the default) frames the panel; `top` draws only a rule along its top edge. */
+  edge?: "all" | "top";
+  /** `quiet` is a muted, shadowless surface that sits back from default panels. */
+  tone?: "default" | "quiet";
+}
+
+function PanelRoot({ padding, edge, tone, className, ...props }: PanelProps) {
+  return (
+    <div
+      {...props}
+      className={cn("fux-panel fux-surface", className)}
+      data-padding={padding}
+      data-edge={edge === "all" ? undefined : edge}
+      data-tone={tone === "default" ? undefined : tone}
+    />
+  );
+}
+export interface PanelHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** `band` fills the header, setting it off from the body as a band. */
+  tone?: "plain" | "band";
+  /** Lets the title and actions wrap onto lines of their own when they do not fit. */
+  wrap?: boolean;
+}
+function PanelHeader({ tone, wrap, className, ...props }: PanelHeaderProps) {
+  return (
+    <div
+      {...props}
+      className={cn("fux-panel-header", className)}
+      data-tone={tone === "plain" ? undefined : tone}
+      data-wrap={wrap || undefined}
+    />
+  );
 }
 function PanelTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return <h3 {...props} className={cn("fux-panel-title", className)} />;

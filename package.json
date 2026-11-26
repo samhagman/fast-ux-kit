@@ -89,6 +89,7 @@
     "format": "prettier --write src tests scripts docs studio/src studio/tests studio/*.json studio/*.ts studio/*.md *.json *.md",
     "format:check": "prettier --check src tests scripts docs studio/src studio/tests studio/*.json studio/*.ts studio/*.md *.json *.md",
     "test:browser": "node scripts/test-browser.mjs",
+    "test:layout:browser": "npm run build && node scripts/test-layout-browser.mjs",
     "docs:build": "npm run build && npm --prefix studio run build",
     "dev": "npm --prefix studio run dev",
     "test:note-pages:browser": "npm run docs:build && node scripts/test-note-pages-browser.mjs",

@@ -1,0 +1,127 @@
+/* Text styles: Heading, Text, Eyebrow and DescriptionList. Every size, font and colour reads a
+   theme token (tokens.css and the app theme), so a consumer theme restyles them all. */
+
+/* Heading ------------------------------------------------------------------------------- */
+.fux-heading {
+  font-family: var(--font-heading, var(--font-sans));
+  font-weight: var(--fux-heading-weight);
+  line-height: var(--fux-heading-leading);
+  letter-spacing: var(--fux-heading-tracking);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+/* Display scales with the width of its container (the viewport when there is none), from the
+   title size at its narrowest to the display size. */
+.fux-heading[data-size="display"] {
+  font-size: clamp(var(--fux-heading-title), 0.5rem + 6cqi, var(--fux-heading-display));
+}
+.fux-heading[data-size="title"] {
+  font-size: var(--fux-heading-title);
+}
+.fux-heading[data-size="section"] {
+  font-size: var(--fux-heading-section);
+}
+.fux-heading[data-size="subsection"] {
+  font-size: var(--fux-heading-subsection);
+}
+
+/* Text ---------------------------------------------------------------------------------- */
+.fux-text {
+  line-height: var(--fux-line-height);
+  text-wrap: pretty;
+}
+.fux-text[data-size="sm"] {
+  font-size: var(--fux-body-sm);
+}
+.fux-text[data-size="md"] {
+  font-size: var(--fux-body-md);
+}
+.fux-text[data-size="lg"] {
+  font-size: var(--fux-body-lg);
+}
+
+/* Eyebrow ------------------------------------------------------------------------------- */
+.fux-eyebrow {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fux-eyebrow-size);
+  font-weight: var(--fux-label-weight);
+  line-height: var(--fux-line-height);
+  letter-spacing: var(--fux-eyebrow-tracking);
+  text-transform: uppercase;
+}
+/* Spacing pulls the letters of joined scripts apart. */
+.fux-eyebrow:lang(ar),
+.fux-eyebrow:lang(fa),
+.fux-eyebrow:lang(ur) {
+  letter-spacing: 0;
+}
+
+/* Tones (Text and Eyebrow). `default` inherits the surrounding colour. Status tones mix the
+   theme's tone toward its foreground, as Alert's accent does, so they stay readable. */
+:is(.fux-text, .fux-eyebrow)[data-tone="muted"] {
+  color: var(--muted-foreground);
+}
+:is(.fux-text, .fux-eyebrow)[data-tone="info"] {
+  --fux-text-tone: var(--signal);
+}
+:is(.fux-text, .fux-eyebrow)[data-tone="success"] {
+  --fux-text-tone: var(--success);
+}
+:is(.fux-text, .fux-eyebrow)[data-tone="warning"] {
+  --fux-text-tone: var(--warning);
+}
+:is(.fux-text, .fux-eyebrow)[data-tone="error"] {
+  --fux-text-tone: var(--destructive);
+}
+:is(.fux-text, .fux-eyebrow):is(
+  [data-tone="info"],
+  [data-tone="success"],
+  [data-tone="warning"],
+  [data-tone="error"]
+) {
+  color: color-mix(in oklab, var(--fux-text-tone) 65%, var(--foreground));
+}
+
+/* DescriptionList ----------------------------------------------------------------------- */
+.fux-dl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: var(--fux-body-sm);
+  line-height: var(--fux-line-height);
+}
+.fux-dl > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+.fux-dl dt {
+  color: var(--muted-foreground);
+  font-size: var(--fux-label-size);
+  font-weight: var(--fux-label-weight);
+}
+.fux-dl dd {
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* Inline: the detail sits beside its term while the list has room for both, and wraps under it
+   when it does not, so the list reacts to its own width. Every term takes the same width, which
+   keeps the details lined up. Set --fux-dl-term to change it. */
+.fux-dl[data-layout="inline"] {
+  gap: 0.5rem;
+}
+.fux-dl[data-layout="inline"] > div {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 1rem;
+}
+.fux-dl[data-layout="inline"] dt {
+  flex: 0 1 var(--fux-dl-term, 8rem);
+  min-inline-size: 0;
+}
+.fux-dl[data-layout="inline"] dd {
+  flex: 1 1 var(--fux-dl-detail, 10rem);
+}

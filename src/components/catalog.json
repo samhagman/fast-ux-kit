@@ -513,7 +513,7 @@
     "name": "Stack",
     "exportName": "Stack",
     "category": "Layout",
-    "description": "Vertical layout using the shared spacing scale.",
+    "description": "Vertical layout on the shared spacing scale, rendered as any sectioning or list element.",
     "owner": "native",
     "status": "styled",
     "parts": ["Stack"]
@@ -528,10 +528,28 @@
     "parts": ["Row"]
   },
   {
+    "name": "Grid",
+    "exportName": "Grid",
+    "category": "Layout",
+    "description": "Equal columns, as many of a minimum width as the grid's own width holds, on the shared spacing scale.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Grid"]
+  },
+  {
+    "name": "Split",
+    "exportName": "Split",
+    "category": "Layout",
+    "description": "A side column beside a main column that takes the rest; the two stack in source order when the split itself is narrower than a set width.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Split", "Split.Side", "Split.Main"]
+  },
+  {
     "name": "Panel",
     "exportName": "Panel",
     "category": "Layout",
-    "description": "A neutral surface with shared padding and tonal roles.",
+    "description": "A neutral surface with padding steps, a flush or top-edge frame, a quiet tone and an optional band header.",
     "owner": "native",
     "status": "styled",
     "parts": ["Panel"]
@@ -904,6 +922,42 @@
     "owner": "native",
     "status": "styled",
     "parts": ["ThemeScope"]
+  },
+  {
+    "name": "Heading",
+    "exportName": "Heading",
+    "category": "Typography",
+    "description": "A heading whose level is the element and whose size is the look, in the theme's heading font.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Heading"]
+  },
+  {
+    "name": "Text",
+    "exportName": "Text",
+    "category": "Typography",
+    "description": "Body text as a paragraph or a span, at a theme size and tone.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Text"]
+  },
+  {
+    "name": "Eyebrow",
+    "exportName": "Eyebrow",
+    "category": "Typography",
+    "description": "A small uppercase kicker or label line above a heading.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Eyebrow"]
+  },
+  {
+    "name": "DescriptionList",
+    "exportName": "DescriptionList",
+    "category": "Data display",
+    "description": "Terms and their details as a real dl, stacked or side by side.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["DescriptionList"]
   },
   {
     "name": "Badge",

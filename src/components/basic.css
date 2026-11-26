@@ -96,14 +96,61 @@
 }
 
 /* Panel ---------------------------------------------------------------------------------- */
+/* --fux-panel-pad is the body's padding and --fux-panel-pad-inline its inline part; the header
+   and footer reach the frame through them and inset their own text by --fux-panel-inset. */
 .fux-panel.fux-surface {
   --fux-panel-pad: 1.25rem;
-  padding: var(--fux-panel-pad);
+  --fux-panel-pad-inline: var(--fux-panel-pad);
+  --fux-panel-inset: var(--fux-panel-pad-inline);
+  padding: var(--fux-panel-pad) var(--fux-panel-pad-inline);
   border-color: var(--border);
   border-radius: calc(var(--radius) + 4px);
   background: var(--card);
   color: var(--card-foreground);
   box-shadow: 0 1px 2px color-mix(in oklch, black 5%, transparent);
+}
+/* Flush: the content meets the frame. The header and footer keep a 12px inset, the inset of a
+   Table's cells, so their text lines up with the columns. */
+.fux-panel.fux-surface[data-padding="none"] {
+  --fux-panel-pad: 0px;
+  --fux-panel-inset: 0.75rem;
+}
+.fux-panel.fux-surface[data-padding="sm"] {
+  --fux-panel-pad: 0.75rem;
+}
+.fux-panel.fux-surface[data-padding="md"] {
+  --fux-panel-pad: 1.25rem;
+}
+.fux-panel.fux-surface[data-padding="lg"] {
+  --fux-panel-pad: 1.75rem;
+}
+/* A Table directly inside a flush panel uses the panel's frame instead of drawing its own. */
+.fux-panel.fux-surface[data-padding="none"] > .fux-table-scroll {
+  border: 0;
+  border-radius: 0;
+}
+.fux-panel.fux-surface[data-padding="none"] > .fux-table-scroll:first-child {
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+}
+.fux-panel.fux-surface[data-padding="none"] > .fux-table-scroll:last-child {
+  border-end-start-radius: inherit;
+  border-end-end-radius: inherit;
+}
+/* Top edge: a rule along the top and nothing else, with the content aligned to the rule's ends. */
+.fux-panel.fux-surface[data-edge="top"] {
+  --fux-panel-pad-inline: 0px;
+  --fux-panel-inset: 0px;
+  border-width: 0;
+  border-block-start-width: 1px;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.fux-panel.fux-surface[data-tone="quiet"] {
+  border-color: var(--hairline);
+  background: var(--muted);
+  box-shadow: none;
 }
 .fux-panel-header {
   display: flex;
@@ -111,9 +158,17 @@
   justify-content: space-between;
   gap: 0.75rem;
   margin-block: calc(var(--fux-panel-pad, 1.25rem) * -1) var(--fux-panel-pad, 1.25rem);
-  margin-inline: calc(var(--fux-panel-pad, 1.25rem) * -1);
-  padding: 1rem var(--fux-panel-pad, 1.25rem) 0.875rem;
+  margin-inline: calc(var(--fux-panel-pad-inline, 1.25rem) * -1);
+  padding: 1rem var(--fux-panel-inset, 1.25rem) 0.875rem;
   border-block-end: 1px solid var(--hairline);
+}
+.fux-panel-header[data-tone="band"] {
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
+  background: var(--muted);
+}
+.fux-panel-header[data-wrap] {
+  flex-wrap: wrap;
 }
 .fux-panel-title {
   margin: 0;
@@ -136,8 +191,8 @@
   justify-content: flex-end;
   gap: 0.5rem;
   margin-block: var(--fux-panel-pad, 1.25rem) calc(var(--fux-panel-pad, 1.25rem) * -1);
-  margin-inline: calc(var(--fux-panel-pad, 1.25rem) * -1);
-  padding: 0.75rem var(--fux-panel-pad, 1.25rem);
+  margin-inline: calc(var(--fux-panel-pad-inline, 1.25rem) * -1);
+  padding: 0.75rem var(--fux-panel-inset, 1.25rem);
   border-block-start: 1px solid var(--hairline);
   border-end-start-radius: inherit;
   border-end-end-radius: inherit;
