@@ -19,7 +19,7 @@ provide the complete contracts.
 | Rich documents               | Markdown and extension data, safe rendering, registered renderers and canonical codecs                       | `tests/rich.test.tsx`                                                                                                                                                                   |
 | Text intelligence            | Ranges, search ranking, completions, hover and highlights                                                    | `tests/text-intelligence.test.ts`, `tests/hover.test.tsx`, `tests/highlight.test.tsx`                                                                                                   |
 | Search and productivity      | Bounded queries, filtering, date metadata, sorting, note edits and read-only behavior                        | `tests/outline-search.test.ts`, `tests/outline-search-react.test.tsx`, `tests/outline-productivity.test.ts`, `tests/outline-reorder.test.ts`, `tests/outline-notes-react.test.tsx`      |
-| Shared component catalog     | An executable fixture for each of the 94 canonical families, with interaction assertions where applicable    | `tests/components-catalog.test.tsx`, `tests/components-foundation.test.tsx`                                                                                                             |
+| Shared component catalog     | An executable fixture for each of the 98 canonical families, with interaction assertions where applicable    | `tests/components-catalog.test.tsx`, `tests/components-foundation.test.tsx`                                                                                                             |
 | Date and color controls      | Date value preservation, bounds, range cancellation, color conversion, controlled edits and keyboard changes | `tests/color-date-components.test.tsx`                                                                                                                                                  |
 | Files and media              | File validation, crop state, QR output, signature state and export behavior                                  | `tests/components-media.test.tsx`                                                                                                                                                       |
 | Machine models               | Graph validation, immutable changes, hierarchy, analysis and simulation                                      | `tests/machine-core.test.ts`, `tests/machine-tree-core.test.ts`, `tests/machine-analysis.test.ts`                                                                                       |
@@ -50,7 +50,7 @@ output. Current test counts are available in each run's output.
 ## Browser acceptance
 
 The Studio provides the browser fixtures through `npm run dev`. The component
-page shares its 94-family fixture map with the catalog tests. Verify the
+page shares its 98-family fixture map with the catalog tests. Verify the
 candidate build with keyboard and pointer input, light and dark themes, RTL,
 reduced motion, narrow viewports and browser zoom.
 

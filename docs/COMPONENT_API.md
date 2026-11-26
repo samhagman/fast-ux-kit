@@ -1,7 +1,7 @@
 # Component API
 
 Import components from `@samhagman/fast-ux-kit/components` and load
-`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 94 canonical
+`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 98 canonical
 families. `componentManifest` provides each family's name, category, description,
 interaction owner and exported parts.
 
@@ -240,6 +240,66 @@ import { CircleAlertIcon } from "lucide-react";
   `[--fux-alert-tone:var(--chart-3)]`. Sides are logical, so alerts mirror in
   right-to-left text.
 
+## Text styles
+
+`Heading`, `Text`, `Eyebrow` and `DescriptionList` style text from theme tokens,
+so a page needs no hand-written type classes.
+
+```tsx
+import { DescriptionList, Eyebrow, Heading, Text } from "@samhagman/fast-ux-kit/components";
+
+<header>
+  <Eyebrow>Workspace settings</Eyebrow>
+  <Heading level={1}>Members</Heading>
+  <Text tone="muted" size="sm">
+    People who can open and edit this workspace.
+  </Text>
+  <DescriptionList
+    layout="inline"
+    items={[
+      { term: "Owner", detail: "Rania Haddad" },
+      { term: "Members", detail: "12" },
+    ]}
+  />
+</header>;
+```
+
+- `Heading` takes a required `level` (1 to 6), which is the element, `h1` to
+  `h6`. `size` is how large it looks, independent of the level: `display`,
+  `title`, `section` or `subsection`, so an `h3` can look like a page title.
+  Without `size`, `h1` is a title, `h2` a section and `h3` to `h6` a subsection.
+  `data-size` reports the size. `display` scales with the width of its
+  container (the viewport when no ancestor is a size container), from the title
+  size at its narrowest to the display size.
+- `Text` is body text. `as` is `p` (the default) or `span`. `size` is `sm`, `md`
+  or `lg`. A paragraph defaults to `md`; a span keeps the size of the line it
+  sits in unless it is given one. `tone` is `default` (the surrounding colour), `muted`,
+  or a status tone: `info`, `success`, `warning` or `error`.
+- `Eyebrow` is a small uppercase kicker or label line above a heading, in the
+  theme's mono font. It takes the same `as` and `tone` props, with `muted` as the
+  default tone. The capitals are a style, so the text is read as written, and in
+  Arabic, Persian and Urdu the letter spacing is dropped so letters stay joined.
+- `DescriptionList` renders a real `dl`. Each item is a `div` holding one `dt`
+  (the `term`) and one `dd` (the `detail`); both take any React node, and `id`
+  gives an item a stable key. `layout="stacked"` (the default) puts each detail
+  under its term. `layout="inline"` puts it beside its term while the list has
+  room, and under it when the list is narrow. Every term takes the same width,
+  `--fux-dl-term` (8rem), so the details line up. The detail moves under its
+  term when it would be narrower than `--fux-dl-detail` (10rem).
+- Margins are the application's: the families set none, so apply the global
+  reset (see above) and space them with `Stack` or your own layout.
+- Restyle them through tokens. Sizes and weights are `--fux-heading-display`,
+  `--fux-heading-title`, `--fux-heading-section`, `--fux-heading-subsection`,
+  `--fux-heading-weight`, `--fux-heading-leading`, `--fux-heading-tracking`,
+  `--fux-body-sm`, `--fux-body-md`, `--fux-body-lg`, `--fux-eyebrow-size` and
+  `--fux-eyebrow-tracking`, with `--fux-line-height`, `--fux-label-size` and
+  `--fux-label-weight`. Headings use `--font-heading` when the theme defines it,
+  and `--font-sans` otherwise; eyebrows use `--font-mono`. Colours are
+  `--muted-foreground`, and for the status tones `--signal`, `--success`,
+  `--warning` and `--destructive`, each mixed toward `--foreground` (as Alert's
+  accent is) so it stays readable. Sides are logical, so the families mirror in
+  right-to-left text.
+
 ## Dates and colors
 
 Date and time components retain `@internationalized/date` values. Use
@@ -406,7 +466,8 @@ they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
 | Display       | `Avatar`, `Carousel`, `Marquee`, `KeyChord`                                                                                               |
 | Media         | `ImageCropper`, `QrCode`, `SignaturePad`                                                                                                  |
 | Code          | `CodeBlock`, `Terminal`, `CommandLine`, `FileTree`                                                                                        |
-| Data display  | `Sparkline`, `BarList`                                                                                                                    |
+| Data display  | `Sparkline`, `BarList`, `DescriptionList`                                                                                                 |
+| Typography    | `Heading`, `Text`, `Eyebrow`                                                                                                              |
 
 The Studio's `#/components` page contains an executable example for every
 family. The exported TypeScript declarations define the complete prop and event
