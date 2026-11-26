@@ -77,8 +77,11 @@ import {
 ```
 
 `Sheet`, `Drawer`, `Popover`, `HoverCard` and `Tooltip` expose their own matching
-parts. `TooltipProvider` supplies tooltip timing. `ModalDialog` is a controlled
-recipe with `title`, `open`, `onOpenChange`, children and an optional footer.
+parts. `Sheet` and `Drawer` slide in from their side and back out, and their
+backdrop fades. That motion ships in `styles.css`, so it needs no animation
+plugin, and it is switched off under reduced motion. `TooltipProvider` supplies
+tooltip timing. `ModalDialog` is a controlled recipe with `title`, `open`,
+`onOpenChange`, children and an optional footer.
 
 `FloatingPanel` provides movable and resizable content. `Tour` accepts named
 steps with descriptions and optional target getters. `Toast` or `Toaster` mounts
