@@ -28,6 +28,14 @@
 .fux-json [data-json-part="count"] {
   color: var(--muted-foreground);
 }
+/* A small object drawn on its parent's row: the parts flow as text, so the colons inside it
+   sit after their keys without the row's gap to cancel. */
+.fux-json [data-json-part="inline"] [data-json-part="colon"] {
+  margin-inline-start: 0;
+}
+.fux-json [data-json-part="bracket"] {
+  color: var(--muted-foreground);
+}
 .fux-json [data-json-kind="string"] {
   color: var(--fux-json-string);
 }
@@ -142,5 +150,32 @@
 @media (prefers-reduced-motion: reduce) {
   .fux-carousel-viewport {
     scroll-behavior: auto;
+  }
+}
+/*
+ * One pill glides over static dots. Its place is a slide index: the scroll progress while the
+ * viewport moves, otherwise the settled slide, which the server renders too. Each dot slot is
+ * --fux-carousel-dot wide, so index n centres the pill on dot n, from the inline start in
+ * either writing direction.
+ */
+.fux-carousel-dots {
+  --fux-carousel-dot: 1.5rem;
+  --fux-carousel-pill: 1.25rem;
+}
+.fux-carousel-pill {
+  inline-size: var(--fux-carousel-pill);
+  inset-inline-start: calc(
+    var(--fux-carousel-progress, var(--fux-carousel-index, 0)) * var(--fux-carousel-dot) +
+      (var(--fux-carousel-dot) - var(--fux-carousel-pill)) / 2
+  );
+}
+@media (forced-colors: active) {
+  .fux-carousel-dot {
+    background: ButtonText;
+    forced-color-adjust: none;
+  }
+  .fux-carousel-pill {
+    background: Highlight;
+    forced-color-adjust: none;
   }
 }
