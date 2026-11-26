@@ -43,6 +43,13 @@ import { Progress } from "./ui/progress.js";
 import { buttonVariants } from "./ui/button.js";
 import { useCopy } from "../hooks/use-copy.js";
 import { cn } from "../lib/utils.js";
+import {
+  inlineJson,
+  jsonLeaf,
+  type JsonInlinePart,
+  type JsonLeafKind,
+} from "../core/json-inline.js";
+import { scrollProgress } from "../core/scroll-progress.js";
 
 type ButtonVariant = NonNullable<React.ComponentProps<typeof Button>["variant"]>;
 type ButtonSize = NonNullable<React.ComponentProps<typeof Button>["size"]>;
@@ -1686,52 +1693,76 @@ export function NavigationMenu({
 /* JsonTreeView                                                                */
 /* -------------------------------------------------------------------------- */
 
-type JsonKind =
-  | "string"
-  | "number"
-  | "boolean"
-  | "null"
-  | "undefined"
-  | "bigint"
-  | "function"
-  | "symbol"
-  | "object"
-  | "array"
-  | "note";
+type JsonKind = JsonLeafKind | "object" | "array" | "note";
 interface JsonMeta {
   key: string;
   kind: JsonKind;
   /** The rendered value of a leaf, or a note such as "[Circular]". */
   text: string;
-  /** Entry count of an object or array. */
+  /** Entry count of an object or array; absent when counts are hidden. */
   size?: number;
   index?: boolean;
+  /** The parts of a small object or array drawn on its parent's row. */
+  inline?: readonly JsonInlinePart[];
 }
 function JsonLabel({ meta, fallback }: { meta: JsonMeta | undefined; fallback: string }) {
   if (!meta) return <>{fallback}</>;
-  const container = meta.kind === "object" || meta.kind === "array";
+  const container = !meta.inline && (meta.kind === "object" || meta.kind === "array");
   return (
     <span className="flex min-w-0 items-baseline gap-1.5 font-mono text-[13px] leading-5">
       <span data-json-part="key" data-index={meta.index || undefined}>
         {meta.key}
       </span>
       {container ? (
-        <span
-          data-json-part="count"
-          className="rounded-sm bg-muted px-1.5 text-2xs leading-4 tabular-nums"
-        >
-          {meta.kind === "array"
-            ? `${meta.size} ${meta.size === 1 ? "item" : "items"}`
-            : `${meta.size} ${meta.size === 1 ? "key" : "keys"}`}
-        </span>
+        meta.size !== undefined && (
+          <span
+            data-json-part="count"
+            className="rounded-sm bg-muted px-1.5 text-2xs leading-4 tabular-nums"
+          >
+            {meta.kind === "array"
+              ? `${meta.size} ${meta.size === 1 ? "item" : "items"}`
+              : `${meta.size} ${meta.size === 1 ? "key" : "keys"}`}
+          </span>
+        )
       ) : (
         <>
           <span aria-hidden data-json-part="colon">
             :
           </span>
-          <span data-json-kind={meta.kind} className="truncate" title={meta.text}>
-            {meta.text}
-          </span>
+          {meta.inline ? (
+            <span
+              data-json-part="inline"
+              data-json-kind={meta.kind}
+              // JSON syntax reads left to right; isolated, its brackets and quotes keep their
+              // order inside a right-to-left tree.
+              dir="ltr"
+              className="truncate"
+              title={meta.text}
+            >
+              {/* One text run names the row the same way in every engine; the coloured parts
+                  are the visible copy. */}
+              <span className="sr-only">{meta.text}</span>
+              <span aria-hidden>
+                {meta.inline.map((part, at) =>
+                  part.part === "space" ? (
+                    " "
+                  ) : part.part === "value" ? (
+                    <span key={at} data-json-kind={part.kind}>
+                      {part.text}
+                    </span>
+                  ) : (
+                    <span key={at} data-json-part={part.part}>
+                      {part.text}
+                    </span>
+                  ),
+                )}
+              </span>
+            </span>
+          ) : (
+            <span data-json-kind={meta.kind} className="truncate" title={meta.text}>
+              {meta.text}
+            </span>
+          )}
         </>
       )}
     </span>
@@ -1741,10 +1772,21 @@ export function JsonTreeView({
   value,
   label = "JSON",
   renderLabel,
+  showCounts = true,
+  inlineSmallValues = false,
   ...props
 }: Omit<React.ComponentProps<typeof Tree>, "items" | "label" | "value"> & {
   value: unknown;
   label?: string;
+  /** Show how many keys or items each object or array holds. Default true. */
+  showCounts?: boolean;
+  /**
+   * Draw an object or array with exactly one entry, whose value is a primitive or is itself
+   * such a value, on its parent's row as one leaf: `on: { SUBMIT: "review" }`. At most
+   * `JSON_INLINE_MAX_DEPTH` levels and `JSON_INLINE_MAX_LENGTH` characters; anything bigger
+   * stays expandable. The root row always stays expandable. Default false.
+   */
+  inlineSmallValues?: boolean;
 }) {
   const seen = new WeakSet<object>();
   const meta = new Map<string, JsonMeta>();
@@ -1753,38 +1795,41 @@ export function JsonTreeView({
       meta.set(path, { key: name, kind: "note", text: "maximum depth", index });
       return { id: path, label: `${name}: maximum depth` };
     }
-    if (value === null || typeof value !== "object") {
-      const text =
-        typeof value === "string"
-          ? JSON.stringify(value)
-          : typeof value === "bigint"
-            ? `${value}n`
-            : String(value);
-      meta.set(path, {
-        key: name,
-        kind: value === null ? "null" : (typeof value as JsonKind),
-        text,
-        index,
-      });
-      return { id: path, label: `${name}: ${text}` };
+    const leaf = jsonLeaf(value);
+    if (leaf) {
+      meta.set(path, { key: name, kind: leaf.kind, text: leaf.text, index });
+      return { id: path, label: `${name}: ${leaf.text}` };
     }
-    if (seen.has(value)) {
+    const object = value as object;
+    if (seen.has(object)) {
       meta.set(path, { key: name, kind: "note", text: "[Circular]", index });
       return { id: path, label: `${name}: [Circular]` };
     }
-    seen.add(value);
-    const entries = Object.entries(value);
-    const array = Array.isArray(value);
+    const inline = inlineSmallValues && depth > 0 ? inlineJson(object) : undefined;
+    if (inline) {
+      meta.set(path, {
+        key: name,
+        kind: inline.kind,
+        text: inline.text,
+        index,
+        inline: inline.parts,
+      });
+      return { id: path, label: `${name}: ${inline.text}` };
+    }
+    seen.add(object);
+    const entries = Object.entries(object);
+    const array = Array.isArray(object);
     meta.set(path, {
       key: name,
       kind: array ? "array" : "object",
       text: "",
-      size: entries.length,
+      size: showCounts ? entries.length : undefined,
       index,
     });
+    const count = array ? `[${entries.length}]` : `{${entries.length}}`;
     const result = {
       id: path,
-      label: `${name} ${array ? `[${entries.length}]` : `{${entries.length}}`}`,
+      label: showCounts ? `${name} ${count}` : name,
       children: entries.map(([key, entry]) =>
         nodes(
           entry,
@@ -1795,7 +1840,7 @@ export function JsonTreeView({
         ),
       ),
     };
-    seen.delete(value);
+    seen.delete(object);
     return result;
   }
   const root = nodes(value, "$", label);
@@ -2028,40 +2073,86 @@ export function Marquee({
   );
 }
 
-export function Carousel({ label, children }: { label: string; children: React.ReactNode }) {
+export interface CarouselProps {
+  label: string;
+  children: React.ReactNode;
+  /**
+   * Shows the "2 / 3" count beside the dots. When false the count is not drawn, and a visually
+   * hidden live region still announces "Slide 2 of 3" when the slide changes.
+   */
+  showCount?: boolean;
+}
+
+/** After the last scroll event, how long to wait before treating the scroll as settled. */
+const CAROUSEL_SETTLE_MS = 120;
+
+/**
+ * Where the viewport is scrolled to, in slides: 1.5 is halfway between the second and third.
+ * Slide offsets are measured from the first slide along the inline direction, and the scroll
+ * distance is direction-free (RTL scroll offsets run negative).
+ */
+function carouselScrollProgress(el: HTMLElement | null): number | undefined {
+  if (!el?.clientWidth || !el.children.length) return undefined;
+  const rtl = getComputedStyle(el).direction === "rtl";
+  const starts = Array.from(el.children, (child) => {
+    const box = child.getBoundingClientRect();
+    return rtl ? -box.right : box.left;
+  });
+  const first = starts[0]!;
+  return scrollProgress(
+    starts.map((start) => start - first),
+    Math.abs(el.scrollLeft),
+  );
+}
+
+const prefersReducedMotion = () =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+export function Carousel({ label, children, showCount = true }: CarouselProps) {
   const viewport = React.useRef<HTMLDivElement>(null);
+  const pill = React.useRef<HTMLSpanElement>(null);
+  const settleTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const slides = React.Children.toArray(children);
   const [ownActive, setActive] = React.useState(0);
   const active = Math.max(0, Math.min(ownActive, slides.length - 1));
+  React.useEffect(() => () => clearTimeout(settleTimer.current), []);
   function go(index: number) {
     const next = Math.max(0, Math.min(slides.length - 1, index));
     const child = viewport.current?.children[next] as HTMLElement | undefined;
+    // A settle still pending from an earlier scroll would read the old position.
+    clearTimeout(settleTimer.current);
+    // Pin the pill to where the viewport is now, so the new current slide does not pull it
+    // ahead before the smooth scroll starts.
+    placePill();
     child?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "instant"
-        : "smooth",
+      behavior: prefersReducedMotion() ? "instant" : "smooth",
       block: "nearest",
       inline: "start",
     });
     setActive(next);
   }
-  function readScroll() {
-    const el = viewport.current;
-    if (!el || !el.clientWidth) return;
-    const rtl = getComputedStyle(el).direction === "rtl";
-    const bounds = el.getBoundingClientRect();
-    const edge = rtl ? bounds.right : bounds.left;
-    let nearest = 0;
-    let distance = Infinity;
-    Array.from(el.children).forEach((child, index) => {
-      const box = child.getBoundingClientRect();
-      const delta = Math.abs((rtl ? box.right : box.left) - edge);
-      if (delta < distance) {
-        nearest = index;
-        distance = delta;
-      }
-    });
-    setActive(nearest);
+  /**
+   * The pill follows the scroll itself: its place is written straight to its style, without a
+   * render. Under reduced motion it stays on the current slide instead. Returns false when the
+   * viewport has no layout to read.
+   */
+  function placePill() {
+    const progress = carouselScrollProgress(viewport.current);
+    if (progress === undefined) return false;
+    if (prefersReducedMotion()) pill.current?.style.removeProperty("--fux-carousel-progress");
+    else pill.current?.style.setProperty("--fux-carousel-progress", String(progress));
+    return true;
+  }
+  function followScroll() {
+    if (!placePill()) return;
+    clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(settle, CAROUSEL_SETTLE_MS);
+  }
+  /** The current slide changes only once the scroll comes to rest, never on the way past. */
+  function settle() {
+    clearTimeout(settleTimer.current);
+    const progress = carouselScrollProgress(viewport.current);
+    if (progress !== undefined) setActive(Math.round(progress));
   }
   return (
     <section
@@ -2075,7 +2166,8 @@ export function Carousel({ label, children }: { label: string; children: React.R
         tabIndex={0}
         aria-label={`${label} slides`}
         className="fux-carousel-viewport flex snap-x snap-mandatory overflow-x-auto rounded-xl border border-border bg-card shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 dark:border-input"
-        onScroll={readScroll}
+        onScroll={followScroll}
+        onScrollEnd={settle}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
           const rtl = getComputedStyle(event.currentTarget).direction === "rtl";
@@ -2112,27 +2204,46 @@ export function Carousel({ label, children }: { label: string; children: React.R
           <ChevronLeft aria-hidden className="rtl:rotate-180" />
         </Button>
         <div role="group" aria-label="Choose slide" className="flex min-w-0 flex-1 justify-center">
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              type="button"
-              aria-label={`Go to slide ${index + 1}`}
-              aria-current={index === active ? "true" : undefined}
-              onClick={() => go(index)}
-              className="group/dot grid size-6 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
-            >
+          <div className="fux-carousel-dots relative flex">
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                aria-label={`Go to slide ${index + 1}`}
+                aria-current={index === active ? "true" : undefined}
+                onClick={() => go(index)}
+                className="group/dot grid size-(--fux-carousel-dot) place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/20"
+              >
+                <span
+                  aria-hidden
+                  className="fux-carousel-dot size-2 rounded-full bg-border motion-safe:transition-colors motion-safe:duration-200 group-hover/dot:bg-muted-foreground"
+                />
+              </button>
+            ))}
+            {slides.length > 0 && (
               <span
+                ref={pill}
                 aria-hidden
-                className="h-2 w-2 rounded-full bg-border motion-safe:transition-[width,background-color] motion-safe:duration-200 group-hover/dot:bg-muted-foreground group-aria-[current]/dot:w-5 group-aria-[current]/dot:bg-primary"
+                data-slot="carousel-indicator"
+                className="fux-carousel-pill pointer-events-none absolute inset-y-0 my-auto h-2 rounded-full bg-primary"
+                style={{ "--fux-carousel-index": active } as React.CSSProperties}
               />
-            </button>
-          ))}
+            )}
+          </div>
         </div>
         <output
           aria-live="polite"
-          className="min-w-12 text-center text-xs text-muted-foreground tabular-nums"
+          className={
+            showCount
+              ? "min-w-12 text-center text-xs text-muted-foreground tabular-nums"
+              : "sr-only"
+          }
         >
-          {slides.length ? active + 1 : 0} / {slides.length}
+          {showCount
+            ? `${slides.length ? active + 1 : 0} / ${slides.length}`
+            : slides.length
+              ? `Slide ${active + 1} of ${slides.length}`
+              : ""}
         </output>
         <Button
           variant="outline"
