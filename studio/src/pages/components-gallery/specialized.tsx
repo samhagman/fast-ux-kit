@@ -59,6 +59,15 @@ const project = {
   notes: "Inspection moved to the second week of March; the crew lead has the revised drawings.",
   attachments: [],
 };
+const approvalFlow = {
+  initial: "draft",
+  states: {
+    draft: { on: { SUBMIT: "review" } },
+    review: { on: { APPROVE: "published", REJECT: "draft" } },
+    published: { type: "final" },
+  },
+  owners: ["editor"],
+};
 const circular: Record<string, unknown> = { name: "Node A" };
 circular.self = circular;
 
@@ -182,10 +191,30 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
               <Slide
                 key={index}
                 title={`Chapter ${index + 1}`}
-                text="The dots stay centered and the current one is stretched."
+                text="The dots stay centered and the pill glides across them as you scroll."
               />
             ))}
           </C.Carousel>
+          <C.Carousel label="Without the count" showCount={false}>
+            <Slide
+              title="Dots only"
+              text="The count is hidden. Screen readers still hear which slide is showing."
+            />
+            <Slide
+              title="Second slide"
+              text="Swipe, use the arrows or pick a dot: the announcement follows."
+            />
+            <Slide title="Third slide" text="The pill lands on the last dot." />
+          </C.Carousel>
+        </Variants>
+        <Variants title="Right to left" layout="stack">
+          <div dir="rtl" className="w-full">
+            <C.Carousel label="Right-to-left notes">
+              <Slide title="First" text="The first slide sits at the right." />
+              <Slide title="Second" text="Next moves leftward, and so does the pill." />
+              <Slide title="Third" text="The pill ends on the leftmost dot." />
+            </C.Carousel>
+          </div>
         </Variants>
       </>
     ),
@@ -295,6 +324,13 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
             defaultExpandedIds={["$", "$/deep", "$/deep/a", "$/deep/a/b"]}
           />
           <C.JsonTreeView value={circular} label="Circular" defaultExpandedIds={["$"]} />
+          <C.JsonTreeView
+            value={approvalFlow}
+            label="One-line values, no counts"
+            defaultExpandedIds={["$", "$/states", "$/states/review", "$/states/review/on"]}
+            inlineSmallValues
+            showCounts={false}
+          />
         </Variants>
       </>
     ),

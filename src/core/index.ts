@@ -467,6 +467,8 @@ export * from "./keymap.js";
 
 export * from "./hover.js";
 
+export * from "./json-inline.js";
+
 export * from "./outline-productivity.js";
 export * from "./outline-search.js";
 
