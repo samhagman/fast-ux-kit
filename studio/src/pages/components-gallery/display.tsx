@@ -1,6 +1,6 @@
 // Demos for the code and data display families the app catalog shares with Editorial UI.
 import * as C from "@samhagman/fast-ux-kit/components";
-import { type ComponentFixture, Variants, example } from "./fixture-kit";
+import { type ComponentFixture, Variants, click, example } from "./fixture-kit";
 
 const listing = `export function wordCount(note: string): number {
   // Split on any run of whitespace, and ignore the empty edges.
@@ -19,11 +19,61 @@ export const displayFixtures: Readonly<Record<string, ComponentFixture>> = {
           notes={[{ line: 3, text: "One expression does the whole job, so there is no loop." }]}
         />
         <Variants title="Plain snippet" layout="stack">
-          <C.CodeBlock code={`{ "theme": "paper", "margin": true }`} language="json" plain />
+          {/* A listing is an inline-size container with no width of its own: in a column that
+              does not stretch its items, it needs one. */}
+          <C.CodeBlock
+            className="w-full"
+            code={`{ "theme": "paper", "margin": true }`}
+            language="json"
+            plain
+          />
+        </Variants>
+        <Variants title="Copyable" layout="stack">
+          <C.CodeBlock
+            className="w-full"
+            code={listing}
+            language="ts"
+            filename="src/notes/word-count.ts"
+            copyable
+          />
         </Variants>
       </>
     ),
     ".fux-code",
+    [click(".fux-code-copy", '.fux-code [role="status"]', "Copied")],
+  ),
+  CommandLine: example(
+    "Copy puts the command on the clipboard without the prompt. A long command scrolls sideways inside the box.",
+    () => (
+      <>
+        <C.CommandLine label="Install command" command="npm install @example/notes" prompt />
+        <Variants title="Long command" layout="stack">
+          <div className="w-full max-w-xs">
+            <C.CommandLine
+              label="Export command"
+              command="fieldbook export --format markdown --include-attachments --out ./export/2028-02"
+              prompt
+            />
+          </div>
+        </Variants>
+        <Variants title="No prompt, custom labels" layout="stack">
+          <C.CommandLine
+            label="Status command"
+            command="fieldbook status"
+            copyLabel="Copy command"
+            copiedLabel="Command copied"
+          />
+        </Variants>
+      </>
+    ),
+    '[data-slot="command-line"]',
+    [
+      click(
+        '[data-slot="command-line"] button',
+        '[data-slot="command-line"] [role="status"]',
+        "Copied",
+      ),
+    ],
   ),
   Terminal: example(
     "Lines the reader types start with the prompt. Everything else is output.",

@@ -92,7 +92,7 @@ after(async () => {
 });
 
 test("every canonical family has one working gallery fixture", () => {
-  assert.equal(catalog.length, 92);
+  assert.equal(catalog.length, 93);
   assert.deepEqual(
     Object.keys(componentFixtures).sort(),
     catalog.map((entry) => entry.name).sort(),
@@ -172,12 +172,12 @@ test("the gallery is one scrolling page: every family's card, filtered by search
   assert.ok(view.getByRole("heading", { name: "App components" }));
   assert.equal(
     view.container.querySelectorAll("[data-family]").length,
-    92,
+    93,
     "the index lists every family",
   );
   assert.equal(
     view.container.querySelectorAll("article[id^=family-]").length,
-    92,
+    93,
     "one card per family",
   );
   assert.equal(view.getAllByRole("tab").length, 16, "one tab per category");

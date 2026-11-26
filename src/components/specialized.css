@@ -144,3 +144,20 @@
     scroll-behavior: auto;
   }
 }
+
+/* CommandLine: a long command scrolls sideways under a thin scrollbar. The track's small block
+   padding leaves room for it inside the box's minimum height, so the box barely grows when the
+   bar appears (and not at all with overlay scrollbars). */
+.fux-command-line-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
+}
+@supports not (scrollbar-width: thin) {
+  .fux-command-line-scroll::-webkit-scrollbar {
+    height: 6px;
+  }
+  .fux-command-line-scroll::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+    background: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+  }
+}

@@ -771,6 +771,63 @@
 .fux-code {
   container: fux-code / inline-size;
 }
+/* The optional Copy action ends the header bar, after the language. Its negative block margin
+   keeps the bar as tall as it is without one; the button is still 1.5rem tall. */
+.fux-code-head {
+  align-items: center;
+}
+.fux-code-lang,
+.fux-code-copy {
+  margin-inline-start: auto;
+}
+.fux-code-lang ~ .fux-code-copy {
+  margin-inline-start: 0;
+}
+.fux-code-copy {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-block-size: 1.5rem;
+  margin-block: -0.2rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--fux-ed-rule);
+  border-radius: var(--fux-ed-radius);
+  background: var(--fux-ed-raised);
+  color: var(--fux-ed-ink);
+  font: inherit;
+  font-weight: 560;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--fux-ed-ease),
+    border-color 140ms var(--fux-ed-ease),
+    color 140ms var(--fux-ed-ease);
+}
+.fux-code-copy:hover:not(:disabled) {
+  background: var(--fux-ed-tone);
+}
+.fux-code-copy:focus-visible {
+  outline: 2px solid var(--fux-ed-accent);
+  outline-offset: 2px;
+}
+.fux-code-copy:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.fux-code-copy[data-copied] {
+  border-color: var(--fux-ed-good);
+  color: var(--fux-ed-good);
+}
+.fux-code-copy-labels {
+  display: grid;
+}
+.fux-code-copy-labels > * {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+.fux-code-copy:not([data-copied]) [data-label="copied"],
+.fux-code-copy[data-copied] [data-label="copy"] {
+  visibility: hidden;
+}
 .fux-code-pre,
 .fux-terminal-pre {
   min-inline-size: 0;
@@ -1417,6 +1474,7 @@
   .fux-article *,
   .fux-playback *,
   .fux-code-line,
+  .fux-code-copy,
   .fux-pipeline-stage {
     transition: none !important;
     animation: none !important;
@@ -1425,7 +1483,8 @@
 
 @media print {
   .fux-playback,
-  .fux-explorable-controls {
+  .fux-explorable-controls,
+  .fux-code-copy {
     display: none;
   }
   .fux-walkthrough .fux-walkthrough-text {

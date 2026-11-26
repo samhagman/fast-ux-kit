@@ -41,6 +41,7 @@ import { Input } from "./ui/input.js";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.js";
 import { Progress } from "./ui/progress.js";
 import { buttonVariants } from "./ui/button.js";
+import { useCopy } from "../hooks/use-copy.js";
 import { cn } from "../lib/utils.js";
 
 type ButtonVariant = NonNullable<React.ComponentProps<typeof Button>["variant"]>;
@@ -411,6 +412,30 @@ export function Pagination({
 /* Clipboard and download                                                      */
 /* -------------------------------------------------------------------------- */
 
+/** The copy icon, which turns into a check while `copied`. */
+function CopyGlyph({
+  copied,
+  inlineStart = false,
+  className = "size-4",
+}: {
+  copied: boolean;
+  inlineStart?: boolean;
+  className?: string;
+}) {
+  const icon =
+    "absolute size-full motion-safe:transition-[opacity,transform] motion-safe:duration-150";
+  return (
+    <span
+      aria-hidden
+      data-icon={inlineStart ? "inline-start" : undefined}
+      className={cn("relative grid place-items-center", className)}
+    >
+      <Copy className={cn(icon, copied ? "scale-50 opacity-0" : "scale-100 opacity-100")} />
+      <Check className={cn(icon, copied ? "scale-100 opacity-100" : "scale-50 opacity-0")} />
+    </span>
+  );
+}
+
 export interface ClipboardProps {
   value: string;
   label?: string;
@@ -434,20 +459,7 @@ export function Clipboard({
   size,
   resetDelay = 2000,
 }: ClipboardProps) {
-  const [status, setStatus] = React.useState<"" | "copied" | "failed">("");
-  const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  React.useEffect(() => () => clearTimeout(timer.current), []);
-  async function copy() {
-    clearTimeout(timer.current);
-    try {
-      await navigator.clipboard.writeText(value);
-      setStatus("copied");
-    } catch (error) {
-      setStatus("failed");
-      onError?.(error instanceof Error ? error : new Error(String(error)));
-    }
-    timer.current = setTimeout(() => setStatus(""), resetDelay);
-  }
+  const { status, copy } = useCopy({ resetDelay, onError });
   const copied = status === "copied";
   return (
     <span data-slot="clipboard" className="inline-flex items-center gap-2">
@@ -456,27 +468,10 @@ export function Clipboard({
         size={size ?? (iconOnly ? "icon" : "default")}
         aria-label={iconOnly ? label : undefined}
         data-copied={copied || undefined}
-        onClick={copy}
+        onClick={() => void copy(value)}
         className={cn("shadow-xs", copied && "border-success/50 text-success")}
       >
-        <span
-          aria-hidden
-          data-icon={iconOnly ? undefined : "inline-start"}
-          className="relative grid size-4 place-items-center"
-        >
-          <Copy
-            className={cn(
-              "absolute size-4 motion-safe:transition-[opacity,transform] motion-safe:duration-150",
-              copied ? "scale-50 opacity-0" : "scale-100 opacity-100",
-            )}
-          />
-          <Check
-            className={cn(
-              "absolute size-4 motion-safe:transition-[opacity,transform] motion-safe:duration-150",
-              copied ? "scale-100 opacity-100" : "scale-50 opacity-0",
-            )}
-          />
-        </span>
+        <CopyGlyph copied={copied} inlineStart={!iconOnly} />
         {!iconOnly && label}
       </Button>
       <span
@@ -490,6 +485,124 @@ export function Clipboard({
         {status === "copied" ? copiedLabel : status === "failed" ? "Copy failed" : ""}
       </span>
     </span>
+  );
+}
+
+export interface CommandLineProps extends Omit<
+  React.ComponentProps<"div">,
+  "children" | "prompt" | "onError"
+> {
+  /** One shell command. It is copied exactly as given. */
+  command: string;
+  /** Names the box for assistive technology: "Install command". */
+  label: string;
+  /** A decorative prompt before the command; `true` draws `$`. It is never copied or announced. */
+  prompt?: boolean | string;
+  /** The button's text and accessible name. */
+  copyLabel?: string;
+  /** Shown on the button and announced after a successful copy. */
+  copiedLabel?: string;
+  /** Announced when the browser refuses the copy. The command is selected instead. */
+  failedLabel?: string;
+  /** How long the confirmation stays, in milliseconds. */
+  resetDelay?: number;
+  onError?: (error: Error) => void;
+}
+/**
+ * One shell command in a monospace box with a Copy button at its inline end.
+ *
+ *   ┌──────────────────────────────────────────┐
+ *   │ $ npm install @example/notes ⇢  [⧉ Copy] │
+ *   └──────────────────────────────────────────┘
+ *
+ * A long command scrolls sideways inside its track; the button stays where it is.
+ */
+export function CommandLine({
+  command,
+  label,
+  prompt = false,
+  copyLabel = "Copy",
+  copiedLabel = "Copied",
+  failedLabel = "Copy failed. The command is selected.",
+  resetDelay = 2000,
+  onError,
+  className,
+  ...props
+}: CommandLineProps) {
+  const { status, copy } = useCopy({ resetDelay, onError });
+  const copied = status === "copied";
+  const promptText = prompt === true ? "$" : prompt || "";
+  const track = React.useRef<HTMLDivElement>(null);
+  const text = React.useRef<HTMLElement>(null);
+  // A track that overflows becomes a tab stop, so the keyboard can scroll it. One that fits adds
+  // nothing to the tab order. Server markup is the fitting case until the browser measures.
+  const [overflowing, setOverflowing] = React.useState(false);
+  React.useEffect(() => {
+    const node = track.current;
+    if (!node) return;
+    const measure = () => setOverflowing(node.scrollWidth > node.clientWidth + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [command, promptText]);
+  // Both labels share one grid cell, so the button keeps the wider one's width and never jumps.
+  const buttonLabel = (value: string, shown: boolean) => (
+    <span data-label className={cn("[grid-area:1/1]", !shown && "invisible")}>
+      {value}
+    </span>
+  );
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      data-slot="command-line"
+      className={cn(
+        "fux-command-line flex min-h-10 max-w-full min-w-0 items-stretch rounded-lg border border-border bg-muted/50 font-mono text-sm text-foreground dark:bg-input/30",
+        className,
+      )}
+      {...props}
+    >
+      {/* Commands read left to right on any page; the box around them still follows the page. */}
+      <div
+        ref={track}
+        dir="ltr"
+        data-slot="command-line-scroll"
+        tabIndex={overflowing ? 0 : undefined}
+        className="fux-command-line-scroll flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden rounded-[inherit] px-3 py-1 whitespace-pre outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset"
+      >
+        {promptText && (
+          <span
+            aria-hidden="true"
+            data-slot="command-line-prompt"
+            className="me-[1ch] text-muted-foreground select-none"
+          >
+            {promptText}
+          </span>
+        )}
+        <code ref={text} data-slot="command-line-command" className="[font:inherit] select-text">
+          {command}
+        </code>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={copyLabel}
+        data-copied={copied || undefined}
+        onClick={() => void copy(command, text.current)}
+        className={cn("me-1 self-center font-sans", copied && "text-success hover:text-success")}
+      >
+        <CopyGlyph copied={copied} inlineStart className="size-3.5" />
+        <span aria-hidden className="grid justify-items-center">
+          {buttonLabel(copyLabel, !copied)}
+          {buttonLabel(copiedLabel, copied)}
+        </span>
+      </Button>
+      <span role="status" className="sr-only">
+        {status === "copied" ? copiedLabel : status === "failed" ? failedLabel : ""}
+      </span>
+    </div>
   );
 }
 
