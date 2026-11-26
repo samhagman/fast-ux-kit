@@ -24,3 +24,12 @@ export type {
 } from "../editorial/index.js";
 export { cn } from "../lib/utils.js";
 export { Toaster, Toaster as Toast, toast } from "./ui/sonner.js";
+export {
+  Alert,
+  AlertActions,
+  AlertDescription,
+  AlertTitle,
+  alertTone,
+  alertVariants,
+} from "./ui/alert.js";
+export type { AlertProps, AlertTone, AlertVariant } from "./ui/alert.js";

@@ -1,4 +1,5 @@
-// Gallery demos: Toggles, overlays, layout surfaces, media and toasts (overlays.tsx, media.tsx).
+// Gallery demos: Toggles, overlays, layout surfaces, media, toasts and alerts (overlays.tsx,
+// media.tsx, ui/alert.tsx).
 import * as React from "react";
 import {
   AlignCenterIcon,
@@ -7,11 +8,14 @@ import {
   ArchiveIcon,
   BellIcon,
   BoldIcon,
+  CheckCircleIcon,
   CheckIcon,
+  CircleAlertIcon,
   CopyIcon,
   FileTextIcon,
   FilterIcon,
   FolderInputIcon,
+  InfoIcon,
   ItalicIcon,
   LinkIcon,
   Loader2Icon,
@@ -19,6 +23,7 @@ import {
   SearchIcon,
   SettingsIcon,
   StarIcon,
+  TriangleAlertIcon,
   UnderlineIcon,
   UserIcon,
   Undo2Icon,
@@ -1290,6 +1295,87 @@ export const overlaysMediaFixtures: Readonly<Record<string, ComponentFixture>> =
     ),
     "button",
     [click("button", "[data-sonner-toast]", "Saved example")],
+  ),
+  Alert: example(
+    "A message that stays until the reader deals with it: what happened, then the next step. Errors interrupt; the other tones wait their turn.",
+    (s) => {
+      /** A demo link that reports instead of leaving the page. */
+      const step = (label: string, report: string) => (
+        <C.Link
+          href="#/components/Alert"
+          onClick={(event) => {
+            event.preventDefault();
+            s.report(report);
+          }}
+        >
+          {label}
+        </C.Link>
+      );
+      return (
+        <>
+          <C.Alert variant="error" icon={<CircleAlertIcon />}>
+            <C.AlertTitle>Sync stopped</C.AlertTitle>
+            <C.AlertDescription>
+              3 notes on this device have not reached the server. They are safe here until the
+              connection comes back.
+            </C.AlertDescription>
+            <C.AlertActions>
+              <C.Button size="sm" variant="outline" onClick={() => s.report("Retrying sync")}>
+                Try again
+              </C.Button>
+              {step("See what is waiting", "Opening the 3 waiting notes")}
+            </C.AlertActions>
+          </C.Alert>
+          <Variants title="Tones" layout="stack">
+            <C.Alert variant="info" icon={<InfoIcon />}>
+              <C.AlertTitle>This notebook is shared</C.AlertTitle>
+              <C.AlertDescription>
+                Changes you make here are visible to 4 people.
+              </C.AlertDescription>
+              <C.AlertActions>{step("Manage access", "Opening sharing settings")}</C.AlertActions>
+            </C.Alert>
+            <C.Alert variant="success" icon={<CheckCircleIcon />}>
+              <C.AlertTitle>Export finished</C.AlertTitle>
+              <C.AlertDescription>42 notes were written to field-notes.zip.</C.AlertDescription>
+              <C.AlertActions>
+                <C.Button size="sm" variant="outline" onClick={() => s.report("Downloading")}>
+                  Download
+                </C.Button>
+              </C.AlertActions>
+            </C.Alert>
+            <C.Alert variant="warning" icon={<TriangleAlertIcon />}>
+              <C.AlertTitle>Storage is 90% full</C.AlertTitle>
+              <C.AlertDescription>
+                Uploads stop at 100%. Archive old attachments to make room.
+              </C.AlertDescription>
+              <C.AlertActions>
+                {step("Review attachments", "Opening attachments, largest first")}
+              </C.AlertActions>
+            </C.Alert>
+          </Variants>
+          <Variants title="Title only, no icon" layout="stack">
+            <C.Alert variant="success">
+              <C.AlertTitle>Settings saved</C.AlertTitle>
+            </C.Alert>
+          </Variants>
+          <Variants title="Right to left" layout="stack">
+            <C.Alert variant="error" icon={<CircleAlertIcon />} dir="rtl" lang="ar">
+              <C.AlertTitle>توقفت المزامنة</C.AlertTitle>
+              <C.AlertDescription>
+                لم تصل ٣ ملاحظات من هذا الجهاز إلى الخادم بعد.
+              </C.AlertDescription>
+              <C.AlertActions>
+                <C.Button size="sm" variant="outline" onClick={() => s.report("إعادة المحاولة")}>
+                  أعد المحاولة
+                </C.Button>
+              </C.AlertActions>
+            </C.Alert>
+          </Variants>
+        </>
+      );
+    },
+    '[data-slot="alert"][role="alert"]',
+    [click('[data-slot="alert-actions"] button', ".fixture-status", "Retrying sync")],
   ),
   Tour: example(
     "Step through a short guided introduction.",

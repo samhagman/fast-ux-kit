@@ -868,5 +868,14 @@
     "owner": "native",
     "status": "styled",
     "parts": ["BarList"]
+  },
+  {
+    "name": "Alert",
+    "exportName": "Alert",
+    "category": "Feedback",
+    "description": "A message that stays in the page, saying what happened and the next step, in info, success, warning and error tones.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Alert", "AlertTitle", "AlertDescription", "AlertActions"]
   }
 ]

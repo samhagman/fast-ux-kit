@@ -1,6 +1,6 @@
 # Component coverage
 
-The canonical inventory contains 92 families. Its source is
+The canonical inventory contains 93 families. Its source is
 `src/components/catalog.json`, exposed as `componentManifest`. Leaf parts and
 utility functions are listed separately from canonical families.
 
@@ -9,6 +9,7 @@ utility functions are listed separately from canonical families.
 | Suite                                  | Coverage                                                                                                                                                     |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `tests/components-catalog.test.tsx`    | A real gallery fixture for every family, rendered semantics and applicable action flows                                                                      |
+| `tests/components-alert.test.tsx`      | Alert roles per tone and the role override, its slots and reachable action, stable server rendering and hydration, logical sides and token-only colors       |
 | `tests/color-date-components.test.tsx` | Color immutability and alpha, controlled edits, invalid input, keyboard channels, date bounds, leap days, time zones, read-only values and unfinished ranges |
 | `studio/tests/`                        | Outliner commands, editing, focus, clipboard, date handling, search, workspace behavior and machine tools                                                    |
 | `npm run test:consumer`                | Packed ESM entries, declarations, independent installation, rendering, hydration, styles and dependency boundaries                                           |
