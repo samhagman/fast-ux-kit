@@ -1,7 +1,7 @@
 # Fast UX Kit
 
 A React component library for structured writing and interactive tools. It
-includes an outliner, a state-machine canvas, a machine hierarchy view, 94 app
+includes an outliner, a state-machine canvas, a machine hierarchy view, 96 app
 component families built on a shared shadcn and Base UI layer, and Editorial UI:
 35 forms for explaining something on a page.
 
@@ -125,7 +125,7 @@ shows on the state's card and in full in the details panel.
 
 | Entry            | Purpose                                                   |
 | ---------------- | --------------------------------------------------------- |
-| `/components`    | The 94-family app component catalog                       |
+| `/components`    | The 96-family app component catalog                       |
 | `/editorial`     | Editorial UI: atoms, molecules and organisms for articles |
 | `/editorial.css` | The standalone stylesheet for Editorial UI                |
 | `/outliner`      | Outliner, document workspace, types and host seams        |
@@ -188,8 +188,9 @@ Components use standard React events and Base UI value callbacks. For example,
 accept their documented value types. The catalog also contains native controls
 where a browser element provides the required behavior.
 
-Use the shared CSS variables for theme customization and one focus or overlay
-manager for each interactive element. Support keyboard access, logical direction
+Use the shared CSS variables for theme customization, or `ThemeScope` to give a
+subtree a sub-theme from a few inputs, and one focus or overlay manager for each
+interactive element. Support keyboard access, logical direction
 and reduced motion when composing components. Sizes come from each variant
 (`xs` to `xl`); pick the one that fits the layout.
 

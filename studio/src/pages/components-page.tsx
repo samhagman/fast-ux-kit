@@ -8,6 +8,7 @@ import { displayFixtures } from "./components-gallery/display";
 import { overlaysMediaFixtures } from "./components-gallery/overlays-media";
 import { primitiveFixtures } from "./components-gallery/primitives";
 import { specializedFixtures } from "./components-gallery/specialized";
+import { surfacesFixtures } from "./components-gallery/surfaces";
 
 export type { ComponentFixture, FixtureAction } from "./components-gallery/fixture-kit";
 
@@ -19,6 +20,7 @@ export const componentFixtures: Readonly<Record<string, ComponentFixture>> = {
   ...overlaysMediaFixtures,
   ...specializedFixtures,
   ...displayFixtures,
+  ...surfacesFixtures,
   ...primitiveFixtures,
 };
 const PRIMITIVES = C.componentManifest.filter((entry) => entry.layer === "primitive").length;
@@ -52,6 +54,8 @@ const WIDE = new Set([
   "Form",
   "Panel",
   "CodeBlock",
+  "Frame",
+  "ThemeScope",
 ]);
 const slug = (name: string) => `family-${name}`;
 const familyFromHash = () => window.location.hash.match(/^#\/components\/([A-Za-z]+)$/)?.[1];

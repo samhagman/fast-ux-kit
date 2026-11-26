@@ -83,18 +83,31 @@
   background: var(--fux-ed-paper);
   padding-inline: var(--fux-ed-gutter);
 }
-.fux-article :where(p, ul, ol, dl, figure, blockquote, h1, h2, h3, table, pre) {
+/* The article's base element styles. They stop at a kit boundary: an element with
+   data-kit-boundary, and everything inside it, keeps its own styles (an embedded mock-up, a
+   custom picture). The exclusion adds no specificity. */
+.fux-article
+  :where(p, ul, ol, dl, figure, blockquote, h1, h2, h3, table, pre):not(
+    :where(.fux-article [data-kit-boundary], .fux-article [data-kit-boundary] *)
+  ) {
   margin: 0;
 }
-.fux-article :where(a) {
+.fux-article
+  :where(a):not(:where(.fux-article [data-kit-boundary], .fux-article [data-kit-boundary] *)) {
   color: inherit;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.18em;
 }
-.fux-article :where(a:hover) {
+.fux-article
+  :where(a:hover):not(
+    :where(.fux-article [data-kit-boundary], .fux-article [data-kit-boundary] *)
+  ) {
   text-decoration-thickness: 2px;
 }
-.fux-article :where(a, button, input, pre, summary):focus-visible {
+.fux-article
+  :where(a, button, input, pre, summary):focus-visible:not(
+    :where(.fux-article [data-kit-boundary], .fux-article [data-kit-boundary] *)
+  ) {
   outline: 2px solid var(--fux-ed-accent);
   outline-offset: 2px;
   border-radius: 1px;

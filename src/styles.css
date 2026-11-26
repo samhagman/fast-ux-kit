@@ -248,55 +248,56 @@
   max-inline-size: 100%;
   overflow: auto;
 }
-.fast-ux-rich table {
-  border-collapse: collapse;
-}
-.fast-ux-rich th,
-.fast-ux-rich td {
-  border: 1px solid var(--fux-border-subtle, currentColor);
-  padding: var(--fux-space-sm, 0.5rem);
-  text-align: start;
-}
-.fast-ux-rich figure {
-  margin: 0;
-}
-.fast-ux-rich img,
-.fast-ux-rich video,
-.fast-ux-rich audio {
-  max-inline-size: 100%;
-}
-.fast-ux-rich img,
-.fast-ux-rich video {
-  block-size: auto;
-}
-.fast-ux-rich pre {
-  padding: var(--fux-space-sm, 0.5rem);
-}
 .fast-ux-rich__external-label {
   font-size: 0.8em;
-}
-.fast-ux-rich aside {
-  border-inline-start: 2px solid var(--fux-border-subtle, currentColor);
-  padding-inline-start: var(--fux-space-md, 0.75rem);
-}
-.fast-ux-rich a {
-  color: var(--fux-accent, LinkText);
 }
 .fast-ux-rich__scroll:focus-visible {
   outline: 2px solid var(--fux-focus, Highlight);
   outline-offset: 2px;
 }
-.fast-ux-rich :is(h1, h2, h3, h4) {
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  margin-block: 1em 0.4em;
-}
-.fast-ux-rich p {
-  margin-block: 0.5em;
-}
-.fast-ux-rich :is(pre, blockquote) {
-  background: var(--fux-surface-subtle, transparent);
-  border-radius: var(--fux-radius-sm, 0.1875rem);
+/* The element styles, at the specificity of `.fast-ux-rich <element>`. They stop at a kit
+   boundary: an element with data-kit-boundary, and everything inside it, keeps its own styles
+   (a custom renderer's own markup). The exclusion adds no specificity. */
+.fast-ux-rich :not(:where(.fast-ux-rich [data-kit-boundary], .fast-ux-rich [data-kit-boundary] *)) {
+  &:is(table) {
+    border-collapse: collapse;
+  }
+  &:is(th, td) {
+    border: 1px solid var(--fux-border-subtle, currentColor);
+    padding: var(--fux-space-sm, 0.5rem);
+    text-align: start;
+  }
+  &:is(figure) {
+    margin: 0;
+  }
+  &:is(img, video, audio) {
+    max-inline-size: 100%;
+  }
+  &:is(img, video) {
+    block-size: auto;
+  }
+  &:is(pre) {
+    padding: var(--fux-space-sm, 0.5rem);
+  }
+  &:is(aside) {
+    border-inline-start: 2px solid var(--fux-border-subtle, currentColor);
+    padding-inline-start: var(--fux-space-md, 0.75rem);
+  }
+  &:is(a) {
+    color: var(--fux-accent, LinkText);
+  }
+  &:is(h1, h2, h3, h4) {
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+    margin-block: 1em 0.4em;
+  }
+  &:is(p) {
+    margin-block: 0.5em;
+  }
+  &:is(pre, blockquote) {
+    background: var(--fux-surface-subtle, transparent);
+    border-radius: var(--fux-radius-sm, 0.1875rem);
+  }
 }
 @media (max-width: 480px) {
   .fast-ux-outliner {

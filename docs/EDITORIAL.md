@@ -181,6 +181,11 @@ Override the `--fux-ed-*` tokens on `:root` or on `.fux-article`.
 With the app stylesheet loaded, the editorial set follows the app theme, dark mode
 included. On its own it uses a neutral paper.
 
+The article styles its plain elements: block margins, links and focus rings.
+Custom markup inside an article, such as a mock-up or a hand-drawn picture, keeps
+its own styles under `data-kit-boundary`: the attribute's element and everything
+inside it are left alone. The exclusion adds no specificity.
+
 ## Code listings
 
 `CodeBlock` takes source text and a language. A small built-in tokenizer marks

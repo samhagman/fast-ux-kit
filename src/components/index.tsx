@@ -7,6 +7,7 @@ export * from "./dates.js";
 export * from "./overlays.js";
 export * from "./specialized.js";
 export * from "./media.js";
+export * from "./surfaces.js";
 export * from "./manifest.js";
 // General-purpose display families that came out of Editorial UI. They live in the editorial
 // module (React only, plain CSS) and are part of the app catalog too.

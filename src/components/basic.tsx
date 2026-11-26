@@ -786,9 +786,9 @@ export function RadioGroup({
                 disabled={option.disabled}
                 aria-describedby={describedBy}
                 aria-invalid={error ? true : undefined}
-                className="relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/15 data-checked:border-primary data-checked:bg-primary data-disabled:opacity-50 dark:bg-input/30 dark:data-checked:bg-primary"
+                className="relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/15 data-checked:border-selection data-checked:bg-selection data-disabled:opacity-50 dark:bg-input/30 dark:data-checked:bg-selection"
               >
-                <RadioPrimitive.Indicator className="fux-radio-indicator block size-1.5 rounded-full bg-primary-foreground motion-safe:transition motion-safe:duration-150 motion-safe:starting:scale-50 motion-safe:starting:opacity-0" />
+                <RadioPrimitive.Indicator className="fux-radio-indicator block size-1.5 rounded-full bg-selection-foreground motion-safe:transition motion-safe:duration-150 motion-safe:starting:scale-50 motion-safe:starting:opacity-0" />
               </RadioPrimitive.Root>
             )}
           />

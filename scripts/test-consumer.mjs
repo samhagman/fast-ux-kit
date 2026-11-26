@@ -75,7 +75,7 @@ import assert from 'node:assert/strict';
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
 import { validateOutline, createOutlineEditorState, reduceOutlineEditor } from '@samhagman/fast-ux-kit/core';
-import { Alert, AlertTitle, Button, ColorPicker, CommandLine, DatePicker, componentManifest } from '@samhagman/fast-ux-kit/components';
+import { Alert, AlertTitle, Button, ColorPicker, CommandLine, DatePicker, Frame, ThemeScope, type ThemeScopeTokens, componentManifest } from '@samhagman/fast-ux-kit/components';
 import { Outliner, OutlinerWorkspace, type OutlineItem, type OutlinerHandle, type OutlineWorkspaceSnapshot, createNotePageRegistry, defineNotePageExtension, NotePageView, type NotePageType, type OutlineCollaboration, type OutlineFieldEvent } from '@samhagman/fast-ux-kit/outliner';
 import { MachineGraphView } from '@samhagman/fast-ux-kit/machine-graph';
 import { MachineView as DeprecatedMachineView, type MachineViewProps } from '@samhagman/fast-ux-kit/machine-view';
@@ -93,7 +93,7 @@ const state = reduceOutlineEditor(createOutlineEditorState(nodes), {type:'text',
 assert.equal(state.nodes[0]?.text,'Two');
 const machine: MachineDocument = {version:1,rootId:'main',machines:[{id:'main',label:'Consumer machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
 assert.deepEqual(createMachineSnapshot(machine).activeIds,['idle']);
-assert.equal(componentManifest.filter(entry=>entry.layer==='family').length,94);
+assert.equal(componentManifest.filter(entry=>entry.layer==='family').length,96);
 assert.equal(componentManifest.filter(entry=>entry.layer==='primitive').length,11);
 for (const entry of [OutlinerWorkspace, MachineGraphView, MachineTree, legacyReader.OutlineEditor, rich, root]) assert.ok(entry);
 const acceptWorkspace = (event: OutlineWorkspaceSnapshot) => event.documents;
@@ -101,6 +101,8 @@ assert.equal(typeof acceptWorkspace,'function');
 assert.match(renderToString(<Button>Save</Button>),/Save/);
 assert.match(renderToString(<Alert variant="error"><AlertTitle>Sync stopped</AlertTitle></Alert>),/role="alert"[^>]*>.*Sync stopped/);
 assert.match(renderToString(<CommandLine label="Install command" command="npm install example" prompt/>),/aria-label="Install command"[\\s\\S]*npm install example/);
+const sub: ThemeScopeTokens = {fg:'var(--foreground)',selection:'teal'};
+assert.match(renderToString(<ThemeScope tokens={sub}><Frame url="example.test/t/7Hq2" label="Mock-up">Body</Frame></ThemeScope>),/--fux-scope-fg:var\\(--foreground\\)[\\s\\S]*data-tokens="fg selection"[\\s\\S]*aria-label="Mock-up"[\\s\\S]*example\\.test\\/t\\/7Hq2/);
 assert.match(renderToString(<ColorPicker label="Accent" defaultValue="#225544"/>),/Accent/);
 assert.match(renderToString(<DatePicker label="Due"/>),/Due/);
 assert.match(renderToString(<Outliner defaultValue={nodes}/>),/One/);
@@ -150,7 +152,7 @@ import assert from 'node:assert/strict';
 import { createElement as h, act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
-import { Button, CodeBlock, CommandLine, componentManifest } from '@samhagman/fast-ux-kit/components';
+import { Button, CodeBlock, CommandLine, Frame, ThemeScope, componentManifest } from '@samhagman/fast-ux-kit/components';
 import { Outliner } from '@samhagman/fast-ux-kit/outliner';
 import { MachineGraphView } from '@samhagman/fast-ux-kit/machine-graph';
 import { MachineTree } from '@samhagman/fast-ux-kit/machine-tree';
@@ -166,6 +168,7 @@ const views=[
  h(Outliner,{defaultValue:nodes,readOnly:true}),
  h(MachineGraphView,{defaultDocument:machine,readOnly:true}),
  h(MachineTree,{document:machine}),
+ h(ThemeScope,{tokens:{fg:'var(--foreground)',radius:'0'}},h(Frame,{url:'example.test/t/7Hq2',label:'Hydration frame'},'Hydration frame body')),
  h(CommandLine,{label:'Hydration command',command:'npm install example',prompt:true}),
  h(CodeBlock,{code:'const a = 1',language:'ts',filename:'a.ts',copyable:true}),
 ];
@@ -193,6 +196,7 @@ await act(async()=>document.querySelector('#root-0 button').click());
 assert.equal(clicks,1); assert.deepEqual(errors,[]);
 assert.equal(document.querySelector('#root-'+copyIndex+' .fux-code-copy').disabled,false,'the copy action is live after hydration');
 assert.match(document.body.textContent,/npm install example/);
+assert.match(document.body.textContent,/Hydration frame body/);
 assert.match(document.body.textContent,/Hydration note/);
 assert.match(document.body.textContent,/Hydration machine/);
 await act(async()=>roots.forEach(root=>root.unmount())); dom.window.close();

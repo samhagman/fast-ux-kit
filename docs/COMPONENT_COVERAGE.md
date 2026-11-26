@@ -1,6 +1,6 @@
 # Component coverage
 
-The canonical inventory contains 94 families. Its source is
+The canonical inventory contains 96 families. Its source is
 `src/components/catalog.json`, exposed as `componentManifest`. Leaf parts and
 utility functions are listed separately from canonical families.
 
@@ -15,15 +15,17 @@ the page's scroll position alone.
 
 ## Executable coverage
 
-| Suite                                    | Coverage                                                                                                                                                                                |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/components-catalog.test.tsx`      | A real gallery fixture for every family, rendered semantics and applicable action flows                                                                                                 |
-| `tests/components-*-polish.test.tsx`     | Per-family states and styling hooks, including where the `ToggleButtonGroup` and `SegmentGroup` highlights land, multiple-selection fades, hover and reduced motion                     |
-| `tests/components-alert.test.tsx`        | Alert roles per tone and the role override, its slots and reachable action, the page size and heading title, stable server rendering and hydration, logical sides and token-only colors |
-| `tests/components-command-line.test.tsx` | `CommandLine` and the copyable `CodeBlock`: what is copied (no prompt, no line numbers), the announcement, accessible names, the overflow track and server markup                       |
-| `tests/color-date-components.test.tsx`   | Color immutability and alpha, controlled edits, invalid input, keyboard channels, date bounds, leap days, time zones, read-only values and unfinished ranges                            |
-| `studio/tests/`                          | Outliner commands, editing, focus, clipboard, date handling, search, workspace behavior and machine tools                                                                               |
-| `npm run test:consumer`                  | Packed ESM entries, declarations, independent installation, rendering, hydration, styles and dependency boundaries                                                                      |
+| Suite                                    | Coverage                                                                                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/components-catalog.test.tsx`      | A real gallery fixture for every family, rendered semantics and applicable action flows                                                                                                                                                           |
+| `tests/components-*-polish.test.tsx`     | Per-family states and styling hooks, including where the `ToggleButtonGroup` and `SegmentGroup` highlights land, multiple-selection fades, hover and reduced motion                                                                               |
+| `tests/components-alert.test.tsx`        | Alert roles per tone and the role override, its slots and reachable action, the page size and heading title, stable server rendering and hydration, logical sides and token-only colors                                                           |
+| `tests/components-command-line.test.tsx` | `CommandLine` and the copyable `CodeBlock`: what is copied (no prompt, no line numbers), the announcement, accessible names, the overflow track and server markup                                                                                 |
+| `tests/components-frame-theme.test.tsx`  | `Frame` chrome and semantics, `ThemeScope` inputs and mappings (no token refers to itself, every token derived at `:root` restated), the selection colour, the kit boundary, server markup and token-only, logical styles                         |
+| `tests/color-date-components.test.tsx`   | Color immutability and alpha, controlled edits, invalid input, keyboard channels, date bounds, leap days, time zones, read-only values and unfinished ranges                                                                                      |
+| `studio/tests/`                          | Outliner commands, editing, focus, clipboard, date handling, search, workspace behavior and machine tools                                                                                                                                         |
+| `npm run test:surfaces:browser`          | In Chromium on the built Studio: the `Frame` bar, its narrow width and RTL; custom markup with and without `data-kit-boundary` in an article; `ThemeScope` colours, faces, radius and selection, and `var()` inputs that name the token they feed |
+| `npm run test:consumer`                  | Packed ESM entries, declarations, independent installation, rendering, hydration, styles and dependency boundaries                                                                                                                                |
 
 The same per-family fixtures power the Studio gallery and the catalog tests.
 Interactive examples exercise changes such as menu selection, file choice,

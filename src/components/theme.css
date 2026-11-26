@@ -7,7 +7,8 @@
 @custom-variant data-vertical (&[data-orientation="vertical"]);
 
 @theme inline {
-  --font-heading: var(--font-sans);
+  /* A ThemeScope's heading face, else the body face. */
+  --font-heading: var(--fux-font-heading, var(--font-sans));
   --font-sans: ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -19,6 +20,14 @@
   --color-signal: var(--signal);
   --color-signal-foreground: var(--signal-foreground);
   --color-signal-muted: var(--signal-muted);
+  /* Selected choices: checked radios and checkboxes, switches that are on, pressed toggles.
+     --selection is unset by default, so checked marks keep primary and pressed toggles keep
+     signal. Setting it (with --selection-foreground and --selection-muted, or through
+     ThemeScope) gives every selected choice one colour of its own. */
+  --color-selection: var(--selection, var(--primary));
+  --color-selection-foreground: var(--selection-foreground, var(--primary-foreground));
+  --color-selection-text: var(--selection, var(--signal));
+  --color-selection-muted: var(--selection-muted, var(--signal-muted));
   --color-surface: var(--surface);
   --color-canvas: var(--canvas);
   --color-success: var(--success);
