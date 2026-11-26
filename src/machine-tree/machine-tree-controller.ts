@@ -143,6 +143,15 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
     [mode, liveSim],
   );
   const isPhone = useMediaQuery("(max-width: 767px)");
+  // The canvas reports whether it is too narrow for columns (see `useNarrowCanvas`). Until it has
+  // been measured, and on a server, alternatives stand side by side as they always have.
+  const [canvasNarrow, setCanvasNarrow] = React.useState(false);
+  const sideBySide =
+    props.alternatives === "stacked"
+      ? false
+      : props.alternatives === "columns"
+        ? true
+        : !canvasNarrow;
   const coarse = useMediaQuery("(pointer: coarse)");
   const [store] = React.useState(createViewStore);
   const [handoff] = React.useState(createFocusHandoff);
@@ -169,7 +178,10 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       ),
     [document, maxItems, structural],
   );
-  const flowPlan = React.useMemo(() => planMachineTreeFlow(source), [source]);
+  const flowPlan = React.useMemo(
+    () => planMachineTreeFlow(source, { sideBySide }),
+    [source, sideBySide],
+  );
   const topology = React.useMemo(() => presentMachineTree(source, flowPlan), [source, flowPlan]);
   // Only the deepest active states are "active"; their ancestors become `activeDescendant`.
   const active =
@@ -289,7 +301,7 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       defaultPanelOpen: props.defaultPanelOpen ?? !!props.inspectionSession,
       defaultPanelTab: props.defaultPanelTab ?? (props.inspectionSession ? "runtime" : "details"),
     },
-    { isPhone, coarse, dir, rootRef, scrollerRef },
+    { isPhone, coarse, dir, rootRef, scrollerRef, setCanvasNarrow },
   );
   // Enter / click on a row belongs to the simulation concern, created just below.
   const activate = useEvent((id: string) => run.activate(id));
