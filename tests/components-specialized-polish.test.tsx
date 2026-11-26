@@ -5,6 +5,7 @@ import * as React from "react";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { layOutRow } from "./row-geometry.js";
+import { renderToString } from "react-dom/server";
 import {
   AngleSlider,
   Carousel,
@@ -582,6 +583,211 @@ test("carousel indicators name each slide and move the count", () => {
   assert.equal((view.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true);
   fireEvent.click(view.getByRole("button", { name: "Previous" }));
   assert.ok(view.getByText("2 / 3"));
+});
+
+/**
+ * jsdom has no layout, so lay the slides out the way a browser does: side by side, `width` px
+ * each, inside a viewport with a 1px border, moved by the viewport's scroll offset. RTL scroll
+ * offsets run negative, as in browsers. Returns a function that scrolls a distance from the
+ * first slide and fires the scroll event.
+ */
+function layOutSlides(viewport: HTMLElement, width: number, rtl = false) {
+  viewport.style.direction = rtl ? "rtl" : "ltr";
+  let offset = 0;
+  Object.defineProperty(viewport, "clientWidth", { configurable: true, value: width });
+  Object.defineProperty(viewport, "scrollLeft", {
+    configurable: true,
+    get: () => offset,
+    set: (value: number) => void (offset = value),
+  });
+  const bounds = {
+    left: 10,
+    right: 12 + width,
+    top: 0,
+    bottom: 100,
+    width: width + 2,
+    height: 100,
+  };
+  viewport.getBoundingClientRect = () => bounds as DOMRect;
+  Array.from(viewport.children).forEach((slide, index) => {
+    slide.getBoundingClientRect = () => {
+      const start = index * width - Math.abs(offset);
+      const left = rtl ? bounds.right - 1 - start - width : bounds.left + 1 + start;
+      return { left, right: left + width, top: 1, bottom: 99, width, height: 98 } as DOMRect;
+    };
+  });
+  return (distance: number) => {
+    offset = rtl ? -distance : distance;
+    fireEvent.scroll(viewport);
+  };
+}
+/** The slide index the pill sits on, read the way its stylesheet reads it. */
+function pillIndex(pill: HTMLElement) {
+  const progress = pill.style.getPropertyValue("--fux-carousel-progress");
+  return Number(progress || pill.style.getPropertyValue("--fux-carousel-index"));
+}
+function settleScroll(viewport: HTMLElement) {
+  act(() => void viewport.dispatchEvent(new dom.window.Event("scrollend")));
+}
+function withReducedMotion(run: () => void) {
+  const original = dom.window.matchMedia;
+  Object.defineProperty(dom.window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: query.includes("prefers-reduced-motion: reduce"),
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+    }),
+  });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(dom.window, "matchMedia", { configurable: true, value: original });
+  }
+}
+function threeSlides(props: Partial<React.ComponentProps<typeof Carousel>> = {}) {
+  return (
+    <Carousel label="Tips" {...props}>
+      <div>One</div>
+      <div>Two</div>
+      <div>Three</div>
+    </Carousel>
+  );
+}
+
+test("carousel dots are static and one decorative pill marks the current slide", () => {
+  const view = render(threeSlides());
+  const pills = view.container.querySelectorAll<HTMLElement>('[data-slot="carousel-indicator"]');
+  assert.equal(pills.length, 1);
+  const pill = pills[0]!;
+  assert.equal(pill.getAttribute("aria-hidden"), "true");
+  assert.equal(pillIndex(pill), 0);
+  const dots = view.getAllByRole("button", { name: /^Go to slide/ });
+  // The dots no longer change size, so nothing grows or shrinks as the current slide moves.
+  for (const dot of dots) assert.doesNotMatch(dot.innerHTML, /aria-\[current\]|w-5/);
+  const physical = /(?:^|\s)(?:ml|mr|pl|pr|left|right|text-left|text-right|border-l|border-r)-/;
+  for (const element of Array.from(view.container.querySelectorAll("[class]")))
+    assert.doesNotMatch(String(element.getAttribute("class")), physical);
+});
+
+test("carousel pill renders on the initial slide on the server, before any measuring", () => {
+  const html = renderToString(threeSlides());
+  assert.match(html, /data-slot="carousel-indicator"[^>]*style="--fux-carousel-index:0"/);
+  assert.doesNotMatch(html, /--fux-carousel-progress/);
+});
+
+test("carousel pill follows scroll progress and rests on each dot", () => {
+  const view = render(threeSlides());
+  const viewport = view.getByLabelText("Tips slides");
+  const pill = view.container.querySelector<HTMLElement>('[data-slot="carousel-indicator"]')!;
+  const scroll = layOutSlides(viewport, 300);
+  scroll(75);
+  assert.equal(pillIndex(pill), 0.25);
+  scroll(450);
+  assert.equal(pillIndex(pill), 1.5);
+  // Gliding past a slide does not make it current: the dots and count wait for the scroll to settle.
+  const dots = view.getAllByRole("button", { name: /^Go to slide/ });
+  assert.equal(dots[0]!.getAttribute("aria-current"), "true");
+  assert.ok(view.getByText("1 / 3"));
+  for (const [index, distance] of [0, 300, 600].entries()) {
+    scroll(distance);
+    settleScroll(viewport);
+    assert.equal(pillIndex(pill), index);
+    assert.equal(dots[index]!.getAttribute("aria-current"), "true");
+    assert.ok(view.getByText(`${index + 1} / 3`));
+  }
+  // Sub-pixel layout still lands on the dot exactly.
+  scroll(299.6);
+  settleScroll(viewport);
+  assert.equal(pillIndex(pill), 1);
+});
+
+test("carousel pill starts its glide from where the viewport is, not from the picked dot", () => {
+  const view = render(threeSlides());
+  const viewport = view.getByLabelText("Tips slides");
+  const pill = view.container.querySelector<HTMLElement>('[data-slot="carousel-indicator"]')!;
+  // Laid out but never scrolled: the first pick happens before any scroll event.
+  const scroll = layOutSlides(viewport, 300);
+  fireEvent.click(view.getByRole("button", { name: "Go to slide 3" }));
+  assert.equal(
+    view.getByRole("button", { name: "Go to slide 3" }).getAttribute("aria-current"),
+    "true",
+  );
+  assert.equal(pillIndex(pill), 0);
+  scroll(300);
+  assert.equal(pillIndex(pill), 1);
+});
+
+test("carousel settles without a scrollend event", async () => {
+  const view = render(threeSlides());
+  const viewport = view.getByLabelText("Tips slides");
+  const scroll = layOutSlides(viewport, 300);
+  scroll(600);
+  assert.ok(view.getByText("1 / 3"));
+  await waitFor(() => assert.ok(view.getByText("3 / 3")));
+});
+
+test("carousel pill follows the scroll in RTL", () => {
+  const view = render(threeSlides());
+  const viewport = view.getByLabelText("Tips slides");
+  const pill = view.container.querySelector<HTMLElement>('[data-slot="carousel-indicator"]')!;
+  const scroll = layOutSlides(viewport, 300, true);
+  scroll(150);
+  assert.equal(pillIndex(pill), 0.5);
+  scroll(600);
+  settleScroll(viewport);
+  assert.equal(pillIndex(pill), 2);
+  assert.ok(view.getByText("3 / 3"));
+});
+
+test("carousel pill does not glide under reduced motion and jumps once the slide settles", () => {
+  withReducedMotion(() => {
+    const view = render(threeSlides());
+    const viewport = view.getByLabelText("Tips slides");
+    const pill = view.container.querySelector<HTMLElement>('[data-slot="carousel-indicator"]')!;
+    const scroll = layOutSlides(viewport, 300);
+    scroll(150);
+    scroll(450);
+    assert.equal(pillIndex(pill), 0);
+    scroll(600);
+    settleScroll(viewport);
+    assert.equal(pillIndex(pill), 2);
+    fireEvent.click(view.getByRole("button", { name: "Go to slide 2" }));
+    assert.equal(pillIndex(pill), 1);
+  });
+});
+
+test("carousel without its count still announces the slide", () => {
+  const view = render(threeSlides({ showCount: false }));
+  assert.equal(view.queryByText("1 / 3"), null);
+  const live = view.container.querySelector("output")!;
+  assert.equal(live.getAttribute("aria-live"), "polite");
+  assert.equal(live.textContent, "Slide 1 of 3");
+  assert.ok(live.classList.contains("sr-only"));
+  fireEvent.click(view.getByRole("button", { name: "Next" }));
+  assert.equal(live.textContent, "Slide 2 of 3");
+  assert.equal(view.queryByText("2 / 3"), null);
+});
+
+test("carousel dots navigate and move the pill", () => {
+  const view = render(threeSlides());
+  const pill = view.container.querySelector<HTMLElement>('[data-slot="carousel-indicator"]')!;
+  const viewport = view.getByLabelText("Tips slides");
+  const scrolled: number[] = [];
+  Array.from(viewport.children).forEach((slide, index) => {
+    Object.defineProperty(slide, "scrollIntoView", {
+      configurable: true,
+      value: () => void scrolled.push(index),
+    });
+  });
+  for (const index of [2, 0, 1]) {
+    const dot = view.getByRole("button", { name: `Go to slide ${index + 1}` });
+    fireEvent.click(dot);
+    assert.equal(dot.getAttribute("aria-current"), "true");
+    assert.equal(pillIndex(pill), index);
+  }
+  assert.deepEqual(scrolled, [2, 0, 1]);
 });
 
 test("the new surfaces use logical properties only", () => {

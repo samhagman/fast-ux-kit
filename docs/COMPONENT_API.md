@@ -61,6 +61,24 @@ single option ID. `CheckboxGroup` uses an array of option IDs. Options expose
 `Tree` also accepts controlled expansion through `expandedIds` and
 `onExpandedChange`.
 
+A `Tree` or `NavigationTree` node can carry a `badge`, such as a count, drawn
+like a tab badge. `badgePlacement` on the tree sets where badges sit: `"end"`
+(the default) pins them to the row's inline-end edge, so a long label truncates
+before it, and `"start"` puts them just before the label, after the disclosure,
+guides and icon. A node's own `badgePlacement` overrides the tree's. The badge
+text joins the row's accessible name, and a navigation link's, so a reader hears
+"Inbox, 3". Give `badgeLabel` for a badge that is not plain text, such as a dot.
+
+```tsx
+<NavigationTree
+  label="Mail"
+  items={[
+    { id: "inbox", label: "Inbox", href: "/inbox", badge: 3 },
+    { id: "drafts", label: "Drafts", href: "/drafts", badge: <Dot />, badgeLabel: "unsaved" },
+  ]}
+/>
+```
+
 `Table` takes `rows`, typed `columns` and an optional sort descriptor. A sortable
 column supplies `allowsSorting` and a comparator. Selection uses stable row IDs.
 
@@ -94,8 +112,11 @@ import {
 ```
 
 `Sheet`, `Drawer`, `Popover`, `HoverCard` and `Tooltip` expose their own matching
-parts. `TooltipProvider` supplies tooltip timing. `ModalDialog` is a controlled
-recipe with `title`, `open`, `onOpenChange`, children and an optional footer.
+parts. `Sheet` and `Drawer` slide in from their side and back out, and their
+backdrop fades. That motion ships in `styles.css`, so it needs no animation
+plugin, and it is switched off under reduced motion. `TooltipProvider` supplies
+tooltip timing. `ModalDialog` is a controlled recipe with `title`, `open`,
+`onOpenChange`, children and an optional footer.
 
 `FloatingPanel` provides movable and resizable content. `Tour` accepts named
 steps with descriptions and optional target getters. `Toast` or `Toaster` mounts
@@ -134,6 +155,15 @@ storage. `FileUpload` adds a local selected-file list.
 `ImageCropper` controls crop, zoom and rotation and can export a selected image.
 `SignaturePad` supports pointer drawing and typed entry, with controlled value,
 clear, undo and export. Browser canvas operations remain client-side.
+
+`Carousel` takes a `label` and its slides as children. The arrows, the dots and
+the arrow, Home and End keys on the focused viewport move between slides. The dots
+stay still while one pill glides over them with the scroll and lands on the
+current dot when the scroll settles; with reduced motion it moves straight to
+the dot once the slide settles. The current slide, its dot's `aria-current` and
+the count change when the scroll comes to rest, not on the way past a slide.
+`showCount={false}` hides the "2 / 3" count, and a visually hidden live region
+still announces "Slide 2 of 3".
 
 `Pagination` uses `count`, `pageSize`, `page` and `onPageChange`. With many pages,
 each "…" gap is a button that opens a field for typing the exact page; in `compact`
