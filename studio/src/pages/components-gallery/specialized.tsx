@@ -4,12 +4,16 @@ import * as C from "@samhagman/fast-ux-kit/components";
 import {
   BookOpen,
   Boxes,
+  CircleCheck,
   Columns3,
+  FilePlus,
   Gauge,
+  Hourglass,
   LayoutGrid,
   LifeBuoy,
   List,
   Rows3,
+  Send,
   Sparkles,
   Workflow,
 } from "lucide-react";
@@ -560,7 +564,7 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
     [click("button", ".fixture-status", "draft")],
   ),
   Steps: example(
-    "Move through a short sequence. Completed steps show a check and fill the connecting line.",
+    "Move through a short sequence. Completed steps show a check and fill the connecting line. The log variant lists past entries, each with its own state.",
     (s) => (
       <>
         <C.Steps
@@ -607,6 +611,51 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
               { id: "c", title: "Ship" },
             ]}
           />
+        </Variants>
+        <Variants title="Log" layout="stack">
+          <div className="w-full max-w-xl">
+            <C.Steps
+              label="Document history"
+              variant="log"
+              items={[
+                {
+                  id: "created",
+                  title: "Created in draft",
+                  meta: "ada · 14:01:48",
+                  aside: "#1",
+                  icon: <FilePlus className="size-3.5" />,
+                },
+                {
+                  id: "submit",
+                  title: (
+                    <>
+                      <code className="font-mono text-xs">SUBMIT</code> · draft → review
+                    </>
+                  ),
+                  meta: "ada · 14:01:52",
+                  aside: "#2",
+                  icon: <Send className="size-3.5" />,
+                },
+                {
+                  id: "ask",
+                  title: "Asked the owner: Approve?",
+                  description: "Closes after 24 h",
+                  meta: "waiting for grace",
+                  status: "waiting",
+                  statusLabel: "waiting for an answer",
+                  aside: "#3",
+                  icon: <Hourglass className="size-3.5" />,
+                },
+                {
+                  id: "answer",
+                  title: "Answered approve · review → approved",
+                  meta: "grace · 14:20:03",
+                  aside: "#4",
+                  icon: <CircleCheck className="size-3.5" />,
+                },
+              ]}
+            />
+          </div>
         </Variants>
       </>
     ),

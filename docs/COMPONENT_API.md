@@ -51,6 +51,42 @@ column supplies `allowsSorting` and a comparator. Selection uses stable row IDs.
 items and calls `onAction` with their IDs. `NavigationTree`, `NavigationMenu`,
 `Breadcrumbs` and `Toc` provide their respective navigation structures.
 
+`Steps` takes `label`, `items` and a step index `value`. By default (`variant="progress"`)
+it is a navigation landmark: items before `value` are complete, the item at `value` is
+current with `aria-current="step"`, and the rest are upcoming. `onValueChange` makes each
+step a button, and `orientation="horizontal"` lays them in a row. Each item has an `id`,
+a `title` (any React content) and an optional `description`, plus these optional fields:
+
+- `status`: `"complete"`, `"current"`, `"upcoming"`, `"error"` or `"waiting"`. It
+  overrides the state from `value`; `aria-current` and the filled connector follow it.
+  `"waiting"` is a pending state, signal-coloured with a dashed marker. `error: true`
+  still means `"error"`, and an explicit `status` wins over it.
+- `icon`: replaces the marker's number, check or alert. The marker is decorative.
+- `statusLabel`: replaces the screen-reader state read after the title ("completed",
+  "current", "upcoming", "error" or "waiting").
+- `meta`: a muted line under the description, such as who acted and when.
+- `aside`: trailing content at the inline end of the row, such as a sequence number,
+  in tabular numerals.
+
+`variant="log"` draws a read-only history of entries. It renders a `role="log"` region
+named by `label` around the ordered list (ARIA doesn't allow `role="log"` on `<ol>`
+itself), with no navigation landmark, buttons or `aria-current`. It ignores `value`,
+`onValueChange` and `orientation`, and always lays out vertically. Each entry's state is
+its `status`, defaulting to `"complete"`, and the line below an entry follows that
+entry's state. A log is a polite live region, so screen readers announce entries
+appended later; append new entries rather than re-creating the list.
+
+```tsx
+<Steps
+  label="Document history"
+  variant="log"
+  items={[
+    { id: "1", title: "Created in draft", meta: "ada · 14:01:48", aside: "#1" },
+    { id: "2", title: "Asked the owner: Approve?", status: "waiting", aside: "#2" },
+  ]}
+/>
+```
+
 `TagsInput` stores strings. `TokenField` stores typed token objects with stable
 IDs and labels, supports supplied suggestions and can use `createToken` for
 application-approved new entries.

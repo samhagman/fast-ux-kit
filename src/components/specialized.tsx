@@ -1281,23 +1281,69 @@ export function SegmentGroup({
 /* Steps and Toc                                                               */
 /* -------------------------------------------------------------------------- */
 
+export type StepStatus = "complete" | "current" | "upcoming" | "error" | "waiting";
+export interface StepsItem {
+  id: string;
+  title: React.ReactNode;
+  description?: string;
+  /** Shorthand for `status: "error"`. An explicit `status` wins. */
+  error?: boolean;
+  /** Overrides the state `value` gives this item. In a log it is the entry's state (default `"complete"`). */
+  status?: StepStatus;
+  /** Replaces the marker's number, check or alert. Decorative: the marker is hidden from assistive tech. */
+  icon?: React.ReactNode;
+  /** Replaces the screen-reader state after the title, such as "waiting for an answer". */
+  statusLabel?: string;
+  /** A muted line under the title and description, such as who and when. */
+  meta?: React.ReactNode;
+  /** Trailing content at the inline end of the row, such as a sequence number. */
+  aside?: React.ReactNode;
+}
 export interface StepsProps {
   label: string;
-  items: readonly { id: string; title: string; description?: string; error?: boolean }[];
+  items: readonly StepsItem[];
   value?: number;
   onValueChange?: (step: number) => void;
+  /** A log always lays out vertically and ignores this. */
   orientation?: "vertical" | "horizontal";
+  /**
+   * `"progress"` (default) is a navigation landmark whose states follow `value`. `"log"` is a
+   * read-only, named `role="log"` region of past entries: it ignores `value` and `onValueChange`,
+   * renders no buttons or `aria-current`, and takes each entry's state from its `status`.
+   */
+  variant?: "progress" | "log";
 }
+const stepsLine =
+  "after:absolute after:start-[calc(0.375rem+0.75rem-0.5px)] after:top-[2.25rem] after:-bottom-1 after:w-px";
+/** In a log the line below an entry follows that entry's own state. */
+const stepsLogLine: Record<StepStatus, string> = {
+  complete: "after:bg-primary",
+  current: "after:bg-signal",
+  upcoming: "after:bg-border",
+  error: "after:bg-destructive",
+  waiting: "after:w-0 after:border-s after:border-dashed after:border-signal",
+};
 export function Steps({
   label,
   items,
   value = 0,
   onValueChange,
   orientation = "vertical",
+  variant = "progress",
 }: StepsProps) {
-  const horizontal = orientation === "horizontal";
+  const log = variant === "log";
+  const horizontal = !log && orientation === "horizontal";
+  // ARIA in HTML doesn't allow role="log" on <ol>, and it would drop the list's semantics, so a
+  // log is a named region around the list rather than a nav landmark.
+  const Root = log ? "div" : "nav";
   return (
-    <nav aria-label={label} data-slot="steps" data-orientation={orientation}>
+    <Root
+      role={log ? "log" : undefined}
+      aria-label={label}
+      data-slot="steps"
+      data-variant={log ? "log" : undefined}
+      data-orientation={log ? "vertical" : orientation}
+    >
       <ol
         className={cn(
           "m-0 flex list-none p-0",
@@ -1305,15 +1351,18 @@ export function Steps({
         )}
       >
         {items.map((item, index) => {
-          const complete = index < value;
-          const current = index === value;
-          const state = item.error
-            ? "error"
-            : complete
-              ? "complete"
-              : current
-                ? "current"
-                : "upcoming";
+          const state: StepStatus =
+            item.status ??
+            (item.error
+              ? "error"
+              : log || index < value
+                ? "complete"
+                : index === value
+                  ? "current"
+                  : "upcoming");
+          // Without an override a progress step's line and check follow its position, as before.
+          const complete = item.status || log ? state === "complete" : index < value;
+          const current = !log && (item.status ? state === "current" : index === value);
           const last = index === items.length - 1;
           const body = (
             <>
@@ -1326,15 +1375,18 @@ export function Steps({
                   "data-[state=current]:border-signal data-[state=current]:bg-signal-muted data-[state=current]:text-signal data-[state=current]:ring-3 data-[state=current]:ring-signal/20",
                   "data-[state=complete]:border-primary data-[state=complete]:bg-primary data-[state=complete]:text-primary-foreground",
                   "data-[state=error]:border-destructive data-[state=error]:bg-destructive/10 data-[state=error]:text-destructive",
+                  // Pending on someone else: signal-coloured like current, dashed so it differs without colour.
+                  state === "waiting" && "border-dashed border-signal bg-background text-signal",
                 )}
               >
-                {item.error ? (
-                  <CircleAlert className="size-3.5" />
-                ) : complete ? (
-                  <Check className="size-3.5" strokeWidth={3} />
-                ) : (
-                  index + 1
-                )}
+                {item.icon ??
+                  (state === "error" ? (
+                    <CircleAlert className="size-3.5" />
+                  ) : complete ? (
+                    <Check className="size-3.5" strokeWidth={3} />
+                  ) : (
+                    index + 1
+                  ))}
               </span>
               <span
                 className={cn(
@@ -1351,9 +1403,7 @@ export function Steps({
                   {item.title}
                   <span className="sr-only">
                     {" "}
-                    (
-                    {state === "complete" ? "completed" : state === "upcoming" ? "upcoming" : state}
-                    )
+                    ({item.statusLabel ?? (state === "complete" ? "completed" : state)})
                   </span>
                 </span>
                 {item.description && (
@@ -1361,7 +1411,23 @@ export function Steps({
                     {item.description}
                   </small>
                 )}
+                {item.meta != null && (
+                  <small
+                    data-slot="steps-meta"
+                    className="text-xs font-normal text-pretty text-muted-foreground tabular-nums"
+                  >
+                    {item.meta}
+                  </small>
+                )}
               </span>
+              {item.aside != null && (
+                <span
+                  data-slot="steps-aside"
+                  className="ms-auto shrink-0 text-xs leading-6 text-muted-foreground tabular-nums"
+                >
+                  {item.aside}
+                </span>
+              )}
             </>
           );
           return (
@@ -1377,11 +1443,13 @@ export function Steps({
                   : cn(
                       "flex flex-col",
                       !last &&
-                        "after:absolute after:start-[calc(0.375rem+0.75rem-0.5px)] after:top-[2.25rem] after:-bottom-1 after:w-px after:bg-border after:content-[''] data-[complete]:after:bg-primary",
+                        (log
+                          ? cn(stepsLine, "after:content-['']", stepsLogLine[state])
+                          : `${stepsLine} after:bg-border after:content-[''] data-[complete]:after:bg-primary`),
                     ),
               )}
             >
-              {onValueChange ? (
+              {onValueChange && !log ? (
                 <Button
                   variant="ghost"
                   onClick={() => onValueChange(index)}
@@ -1415,7 +1483,7 @@ export function Steps({
           );
         })}
       </ol>
-    </nav>
+    </Root>
   );
 }
 export function Toc({
