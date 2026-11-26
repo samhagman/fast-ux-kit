@@ -41,6 +41,7 @@ import { Input } from "./ui/input.js";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.js";
 import { Progress } from "./ui/progress.js";
 import { buttonVariants } from "./ui/button.js";
+import { useSlidingIndicator } from "../hooks/use-sliding-indicator.js";
 import { cn } from "../lib/utils.js";
 
 type ButtonVariant = NonNullable<React.ComponentProps<typeof Button>["variant"]>;
@@ -1204,33 +1205,20 @@ export function SegmentGroup({
   const [own, setOwn] = React.useState(defaultValue);
   const current = value ?? own;
   const group = React.useRef<HTMLDivElement>(null);
-  const [indicator, setIndicator] = React.useState<{ left: number; width: number } | null>(null);
-  React.useLayoutEffect(() => {
-    const root = group.current;
-    if (!root) return;
-    const measure = () => {
-      const active = root.querySelector<HTMLElement>("[data-pressed]");
-      // offsetLeft is physical and the indicator is positioned from the physical left edge,
-      // so the measured box lines up in both writing directions.
-      setIndicator((previous) => {
-        if (!active) return previous === null ? previous : null;
-        const next = { left: active.offsetLeft, width: active.offsetWidth };
-        return previous?.left === next.left && previous.width === next.width ? previous : next;
-      });
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, [current, items, size, fullWidth]);
+  const indicator = React.useRef<HTMLSpanElement>(null);
+  const placed = useSlidingIndicator(
+    group,
+    ":scope > [data-pressed]",
+    [current, items, size, fullWidth],
+    indicator,
+  );
   const heights = { sm: "h-6 text-xs", default: "h-7 text-sm", lg: "h-8 text-sm" } as const;
   return (
     <ToggleGroup
       ref={group}
       aria-label={label}
       data-slot="segment-group"
-      data-ready={indicator ? "" : undefined}
+      data-ready={placed ? "" : undefined}
       className={cn(
         "group/seg relative isolate items-center gap-0 rounded-lg bg-muted p-[3px] text-muted-foreground",
         fullWidth ? "flex w-full" : "inline-flex w-fit",
@@ -1244,17 +1232,13 @@ export function SegmentGroup({
       }}
     >
       <span
+        ref={indicator}
         aria-hidden
         data-slot="segment-indicator"
         className={cn(
-          "pointer-events-none absolute start-0 top-[3px] bottom-[3px] -z-10 rounded-md bg-background shadow-sm ring-1 ring-foreground/5 motion-safe:transition-[transform,width] motion-safe:duration-200 motion-safe:ease-(--ease-standard) dark:bg-input/60",
-          !indicator && "hidden",
+          "fux-sliding-indicator bg-background shadow-sm ring-1 ring-foreground/5 dark:bg-input/60",
+          !placed && "hidden",
         )}
-        style={
-          indicator
-            ? { width: indicator.width, transform: `translateX(${indicator.left - 3}px)` }
-            : undefined
-        }
       />
       {items.map((item) => (
         <Toggle

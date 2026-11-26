@@ -33,6 +33,23 @@ import { Button, Field, Checkbox, Slider } from "@samhagman/fast-ux-kit/componen
 <Slider label="Volume" value={volume} onValueChange={setVolume} min={0} max={100} />;
 ```
 
+`ToggleButtonGroup` takes an array of pressed item values, like Base UI's toggle
+group. Items share borders by default (`variant="outline"`, `spacing={0}`). A
+hovered item takes the muted tint; a selected item keeps its selected look under
+the pointer. With single selection, one highlight slides from the old item to the
+new one, with the duration and easing of the `Tabs` indicator. With `multiple`
+there is no sliding highlight: each selected item fades its own fill and colour in
+and out over `--fux-motion-duration`. Under `prefers-reduced-motion: reduce` the
+highlight moves and the fills change at once.
+
+The sliding highlight is the group's `::before`. A single-selection group carries
+`fux-sliding-group`, and `data-indicator` once the highlight is placed. Before
+that, including in server-rendered HTML, the selected item shows its own fill. The
+measured box is exposed as `--fux-indicator-x`, `--fux-indicator-y`,
+`--fux-indicator-width`, `--fux-indicator-height` and `--fux-indicator-radius`.
+`SegmentGroup` moves its highlight the same way, lined up exactly with the chosen
+segment inside the group's padding, in both writing directions.
+
 `NumberField` uses numeric values and `min`, `max` and `step`. `RadioGroup` uses a
 single option ID. `CheckboxGroup` uses an array of option IDs. Options expose
 `id`, `label` and optional `disabled`.

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import * as React from "react";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { layOutRow } from "./row-geometry.js";
 import {
   AngleSlider,
   Carousel,
@@ -361,6 +363,53 @@ test("segment group renders a sliding indicator behind the selection", () => {
   assert.equal(indicator.classList.contains("hidden"), false);
   assert.equal(view.getByRole("button", { name: "Grid" }).getAttribute("aria-pressed"), "true");
   assert.ok(view.getByTestId("icon"));
+});
+
+test("segment group's indicator lines up exactly with the chosen segment, inside the group's padding", () => {
+  // The group has 3px of padding: the first segment starts 3px in, and so must the indicator.
+  const restore = layOutRow({ padding: 3, width: 64, height: 28 });
+  try {
+    const view = render(
+      <SegmentGroup
+        label="View"
+        defaultValue="list"
+        items={[
+          { id: "list", label: "List" },
+          { id: "grid", label: "Grid" },
+          { id: "board", label: "Board" },
+        ]}
+      />,
+    );
+    const indicator = view.container.querySelector<HTMLElement>('[data-slot="segment-indicator"]')!;
+    const box = () =>
+      Object.fromEntries(
+        ["x", "y", "width", "height"].map((key) => [
+          key,
+          indicator.style.getPropertyValue(`--fux-indicator-${key}`),
+        ]),
+      );
+    const segment = (name: string) => view.getByRole("button", { name });
+    assert.equal(box().x, `${segment("List").offsetLeft}px`);
+    assert.deepEqual(box(), { x: "3px", y: "3px", width: "64px", height: "28px" });
+    fireEvent.click(segment("Board"));
+    assert.deepEqual(box(), { x: "131px", y: "3px", width: "64px", height: "28px" });
+    // Nothing else shifts it: it is placed from the group's own corner and moved by exactly that.
+    assert.equal(indicator.style.transform, "");
+    assert.match(indicator.className, /\bfux-sliding-indicator\b/);
+    assert.doesNotMatch(indicator.className, /(^|\s)(start|left|top|bottom|inset)-/);
+    const css = readFileSync(
+      new URL("../src/components/overlays-media.css", import.meta.url),
+      "utf8",
+    ).replace(/\s+/g, " ");
+    const rule = css.match(/\.fux-sliding-indicator, [^{]*\{([^}]*)\}/)?.[1] ?? "";
+    assert.match(rule, / top: 0; left: 0;/);
+    assert.match(
+      rule,
+      /transform: translate\(var\(--fux-indicator-x\), var\(--fux-indicator-y\)\);/,
+    );
+  } finally {
+    restore();
+  }
 });
 
 test("steps mark complete, current, upcoming and error states, and can be display-only", () => {
