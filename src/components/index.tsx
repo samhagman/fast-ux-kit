@@ -33,3 +33,5 @@ export {
   alertVariants,
 } from "./ui/alert.js";
 export type { AlertProps, AlertSize, AlertTone, AlertVariant } from "./ui/alert.js";
+// Terminal text: the segment and tone types for styled Terminal lines.
+export type { TerminalLine, TerminalSegment, TerminalTone } from "../editorial/index.js";
