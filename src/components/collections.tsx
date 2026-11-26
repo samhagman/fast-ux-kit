@@ -836,9 +836,18 @@ export function Table<T extends { id: string }>({
   );
 }
 
+/** "end" pins a badge to the row's inline-end edge; "start" puts it just before the label. */
+export type TreeBadgePlacement = "end" | "start";
+
 export interface TreeNode extends CollectionOption {
   href?: string;
   children?: readonly TreeNode[];
+  /** A count or another small element drawn beside the label. */
+  badge?: React.ReactNode;
+  /** What the badge says in the row's name. Give one when the badge is not plain text. */
+  badgeLabel?: string;
+  /** Overrides the tree's `badgePlacement` for this row. */
+  badgePlacement?: TreeBadgePlacement;
 }
 
 export interface TreeProps extends SelectionProps {
@@ -851,6 +860,25 @@ export interface TreeProps extends SelectionProps {
   renderLabel?: (node: TreeNode) => React.ReactNode;
   /** Shows a folder or document icon before each label unless the node brings its own. */
   showIcons?: boolean;
+  /** Where node badges sit. Defaults to "end"; a node's own `badgePlacement` wins. */
+  badgePlacement?: TreeBadgePlacement;
+}
+
+/** The words a node's badge adds to the row's name, or nothing when it is not text. */
+function treeBadgeName(node: TreeNode): string | undefined {
+  if (node.badge == null) return undefined;
+  const name =
+    node.badgeLabel ??
+    (typeof node.badge === "string" || typeof node.badge === "number"
+      ? String(node.badge)
+      : undefined);
+  return name || undefined;
+}
+
+/** Reads ", 3" after the label, so the row or link is named "Inbox, 3" in either placement. */
+function TreeBadgeName({ node }: { node: TreeNode }) {
+  const name = treeBadgeName(node);
+  return name ? <span className="sr-only">{`, ${name}`}</span> : null;
 }
 
 interface TreeRow {
@@ -901,7 +929,11 @@ function treeRows(items: readonly TreeNode[], expanded: ReadonlySet<string>) {
   return rows;
 }
 
-export function Tree({
+export function Tree(props: TreeProps) {
+  return <TreeView {...props} />;
+}
+
+function TreeView({
   label,
   items,
   expandedIds,
@@ -910,8 +942,13 @@ export function Tree({
   onAction,
   renderLabel,
   showIcons = true,
+  badgePlacement = "end",
+  labelNamesBadge = false,
   ...props
-}: TreeProps) {
+}: TreeProps & {
+  /** The custom label already reads the badge, as NavigationTree's links do. */
+  labelNamesBadge?: boolean;
+}) {
   const [ownExpanded, setExpanded] = React.useState<readonly string[]>(defaultExpandedIds);
   const expanded = new Set(expandedIds ?? ownExpanded);
   const rows = treeRows(items, expanded);
@@ -936,6 +973,16 @@ export function Tree({
       {rows.map((row) => {
         const bindings = collection.itemProps(row.node);
         const children = Boolean(row.node.children?.length);
+        const placement = row.node.badgePlacement ?? badgePlacement;
+        const badge = row.node.badge != null && (
+          <span
+            className="fux-tree-badge"
+            data-placement={placement}
+            aria-hidden={treeBadgeName(row.node) ? true : undefined}
+          >
+            {row.node.badge}
+          </span>
+        );
         return (
           <div
             role="treeitem"
@@ -1000,10 +1047,15 @@ export function Tree({
                   ))}
               </span>
             )}
-            <span className="fux-tree-label">{renderLabel?.(row.node) ?? row.node.label}</span>
+            {placement === "start" && badge}
+            <span className="fux-tree-label">
+              {renderLabel?.(row.node) ?? row.node.label}
+              {!labelNamesBadge && <TreeBadgeName node={row.node} />}
+            </span>
             {row.node.description && (
               <small className="fux-tree-trail">{row.node.description}</small>
             )}
+            {placement === "end" && badge}
           </div>
         );
       })}
@@ -1032,8 +1084,9 @@ export function NavigationTree(props: TreeProps) {
     pending.push(...(node.children ?? []));
   }
   return (
-    <Tree
+    <TreeView
       {...props}
+      labelNamesBadge
       renderLabel={(node) =>
         safeNavigationHref(node.href) && !node.disabled ? (
           <a
@@ -1042,9 +1095,13 @@ export function NavigationTree(props: TreeProps) {
             onClick={() => props.onAction?.(node.id)}
           >
             {node.label}
+            <TreeBadgeName node={node} />
           </a>
         ) : (
-          node.label
+          <>
+            {node.label}
+            <TreeBadgeName node={node} />
+          </>
         )
       }
       onAction={(id) => {
