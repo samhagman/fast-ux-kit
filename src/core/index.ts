@@ -496,3 +496,5 @@ export * from "./outliner/workspace.js";
 export * from "./outliner/library.js";
 
 export * from "./note-pages.js";
+
+export * from "./terminal.js";

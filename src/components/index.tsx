@@ -24,3 +24,5 @@ export type {
 } from "../editorial/index.js";
 export { cn } from "../lib/utils.js";
 export { Toaster, Toaster as Toast, toast } from "./ui/sonner.js";
+// Terminal text: the segment and tone types for styled Terminal lines.
+export type { TerminalLine, TerminalSegment, TerminalTone } from "../editorial/index.js";

@@ -7,6 +7,23 @@ const listing = `export function wordCount(note: string): number {
   return note.trim().split(/\\s+/).filter(Boolean).length;
 }`;
 
+// A styled transcript: a decorative bar on each line, a dim label, a bold name, a green mark and
+// a link-coloured address. The bar is drawn, never copied or read aloud.
+const bar = (tone: C.TerminalTone): C.TerminalSegment => ({ text: "▍", tone, decorative: true });
+const styledLines: readonly C.TerminalLine[] = [
+  [bar("accent"), { text: "$ fieldbook sync --remote " }, { text: "garden", tone: "bold" }],
+  [bar("success"), { text: "✓ ", tone: "success" }, { text: "42 notes synced" }],
+  [bar("warning"), { text: "warning: ", tone: "warning" }, { text: "2 notes have no title" }],
+  [bar("danger"), { text: "error: ", tone: "danger" }, { text: "seeds.md could not be read" }],
+  [
+    bar("info"),
+    { text: "view: ", tone: "dim" },
+    { text: "https://notes.test/garden", tone: "link" },
+  ],
+];
+const ansiTranscript =
+  "$ fieldbook check\n\u001b[1;32m✓\u001b[0m 40 notes are valid\n\u001b[33m!\u001b[0m \u001b[2m2028-02-12-walk.md:\u001b[0m no title\n\u001b[31m✗\u001b[0m \u001b[1mseeds.md\u001b[0m could not be read\n\u001b[36mhttps://notes.test/check\u001b[0m";
+
 export const displayFixtures: Readonly<Record<string, ComponentFixture>> = {
   CodeBlock: example(
     "A listing with its file path. Lines with a note are marked, and the notes sit beside the code.",
@@ -26,13 +43,27 @@ export const displayFixtures: Readonly<Record<string, ComponentFixture>> = {
     ".fux-code",
   ),
   Terminal: example(
-    "Lines the reader types start with the prompt. Everything else is output.",
+    "Lines the reader types start with the prompt. Everything else is output. Segments or ANSI codes colour text inside a line, on the page's ground or the terminal's own.",
     () => (
-      <C.Terminal title="zsh">{`$ fieldbook export --format markdown
+      <>
+        <C.Terminal title="zsh">{`$ fieldbook export --format markdown
 Wrote 42 notes to ./export
 $ ls export | head -2
 2028-02-12-walk.md
 2028-02-13-seeds.md`}</C.Terminal>
+        <Variants title="Styled segments, on each ground" layout="grid">
+          <C.Terminal title="Page ground">{styledLines}</C.Terminal>
+          <C.Terminal title="Dark ground" ground="dark">
+            {styledLines}
+          </C.Terminal>
+          <C.Terminal title="Light ground" ground="light">
+            {styledLines}
+          </C.Terminal>
+          <C.Terminal title="ANSI codes" ground="dark" ansi>
+            {ansiTranscript}
+          </C.Terminal>
+        </Variants>
+      </>
     ),
     ".fux-terminal",
   ),
