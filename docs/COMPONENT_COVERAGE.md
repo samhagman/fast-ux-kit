@@ -6,13 +6,13 @@ utility functions are listed separately from canonical families.
 
 ## Executable coverage
 
-| Suite                                  | Coverage                                                                                                                                                     |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tests/components-catalog.test.tsx`    | A real gallery fixture for every family, rendered semantics and applicable action flows                                                                      |
-| `tests/components-alert.test.tsx`      | Alert roles per tone and the role override, its slots and reachable action, stable server rendering and hydration, logical sides and token-only colors       |
-| `tests/color-date-components.test.tsx` | Color immutability and alpha, controlled edits, invalid input, keyboard channels, date bounds, leap days, time zones, read-only values and unfinished ranges |
-| `studio/tests/`                        | Outliner commands, editing, focus, clipboard, date handling, search, workspace behavior and machine tools                                                    |
-| `npm run test:consumer`                | Packed ESM entries, declarations, independent installation, rendering, hydration, styles and dependency boundaries                                           |
+| Suite                                  | Coverage                                                                                                                                                                                |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/components-catalog.test.tsx`    | A real gallery fixture for every family, rendered semantics and applicable action flows                                                                                                 |
+| `tests/components-alert.test.tsx`      | Alert roles per tone and the role override, its slots and reachable action, the page size and heading title, stable server rendering and hydration, logical sides and token-only colors |
+| `tests/color-date-components.test.tsx` | Color immutability and alpha, controlled edits, invalid input, keyboard channels, date bounds, leap days, time zones, read-only values and unfinished ranges                            |
+| `studio/tests/`                        | Outliner commands, editing, focus, clipboard, date handling, search, workspace behavior and machine tools                                                                               |
+| `npm run test:consumer`                | Packed ESM entries, declarations, independent installation, rendering, hydration, styles and dependency boundaries                                                                      |
 
 The same per-family fixtures power the Studio gallery and the catalog tests.
 Interactive examples exercise changes such as menu selection, file choice,

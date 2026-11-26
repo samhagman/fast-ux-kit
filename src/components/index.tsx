@@ -32,4 +32,4 @@ export {
   alertTone,
   alertVariants,
 } from "./ui/alert.js";
-export type { AlertProps, AlertTone, AlertVariant } from "./ui/alert.js";
+export type { AlertProps, AlertSize, AlertTone, AlertVariant } from "./ui/alert.js";

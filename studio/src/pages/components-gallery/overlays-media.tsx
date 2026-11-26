@@ -1371,6 +1371,36 @@ export const overlaysMediaFixtures: Readonly<Record<string, ComponentFixture>> =
               </C.AlertActions>
             </C.Alert>
           </Variants>
+          {/* On a page of its own, the title is that page's h1. Here it sits under this card's headings. */}
+          <Variants title="Page size: a full-page refusal" layout="stack">
+            <C.Alert size="page" variant="error" icon={<CircleAlertIcon />}>
+              <C.AlertTitle asChild>
+                <h5>This link expired</h5>
+              </C.AlertTitle>
+              <C.AlertDescription>
+                Invitation links last 7 days. This one was sent on 3 March, so it no longer opens
+                the notebook.
+              </C.AlertDescription>
+              <C.AlertActions>
+                <C.Button size="sm" onClick={() => s.report("Asked the owner for a new link")}>
+                  Ask for a new link
+                </C.Button>
+                {step("Go to your notebooks", "Opening your notebooks")}
+              </C.AlertActions>
+            </C.Alert>
+            <C.Alert size="page" variant="info">
+              <C.AlertTitle asChild>
+                <h5>This task is already closed</h5>
+              </C.AlertTitle>
+              <C.AlertDescription>
+                Avery closed it on 12 February, after the seed order went out. It can be read but no
+                longer changed.
+              </C.AlertDescription>
+              <C.AlertActions>
+                {step("See what happened", "Opening the task history")}
+              </C.AlertActions>
+            </C.Alert>
+          </Variants>
         </>
       );
     },

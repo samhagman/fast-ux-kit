@@ -120,6 +120,26 @@ import { CircleAlertIcon } from "lucide-react";
   the alert when the event happens, so assistive technology announces it.
 - `icon` is an optional leading icon, hidden from assistive technology because
   the title carries the meaning. A bare `svg` as the first child also works.
+- `size="page"` makes the alert a full-page refusal, such as "This link
+  expired" or "This task is already closed". It keeps the same tones and roles.
+  The title takes the theme's heading font at display size (`text-2xl`), the
+  description takes body size (`text-base`), the padding is roomier, and no
+  icon is shown, even when one is passed. `size` defaults to `"default"`.
+- `AlertTitle` renders a `div`. Pass `asChild` to render a real heading
+  instead, at the level the page needs:
+
+  ```tsx
+  <Alert size="page" variant="error">
+    <AlertTitle asChild>
+      <h1>This link expired</h1>
+    </AlertTitle>
+    <AlertDescription>Invitation links last 7 days. This one was sent on 3 March.</AlertDescription>
+    <AlertActions>
+      <Link href="/invitations/new">Ask for a new link</Link>
+    </AlertActions>
+  </Alert>
+  ```
+
 - `AlertActions` holds the next step: links, buttons or both, in reading order.
 - Every color mixes theme tokens: the tone reads `--signal`, `--success`,
   `--warning` or `--destructive` through `--fux-alert-tone`, over `--card`,
