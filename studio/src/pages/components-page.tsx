@@ -8,6 +8,7 @@ import { displayFixtures } from "./components-gallery/display";
 import { overlaysMediaFixtures } from "./components-gallery/overlays-media";
 import { primitiveFixtures } from "./components-gallery/primitives";
 import { specializedFixtures } from "./components-gallery/specialized";
+import { surfacesFixtures } from "./components-gallery/surfaces";
 import { textFixtures } from "./components-gallery/text";
 
 export type { ComponentFixture, FixtureAction } from "./components-gallery/fixture-kit";
@@ -20,6 +21,7 @@ export const componentFixtures: Readonly<Record<string, ComponentFixture>> = {
   ...overlaysMediaFixtures,
   ...specializedFixtures,
   ...displayFixtures,
+  ...surfacesFixtures,
   ...textFixtures,
   ...primitiveFixtures,
 };
@@ -56,6 +58,8 @@ const WIDE = new Set([
   "Form",
   "Panel",
   "CodeBlock",
+  "Frame",
+  "ThemeScope",
   "DescriptionList",
 ]);
 const slug = (name: string) => `family-${name}`;

@@ -906,6 +906,24 @@
     "parts": ["Alert", "AlertTitle", "AlertDescription", "AlertActions"]
   },
   {
+    "name": "Frame",
+    "exportName": "Frame",
+    "category": "Display",
+    "description": "A framed page or app mock-up with an optional browser bar showing its address; the bar is decoration and the content keeps its semantics.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Frame"]
+  },
+  {
+    "name": "ThemeScope",
+    "exportName": "ThemeScope",
+    "category": "Layout",
+    "description": "A sub-theme for a subtree, mapped onto every kit token from a dozen inputs, with a selection colour apart from primary.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ThemeScope"]
+  },
+  {
     "name": "Heading",
     "exportName": "Heading",
     "category": "Typography",

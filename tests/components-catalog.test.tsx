@@ -102,7 +102,7 @@ after(async () => {
 });
 
 test("every canonical family and primitive has one working gallery fixture", () => {
-  assert.equal(catalog.length - primitives.length, 100);
+  assert.equal(catalog.length - primitives.length, 102);
   assert.equal(primitives.length, 11);
   assert.deepEqual(
     Object.keys(componentFixtures).sort(),

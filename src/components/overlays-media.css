@@ -58,7 +58,7 @@
 }
 .fux-sliding-group[data-indicator]::before {
   content: "";
-  background: var(--signal-muted);
+  background: var(--selection-muted, var(--signal-muted));
 }
 /* A selected item that is disabled, or a disabled group, dims its indicator like its label. */
 .fux-sliding-indicator:has(~ [data-pressed][data-disabled]),

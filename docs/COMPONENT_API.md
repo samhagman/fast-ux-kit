@@ -1,7 +1,7 @@
 # Component API
 
 Import components from `@samhagman/fast-ux-kit/components` and load
-`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 100 canonical
+`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 102 canonical
 families. `componentManifest` provides each family's name, category, description,
 interaction owner and exported parts.
 
@@ -509,6 +509,99 @@ they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
 `-rule`. The dark set applies inside the app theme's `.dark` and on
 `ground="dark"`.
 
+## Frames, boundaries and theme scopes
+
+`Frame` frames a page or app mock-up. `chrome="browser"` (the default) draws a
+browser's top bar: three dots and an address field that shows `url` as plain
+text, always left to right. `chrome="none"` draws only the framed surface. The
+bar is decoration, hidden from assistive technology, and the content keeps its
+own headings, fields and buttons. `label` names the mock-up, which makes the
+frame a labelled group. The bar is its own size container: in a frame narrower
+than 16rem the dots give their room to the address.
+
+```tsx
+import { Frame, ThemeScope } from "@samhagman/fast-ux-kit/components";
+
+<Frame url="example.test/t/7Hq2" label="Task page, in a browser">
+  <TaskPage />
+</Frame>;
+```
+
+### Kit boundary
+
+An article (`.fux-article`) and rich content (`.fast-ux-rich`) style the plain
+elements inside them: links, headings, paragraphs, lists, tables and `pre`.
+Those base styles reach custom markup placed inside, such as a mock-up with its
+own link-styled button. Put `data-kit-boundary` on the custom markup's root: that
+element and everything inside it keep their own styles. Kit components inside a
+boundary still draw as usual, since they style themselves by class. The
+exclusion adds no specificity, so overrides written for the base styles still
+win. A boundary is final: an article nested inside one gets no article base
+styles either.
+
+```tsx
+<Frame chrome="none" label="Chat message">
+  <div data-kit-boundary="">
+    <ChatMessageMock />
+  </div>
+</Frame>
+```
+
+### ThemeScope
+
+`ThemeScope` sets a sub-theme on a subtree from a small set of inputs and maps
+each onto every kit token it stands for: the app tokens (`--foreground`,
+`--primary`, `--input` …), the `--fux-*` roles and the editorial `--fux-ed-*`
+tokens, including those the kit derives at `:root`. Omitted inputs keep the
+surrounding theme. Props, `className` and `style` go to the scope's box.
+
+```tsx
+<ThemeScope
+  tokens={{
+    fg: "#1f2a26",
+    bg: "#fbf8f0",
+    accent: "var(--brand-mark)",
+    primary: "#24493c",
+    onPrimary: "#fbf8f0",
+    field: "#7b8a84",
+    radius: "2px",
+    fontBody: "Georgia, serif",
+    fontHead: '"Iowan Old Style", serif',
+    selection: "#b8572a",
+  }}
+>
+  <TaskPage />
+</ThemeScope>
+```
+
+| Input         | Sets                                                                          | When omitted           |
+| ------------- | ----------------------------------------------------------------------------- | ---------------------- |
+| `fg`          | Text, on every surface                                                        | Surrounding theme      |
+| `bg`          | The ground: page, cards, popovers, fields; painted on the scope               | Surrounding theme      |
+| `muted`       | Secondary text                                                                | `fg` 68% into `bg`     |
+| `accent`      | The signal colour: links, highlights, the focus ring, editorial markers       | Surrounding theme      |
+| `primary`     | The primary action's fill                                                     | Surrounding theme      |
+| `onPrimary`   | Text on `primary`                                                             | `bg`                   |
+| `field`       | Field and control borders                                                     | `fg` mixed into `bg`   |
+| `radius`      | The one corner; smaller and larger steps scale from it                        | Surrounding theme      |
+| `fontBody`    | The body face, set on the scope                                               | Surrounding theme      |
+| `fontHead`    | The heading face of dialogs, sheets, alerts and empty states                  | `fontBody`             |
+| `selection`   | Selected choices: checked radios and checkboxes, on switches, pressed toggles | `primary` and `accent` |
+| `onSelection` | The mark on `selection`: a radio's dot, a checkbox's tick                     | `bg`                   |
+
+A new `fg` or `bg` re-derives the neutrals (muted fills, hover grounds, borders,
+hairlines and tracks) by mixing the two. Any value may be a `var()`, including
+one that names the token it feeds, like `fg: "var(--foreground)"`: the inputs
+are set on an outer element (`display: contents`) under private `--fux-scope-*`
+names and mapped on the inner one, so a token never refers to itself. A value
+that is not one CSS value (it holds `;`, braces or a control character) is
+ignored. Overlays render in the page's portal, outside the scope.
+
+The selection colour is also a token of its own. `--selection` is unset by
+default, so checked marks keep `--primary` and pressed toggles keep `--signal`.
+Set `--selection`, `--selection-foreground` and `--selection-muted` (the pressed
+toggle's tint) yourself, or pass `selection` to a `ThemeScope`.
+
 ## Complete catalog
 
 | Category      | Families                                                                                                                                  |
@@ -524,8 +617,8 @@ they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
 | Color         | `ColorArea`, `ColorField`, `ColorPicker`, `ColorSlider`, `ColorSwatch`, `ColorSwatchPicker`, `ColorWheel`                                 |
 | Feedback      | `ProgressBar`, `Meter`, `Timer`, `Toast`, `Alert`                                                                                         |
 | Files         | `DropZone`, `FileTrigger`, `DownloadTrigger`, `FileUpload`                                                                                |
-| Layout        | `Separator`, `Stack`, `Row`, `Grid`, `Split`, `Panel`, `ScrollArea`, `Splitter`                                                           |
-| Display       | `Avatar`, `Carousel`, `Marquee`, `KeyChord`                                                                                               |
+| Layout        | `Separator`, `Stack`, `Row`, `Grid`, `Split`, `Panel`, `ScrollArea`, `Splitter`, `ThemeScope`                                             |
+| Display       | `Avatar`, `Carousel`, `Marquee`, `KeyChord`, `Frame`                                                                                      |
 | Media         | `ImageCropper`, `QrCode`, `SignaturePad`                                                                                                  |
 | Code          | `CodeBlock`, `Terminal`, `CommandLine`, `FileTree`                                                                                        |
 | Data display  | `Sparkline`, `BarList`, `DescriptionList`                                                                                                 |

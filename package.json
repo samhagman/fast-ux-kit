@@ -92,7 +92,8 @@
     "test:layout:browser": "npm run build && node scripts/test-layout-browser.mjs",
     "docs:build": "npm run build && npm --prefix studio run build",
     "dev": "npm --prefix studio run dev",
-    "test:note-pages:browser": "npm run docs:build && node scripts/test-note-pages-browser.mjs"
+    "test:note-pages:browser": "npm run docs:build && node scripts/test-note-pages-browser.mjs",
+    "test:surfaces:browser": "npm run docs:build && node scripts/test-surfaces-browser.mjs"
   },
   "peerDependencies": {
     "react": "^19.2.0",

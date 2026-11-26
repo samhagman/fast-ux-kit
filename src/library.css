@@ -10,6 +10,7 @@
 @import "./components/specialized.css";
 @import "./components/text.css";
 @import "./components/color-date.css";
+@import "./components/surfaces.css";
 @import "./editorial/editorial.css";
 @import "@xyflow/react/dist/style.css";
 @import "katex/dist/katex.min.css";

@@ -67,11 +67,11 @@ export {
 export { HoverCard, HoverCardTrigger } from "./ui/hover-card.js";
 export { ScrollBar } from "./ui/scroll-area.js";
 
-/** A pressed toggle reads as selected: a signal tint instead of the hover grey. */
+/** A pressed toggle reads as selected: the selection tint (signal by default) instead of the hover grey. */
 const pressedText =
-  "aria-pressed:text-signal data-pressed:text-signal aria-pressed:hover:text-signal data-pressed:hover:text-signal";
+  "aria-pressed:text-selection-text data-pressed:text-selection-text aria-pressed:hover:text-selection-text data-pressed:hover:text-selection-text";
 const pressedFill =
-  "aria-pressed:bg-signal-muted data-pressed:bg-signal-muted aria-pressed:hover:bg-signal-muted data-pressed:hover:bg-signal-muted";
+  "aria-pressed:bg-selection-muted data-pressed:bg-selection-muted aria-pressed:hover:bg-selection-muted data-pressed:hover:bg-selection-muted";
 const pressed = cn(pressedFill, pressedText);
 /** Under a sliding indicator the selected item stays clear, so the indicator shows through. */
 const pressedClear =

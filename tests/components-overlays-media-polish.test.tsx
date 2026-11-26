@@ -58,7 +58,7 @@ test("a pressed toggle button reports its state and carries the selected styling
   const view = render(<ToggleButton>Emphasis</ToggleButton>);
   const button = view.getByRole("button", { name: "Emphasis" });
   assert.equal(button.getAttribute("aria-pressed"), "false");
-  assert.match(button.className, /aria-pressed:bg-signal-muted/);
+  assert.match(button.className, /aria-pressed:bg-selection-muted/);
   fireEvent.click(button);
   assert.equal(button.getAttribute("aria-pressed"), "true");
 });
@@ -106,11 +106,11 @@ test("a single-selection toggle group slides one indicator to the selected item"
     assert.equal(view.getByRole("button", { name: "Right" }).getAttribute("aria-pressed"), "true");
     assert.deepEqual(indicatorBox(group), { x: "120px", y: "0px", width: "60px", height: "32px" });
 
-    // The selected item stays clear so the indicator shows through, and keeps its signal text.
+    // The selected item stays clear so the indicator shows through, and keeps its selection text.
     const right = view.getByRole("button", { name: "Right" });
     assert.match(right.className, /(^|\s)data-pressed:bg-transparent(\s|$)/);
-    assert.match(right.className, /(^|\s)data-pressed:text-signal(\s|$)/);
-    assert.doesNotMatch(right.className, /(^|\s)data-pressed:bg-signal-muted(\s|$)/);
+    assert.match(right.className, /(^|\s)data-pressed:text-selection-text(\s|$)/);
+    assert.doesNotMatch(right.className, /(^|\s)data-pressed:bg-selection-muted(\s|$)/);
     // The items are still the group's own children, so the shared-border corners stay put.
     assert.equal(group.firstElementChild?.textContent, "Left");
   } finally {
@@ -151,7 +151,7 @@ test("before the indicator is measured, the selected item carries its own fill",
   assert.equal(group.hasAttribute("data-indicator"), false);
   const center = page.querySelector('[aria-pressed="true"]')!;
   assert.equal(center.textContent, "Center");
-  assert.match(center.className, /(^|\s)data-pressed:bg-signal-muted(\s|$)/);
+  assert.match(center.className, /(^|\s)data-pressed:bg-selection-muted(\s|$)/);
 });
 
 test("with several selections there is no indicator; each selected item fades its own fill", () => {
@@ -173,7 +173,7 @@ test("with several selections there is no indicator; each selected item fades it
     assert.doesNotMatch(group.className, /fux-sliding-group/);
     assert.equal(group.style.getPropertyValue("--fux-indicator-x"), "");
     for (const item of view.getAllByRole("button")) {
-      assert.match(item.className, /(^|\s)data-pressed:bg-signal-muted(\s|$)/);
+      assert.match(item.className, /(^|\s)data-pressed:bg-selection-muted(\s|$)/);
       assert.match(
         item.className,
         /(^|\s)transition-\[color,background-color,border-color,box-shadow\](\s|$)/,
@@ -200,13 +200,13 @@ test("hover tints an unselected item and leaves the selected look alone", () => 
     );
     for (const item of view.getAllByRole("button")) {
       assert.match(item.className, /(^|\s)hover:bg-muted(\s|$)/, "unselected hover tint");
-      assert.match(item.className, /(^|\s)data-pressed:hover:text-signal(\s|$)/);
+      assert.match(item.className, /(^|\s)data-pressed:hover:text-selection-text(\s|$)/);
     }
     // Under the indicator the selected item stays clear on hover; alone it keeps its own fill.
     const left = view.getByRole("button", { name: "Left" });
     assert.match(left.className, /(^|\s)data-pressed:hover:bg-transparent(\s|$)/);
     const bold = view.getByRole("button", { name: "Bold" });
-    assert.match(bold.className, /(^|\s)data-pressed:hover:bg-signal-muted(\s|$)/);
+    assert.match(bold.className, /(^|\s)data-pressed:hover:bg-selection-muted(\s|$)/);
   } finally {
     restore();
   }

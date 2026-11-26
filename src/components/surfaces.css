@@ -1,0 +1,238 @@
+/* Frame: a framed surface for a page or app mock-up, with an optional browser bar. The bar is
+   decoration (hidden from assistive technology); the framed content keeps its own semantics.
+   The bar is its own size container, so it reacts to the frame's width, not the viewport's. */
+.fux-frame {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+  overflow: clip;
+}
+.fux-frame-bar {
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-block-size: 2.25rem;
+  padding-block: 0.375rem;
+  padding-inline: 0.75rem;
+  border-block-end: 1px solid var(--border);
+  background: var(--muted);
+}
+.fux-frame-dots {
+  display: flex;
+  flex: none;
+  gap: 0.375rem;
+}
+.fux-frame-dots > span {
+  inline-size: 0.625rem;
+  block-size: 0.625rem;
+  border-radius: 50%;
+  background: var(--input);
+}
+.fux-frame-address {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding-block: 0.125rem;
+  padding-inline: 0.625rem;
+  border-radius: calc(var(--radius) * 0.6);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fux-frame-viewport {
+  flex: 1;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+}
+/* In a narrow frame the address keeps the room. */
+@container (max-width: 16rem) {
+  .fux-frame-dots {
+    display: none;
+  }
+}
+
+/* ThemeScope: a sub-theme for a subtree. The outer element holds the inputs under private
+   names (`--fux-scope-*`); the inner one maps them onto the kit's tokens. An input may be a
+   var() that names the very token it feeds: it resolves on the outer element, where the token
+   still has the surrounding value, so no token here refers to itself. Only the inputs that were
+   given are mapped (`data-tokens`); every other token keeps the surrounding theme's value.
+   Tokens the kit derives at :root (custom properties inherit computed values) are restated. */
+.fux-theme-inputs {
+  display: contents;
+}
+.fux-theme-scope[data-tokens~="fg"] {
+  --foreground: var(--fux-scope-fg);
+  --card-foreground: var(--fux-scope-fg);
+  --popover-foreground: var(--fux-scope-fg);
+  --secondary-foreground: var(--fux-scope-fg);
+  --accent-foreground: var(--fux-scope-fg);
+  --sidebar-foreground: var(--fux-scope-fg);
+  --sidebar-accent-foreground: var(--fux-scope-fg);
+  --fux-text: var(--fux-scope-fg);
+  --fux-quiet-text: var(--fux-scope-fg);
+  --fux-ed-ink: var(--fux-scope-fg);
+  color: var(--fux-scope-fg);
+}
+.fux-theme-scope[data-tokens~="bg"] {
+  --background: var(--fux-scope-bg);
+  --surface: var(--fux-scope-bg);
+  --card: var(--fux-scope-bg);
+  --popover: var(--fux-scope-bg);
+  --sidebar: var(--fux-scope-bg);
+  --fux-surface: var(--fux-scope-bg);
+  --fux-raised: var(--fux-scope-bg);
+  --fux-input-surface: var(--fux-scope-bg);
+  --fux-control-surface: var(--fux-scope-bg);
+  --fux-ed-paper: var(--fux-scope-bg);
+  --fux-ed-raised: var(--fux-scope-bg);
+  background: var(--fux-scope-bg);
+}
+/* A new text or ground colour re-derives the neutrals from the pair. */
+.fux-theme-scope:is([data-tokens~="fg"], [data-tokens~="bg"]) {
+  --muted: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 5%,
+    var(--fux-scope-bg, var(--background))
+  );
+  --secondary: var(--muted);
+  --fux-ed-tone: var(--muted);
+  --accent: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 8%,
+    var(--fux-scope-bg, var(--background))
+  );
+  --sidebar-accent: var(--accent);
+  --fux-surface-hover: var(--accent);
+  --canvas: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 3%,
+    var(--fux-scope-bg, var(--background))
+  );
+  --fux-surface-subtle: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 4%,
+    var(--fux-scope-bg, var(--background))
+  );
+  --fux-tint: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 6%,
+    var(--fux-scope-bg, var(--background))
+  );
+  --hairline: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 9%,
+    var(--fux-scope-bg, var(--background))
+  );
+  --border: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 14%,
+    var(--fux-scope-bg, var(--background))
+  );
+  --sidebar-border: var(--border);
+  --fux-border-subtle: var(--border);
+  --fux-ed-rule: var(--border);
+  --fux-track: color-mix(
+    in oklab,
+    var(--fux-scope-fg, var(--foreground)) 18%,
+    var(--fux-scope-bg, var(--background))
+  );
+}
+.fux-theme-scope:is([data-tokens~="fg"], [data-tokens~="bg"], [data-tokens~="muted"]) {
+  --muted-foreground: var(
+    --fux-scope-muted,
+    color-mix(
+      in oklab,
+      var(--fux-scope-fg, var(--foreground)) 68%,
+      var(--fux-scope-bg, var(--background))
+    )
+  );
+  --fux-muted: var(--muted-foreground);
+  --fux-ed-ink-soft: var(--muted-foreground);
+  --sim-muted: var(--muted-foreground);
+}
+.fux-theme-scope:is([data-tokens~="fg"], [data-tokens~="bg"], [data-tokens~="field"]) {
+  --input: var(
+    --fux-scope-field,
+    color-mix(
+      in oklab,
+      var(--fux-scope-fg, var(--foreground)) 22%,
+      var(--fux-scope-bg, var(--background))
+    )
+  );
+  --fux-border: var(
+    --fux-scope-field,
+    color-mix(
+      in oklab,
+      var(--fux-scope-fg, var(--foreground)) 55%,
+      var(--fux-scope-bg, var(--background))
+    )
+  );
+  --fux-tint-border: var(--fux-border);
+}
+.fux-theme-scope[data-tokens~="accent"] {
+  --signal: var(--fux-scope-accent);
+  --signal-muted: color-mix(in oklab, var(--fux-scope-accent) 12%, transparent);
+  --signal-foreground: var(--fux-scope-bg, var(--background));
+  --ring: var(--fux-scope-accent);
+  --sidebar-ring: var(--fux-scope-accent);
+  --fux-focus: var(--fux-scope-accent);
+  --fux-ed-accent: var(--fux-scope-accent);
+  --fux-ed-mark: color-mix(in srgb, var(--fux-scope-accent) 13%, transparent);
+}
+.fux-theme-scope[data-tokens~="primary"] {
+  --primary: var(--fux-scope-primary);
+  --sidebar-primary: var(--fux-scope-primary);
+  --fux-accent: var(--fux-scope-primary);
+  --fux-highlight: color-mix(in srgb, var(--fux-scope-primary) 15%, transparent);
+  --fux-selected: color-mix(in srgb, var(--fux-scope-primary) 12%, transparent);
+}
+/* Text on primary defaults to the ground. */
+.fux-theme-scope[data-tokens~="primary"]:not([data-tokens~="on-primary"]) {
+  --primary-foreground: var(--fux-scope-bg, var(--background));
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --fux-on-accent: var(--primary-foreground);
+}
+.fux-theme-scope[data-tokens~="on-primary"] {
+  --primary-foreground: var(--fux-scope-on-primary);
+  --sidebar-primary-foreground: var(--fux-scope-on-primary);
+  --fux-on-accent: var(--fux-scope-on-primary);
+}
+/* Selected choices take the selection colour instead of primary (see theme.css). */
+.fux-theme-scope[data-tokens~="selection"] {
+  --selection: var(--fux-scope-selection);
+  --selection-muted: color-mix(in oklab, var(--fux-scope-selection) 12%, transparent);
+  --fux-selected: color-mix(in srgb, var(--fux-scope-selection) 12%, transparent);
+}
+/* The mark on a selection defaults to the ground, which a selection colour has to stand out on. */
+.fux-theme-scope[data-tokens~="selection"]:not([data-tokens~="on-selection"]) {
+  --selection-foreground: var(--fux-scope-bg, var(--background));
+}
+.fux-theme-scope[data-tokens~="on-selection"] {
+  --selection-foreground: var(--fux-scope-on-selection);
+}
+.fux-theme-scope[data-tokens~="radius"] {
+  --radius: var(--fux-scope-radius);
+  --fux-radius: var(--fux-scope-radius);
+  --fux-panel-radius: var(--fux-scope-radius);
+  --fux-radius-sm: calc(var(--fux-scope-radius) * 0.75);
+  --fux-radius-lg: calc(var(--fux-scope-radius) * 1.5);
+  --fux-ed-radius: var(--fux-scope-radius);
+}
+.fux-theme-scope[data-tokens~="font-body"] {
+  --font-sans: var(--fux-scope-font-body);
+  --fux-ed-sans: var(--fux-scope-font-body);
+  --fux-ed-serif: var(--fux-scope-font-body);
+  font-family: var(--fux-scope-font-body);
+}
+.fux-theme-scope[data-tokens~="font-head"] {
+  --fux-font-heading: var(--fux-scope-font-head);
+}
