@@ -96,6 +96,7 @@ export function MachineTreeCanvas() {
         .map((id) => elements.get(stateRowIds.get(id) ?? ""))
         .find((el): el is HTMLElement => !!el),
   });
+  useNarrowCanvas(layout.scrollerRef, layout.setCanvasNarrow);
   const steps = sim.snapshot ? Math.max(0, sim.snapshot.trace.length - 1) : 0;
   return (
     <div className="relative flex min-w-0 flex-1 flex-col">
@@ -228,6 +229,35 @@ export function MachineTreeCanvas() {
       </LookInside>
     </div>
   );
+}
+
+/** A canvas this wide or narrower has no room for alternatives side by side: they stack. */
+const NARROW_CANVAS_PX = 520;
+
+/**
+ * Measures the canvas and reports, whenever it crosses `NARROW_CANVAS_PX`, whether it is narrow.
+ * The first measure is a layout effect, so a client render never paints the wrong layout; hydration
+ * renders what the server did first and switches before the next paint. A canvas with no width
+ * (hidden, or not laid out) reports nothing and keeps the layout it has.
+ */
+function useNarrowCanvas(
+  canvasRef: React.RefObject<HTMLElement | null>,
+  report: (narrow: boolean) => void,
+) {
+  React.useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const measure = () => {
+      // The room there is to lay out in: the canvas has no padding, and this leaves out a scrollbar.
+      const width = canvas.clientWidth;
+      if (width > 0) report(width <= NARROW_CANVAS_PX);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [canvasRef, report]);
 }
 
 /**
