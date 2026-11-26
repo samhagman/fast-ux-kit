@@ -182,8 +182,10 @@
   --mt-spine: 14px;
   --mt-gap: 26px;
 }
+/* The canvas's width never depends on what it holds, so the width it measures to choose between
+ * columns and stacked alternatives cannot change when that choice redraws its content. */
 [data-mt-canvas] {
-  container: mt-canvas / inline-size;
+  container-type: inline-size;
 }
 
 /* The state above leads straight here: its line carries on down and ends in an arrowhead. */
@@ -353,44 +355,9 @@
 [data-mt-col][data-closes="end"]::after {
   content: none;
 }
-[data-mt-caption] {
-  display: none;
-}
-/* A narrow host: the columns stack, each block under a caption naming the routes that lead to it. */
-@container mt-canvas (max-width: 520px) {
-  [data-mt-fork="columns"] {
-    grid-template-columns: minmax(0, max-content);
-  }
-  [data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"],
-  [data-mt-fork="columns"] > [data-mt-col] {
-    grid-column: 1;
-  }
-  [data-mt-fork="columns"] > [data-mt-item] > [data-mt-routes="head"] {
-    margin-block-start: 0;
-    padding-block-start: 0;
-  }
-  [data-mt-fork="columns"] [data-mt-routes="head"]::before,
-  [data-mt-fork="columns"] [data-mt-routes="head"][data-mt-first]::after,
-  [data-mt-fork="columns"] > [data-mt-col]::before,
-  [data-mt-fork="columns"] > [data-mt-col]::after {
-    content: none;
-  }
-  [data-mt-fork="columns"] > [data-mt-col] {
-    margin-inline-start: var(--mt-spine);
-    padding-block: 6px;
-    padding-inline-start: 12px;
-    border-inline-start: 1px solid var(--mt-line);
-  }
-  [data-mt-fork="columns"] > [data-mt-col][data-pass],
-  [data-mt-fork="columns"] > [data-mt-col] > [data-mt-close] {
-    display: none;
-  }
-  [data-mt-fork="columns"] > [data-mt-col] > [data-mt-caption] {
-    display: block;
-  }
-}
-
-/* One alternative, or a long one: it hangs off the spine instead of standing beside the others.
+/* One alternative, or a long one, or any set of them in a canvas 520px wide or less (the canvas
+ * measures itself and asks the core for a plan without columns): it hangs off the spine instead of
+ * standing beside the others.
  * The fork is one grid by rows. The state's own tree item spans them and hands them down (subgrid),
  * so its route rows land between the blocks of states they lead to, which are its siblings.
  *

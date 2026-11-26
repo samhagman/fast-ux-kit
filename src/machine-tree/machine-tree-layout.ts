@@ -18,6 +18,8 @@ export interface LayoutCtx {
   readonly dir: Dir;
   readonly rootRef: React.RefObject<HTMLDivElement | null>;
   readonly scrollerRef: React.RefObject<HTMLDivElement | null>;
+  /** The canvas says whether it is too narrow for alternatives side by side (it measures itself). */
+  readonly setCanvasNarrow: (narrow: boolean) => void;
   /* panel */
   readonly panel: boolean;
   readonly setPanel: (open: boolean) => void;
@@ -68,6 +70,7 @@ export function useLayoutController(
     readonly dir: Dir;
     readonly rootRef: React.RefObject<HTMLDivElement | null>;
     readonly scrollerRef: React.RefObject<HTMLDivElement | null>;
+    readonly setCanvasNarrow: (narrow: boolean) => void;
   },
 ): LayoutCtx {
   const [panel, setPanel] = useControllable<boolean>(
@@ -92,7 +95,7 @@ export function useLayoutController(
     },
     [setPanel, setPanelTab],
   );
-  const { isPhone, coarse, dir, rootRef, scrollerRef } = env;
+  const { isPhone, coarse, dir, rootRef, scrollerRef, setCanvasNarrow } = env;
   const { toast, host: toaster } = useTreeToaster(rootRef);
   return React.useMemo<LayoutCtx>(
     () => ({
@@ -101,6 +104,7 @@ export function useLayoutController(
       dir,
       rootRef,
       scrollerRef,
+      setCanvasNarrow,
       panel,
       setPanel,
       panelTab,
@@ -123,6 +127,7 @@ export function useLayoutController(
       dir,
       rootRef,
       scrollerRef,
+      setCanvasNarrow,
       panel,
       setPanel,
       panelTab,

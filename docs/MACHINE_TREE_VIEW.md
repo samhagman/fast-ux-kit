@@ -82,6 +82,23 @@ most five states. A single alternative, or a set with a long one, is stacked
 instead: each hangs off the spine under its own label, with its states indented and
 a curve back where it flows back.
 
+A canvas 520px wide or less has no room for columns, so it stacks every set of
+alternatives the same way, and each route's name is written once. The canvas
+measures itself and switches as it crosses 520px; focus and selection stay where
+they are. Only the placement of the alternatives changes: the same states are on
+the spine at every width, and the stacked routes are listed in the order the
+document declares them, as stacked alternatives always are.
+
+`alternatives` chooses the layout. The default, `"auto"`, follows the canvas's
+width. A server cannot measure, so `"auto"` renders columns, and a narrow canvas
+switches to stacked when it is measured during hydration. `"stacked"` or
+`"columns"` keeps one layout at every width. Use `"stacked"` to server-render a
+host you know is narrow.
+
+```tsx
+<MachineTree document={document} alternatives="stacked" />
+```
+
 A state's routes are drawn in the order the document declares them, which is the
 order the machine tries them. A guarded route therefore stays above the unguarded
 one it falls back to, whichever of the two opens an alternative. A route that
@@ -109,8 +126,7 @@ The DOM keeps the tree's own shape. A state's routes stay inside its tree item a
 sibling states stay siblings, so keyboard order is DOM order: a state, its routes,
 then the alternatives under it in order. An alternative's label is its source
 state's own route row, set over (or, stacked, just above) the states it leads to
-with CSS subgrid. In a host
-narrower than 520px the columns stack, each under a caption naming its routes.
+with CSS subgrid.
 
 A search, a parallel state's lanes, and a container with duplicate ids or more than
 1,000 direct children use the plain wrapping list instead: a flow with states
