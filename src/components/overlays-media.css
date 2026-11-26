@@ -32,6 +32,54 @@
   padding: 0.25rem 1rem;
 }
 
+/*
+ * One indicator that slides between the items of a group to show the selection: the
+ * `fux-sliding-indicator` element in SegmentGroup, and the `::before` of a `fux-sliding-group`
+ * (ToggleButtonGroup in single selection), which keeps the items' :first-child and :last-child
+ * corners. The `--fux-indicator-*` variables come from measuring the selected item. They are
+ * physical in both writing directions, so the indicator is placed from the physical top-left
+ * corner and moved with a transform. It moves with the Tabs indicator's duration and easing;
+ * reduced motion makes it jump.
+ */
+.fux-sliding-indicator,
+.fux-sliding-group[data-indicator]::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: var(--fux-indicator-width);
+  height: var(--fux-indicator-height);
+  border-radius: var(--fux-indicator-radius);
+  transform: translate(var(--fux-indicator-x), var(--fux-indicator-y));
+  pointer-events: none;
+  transition-property: transform, width, height, border-radius;
+  transition-duration: calc(var(--fux-motion-duration, 140ms) * 1.6);
+  transition-timing-function: var(--ease-standard);
+}
+.fux-sliding-group[data-indicator]::before {
+  content: "";
+  background: var(--signal-muted);
+}
+/* A selected item that is disabled, or a disabled group, dims its indicator like its label. */
+.fux-sliding-indicator:has(~ [data-pressed][data-disabled]),
+.fux-sliding-group:has(> [data-pressed][data-disabled])::before {
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fux-sliding-indicator,
+  .fux-sliding-group[data-indicator]::before {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  /* Forced colours drop background fills; outline the selection in the system highlight. */
+  .fux-sliding-indicator,
+  .fux-sliding-group[data-indicator]::before {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+
 /* The paper a signature is drawn on stays light in both themes, so the ink matches the export. */
 .fux-signature-paper {
   background: oklch(0.985 0 0);
