@@ -1,7 +1,7 @@
 # Component API
 
 Import components from `@samhagman/fast-ux-kit/components` and load
-`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 94 canonical
+`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 96 canonical
 families. `componentManifest` provides each family's name, category, description,
 interaction owner and exported parts.
 
@@ -240,6 +240,68 @@ import { CircleAlertIcon } from "lucide-react";
   `[--fux-alert-tone:var(--chart-3)]`. Sides are logical, so alerts mirror in
   right-to-left text.
 
+## Layout
+
+`Stack`, `Row`, `Grid` and `Split` place their children on one spacing scale.
+`gap` takes the same step names in all four:
+
+| `gap`   | `none` | `2xs` | `xs` | `sm` | `sm-md` | `md` | `lg` | `xl` | `2xl` |
+| ------- | ------ | ----- | ---- | ---- | ------- | ---- | ---- | ---- | ----- |
+| Size px | 0      | 2     | 4    | 8    | 12      | 16   | 24   | 32   | 48    |
+
+`sm-md` is the step between `sm` and `md`. A Stack's gap defaults to `md` and a
+Row's to `sm`; Grid and Split default to `md`. Each step sets
+`--fux-layout-gap` on the layout, which a rule can read.
+
+```tsx
+import { Grid, Panel, Row, Split, Stack } from "@samhagman/fast-ux-kit/components";
+
+<Split side="12rem" stackBelow="36rem" gap="lg">
+  <Split.Side as="nav" aria-label="Guide sections">
+    <Stack as="ul" gap="xs">
+      <li>
+        <a href="/guide/install">Install</a>
+      </li>
+    </Stack>
+  </Split.Side>
+  <Split.Main>
+    <Grid min="20rem" gap="sm-md" align="start">
+      <Panel padding="sm">Draft</Panel>
+      <Panel padding="sm">Review</Panel>
+    </Grid>
+  </Split.Main>
+</Split>;
+```
+
+- `as` renders a layout as `section`, `article`, `nav`, `aside`, `header`,
+  `footer`, `main`, `form`, `fieldset`, `figure`, `ul`, `ol` or `li` instead of
+  a `div`. Stack, Row, Grid, Split and Split's parts take it. A `ul` or `ol`
+  loses its bullets and indent, since the gap spaces it, and gets
+  `role="list"`, which WebKit otherwise drops from a list without bullets.
+- `Grid` lays out equal columns, as many of at least `min` (default `16rem`)
+  as its own width holds, and one column when it is narrower than `min`. It
+  follows its own width, not the viewport's, so the same grid reflows inside a
+  narrow sidebar. Fewer items than would fill a row widen to share it; a short
+  last row keeps the column width. `align` is `start`,
+  `center`, `end` or `stretch` (the default), for items of different heights.
+- `Split` places a side column, `side` wide (default `16rem`), beside a main
+  column that takes the rest. When the split itself is narrower than
+  `stackBelow` (default `40rem`), the two stack, each the full width. Source
+  order places the side: `Split.Side` first puts it on the inline start (the
+  left in left-to-right text, the right in right-to-left), and after
+  `Split.Main` on the inline end. Stacked, the parts keep that order, so
+  reading order and visual order always agree. `side` and `stackBelow` take any
+  CSS length, or a number of pixels. `Splitter` is the resizable counterpart.
+- `Panel` takes `padding`: `sm` (12px), `md` (20px, the default), `lg` (28px)
+  or `none`. With `none` the content meets the frame, `Panel.Header` and
+  `Panel.Footer` span it edge to edge with a 12px inset that lines up with a
+  table's cells, and a `Table` placed directly inside drops its own border and
+  takes the panel's corners. `edge="top"` draws only a rule along the top, with
+  no fill, shadow or inline padding. `tone="quiet"` is a muted surface with a
+  hairline border and no shadow. `Panel.Header` takes `tone="band"`, which
+  fills it, and `wrap`, which lets the title and actions wrap onto lines of
+  their own.
+
 ## Dates and colors
 
 Date and time components retain `@internationalized/date` values. Use
@@ -402,7 +464,7 @@ they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
 | Color         | `ColorArea`, `ColorField`, `ColorPicker`, `ColorSlider`, `ColorSwatch`, `ColorSwatchPicker`, `ColorWheel`                                 |
 | Feedback      | `ProgressBar`, `Meter`, `Timer`, `Toast`, `Alert`                                                                                         |
 | Files         | `DropZone`, `FileTrigger`, `DownloadTrigger`, `FileUpload`                                                                                |
-| Layout        | `Separator`, `Stack`, `Row`, `Panel`, `ScrollArea`, `Splitter`                                                                            |
+| Layout        | `Separator`, `Stack`, `Row`, `Grid`, `Split`, `Panel`, `ScrollArea`, `Splitter`                                                           |
 | Display       | `Avatar`, `Carousel`, `Marquee`, `KeyChord`                                                                                               |
 | Media         | `ImageCropper`, `QrCode`, `SignaturePad`                                                                                                  |
 | Code          | `CodeBlock`, `Terminal`, `CommandLine`, `FileTree`                                                                                        |
