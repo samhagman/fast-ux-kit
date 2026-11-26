@@ -90,7 +90,8 @@ const state = reduceOutlineEditor(createOutlineEditorState(nodes), {type:'text',
 assert.equal(state.nodes[0]?.text,'Two');
 const machine: MachineDocument = {version:1,rootId:'main',machines:[{id:'main',label:'Consumer machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
 assert.deepEqual(createMachineSnapshot(machine).activeIds,['idle']);
-assert.equal(componentManifest.length,92);
+assert.equal(componentManifest.filter(entry=>entry.layer==='family').length,92);
+assert.equal(componentManifest.filter(entry=>entry.layer==='primitive').length,11);
 for (const entry of [OutlinerWorkspace, MachineGraphView, MachineTree, legacyReader.OutlineEditor, rich, root]) assert.ok(entry);
 const acceptWorkspace = (event: OutlineWorkspaceSnapshot) => event.documents;
 assert.equal(typeof acceptWorkspace,'function');
@@ -144,7 +145,7 @@ import assert from 'node:assert/strict';
 import { createElement as h, act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
-import { Button } from '@samhagman/fast-ux-kit/components';
+import { Button, componentManifest } from '@samhagman/fast-ux-kit/components';
 import { Outliner } from '@samhagman/fast-ux-kit/outliner';
 import { MachineGraphView } from '@samhagman/fast-ux-kit/machine-graph';
 import { MachineTree } from '@samhagman/fast-ux-kit/machine-tree';
@@ -185,11 +186,17 @@ assert.match(document.body.textContent,/Hydration note/);
 assert.match(document.body.textContent,/Hydration machine/);
 await act(async()=>roots.forEach(root=>root.unmount())); dom.window.close();
 for(const name of ['core','components','editorial','outliner','machine','machine-graph','machine-view','machine-tree','react','rich']) await import('@samhagman/fast-ux-kit/'+name);
+// Every catalog entry, primitives included, imports from the path the manifest gives it.
+for(const entry of componentManifest){
+ const module=await import(entry.importPath);
+ assert.ok(entry.exportName in module,entry.name+' is exported from '+entry.importPath);
+ for(const part of entry.parts) assert.ok(part.split('.').reduce((value,member)=>value?.[member],module),entry.name+' exposes '+part);
+}
 for(const name of ['aria','ark','components/aria']) {
  await assert.rejects(import('@samhagman/fast-ux-kit/'+name),{code:'ERR_PACKAGE_PATH_NOT_EXPORTED'});
 }
 for(const name of ['styles.css','components.css','editorial.css','tokens.css','outliner.css','machine.css','machine-graph.css','machine-view.css','machine-tree.css']) assert.ok(import.meta.resolve('@samhagman/fast-ux-kit/'+name).endsWith('.css'));
-console.log('Hydration, retired-entry rejection and compiled style resolution pass.');
+console.log('Hydration, catalog import paths, retired-entry rejection and compiled style resolution pass.');
 `,
   );
   console.log(run(process.execPath, ["hydrate.mjs"]).trim());

@@ -46,6 +46,10 @@ scroll and jump to what they name, and `#/components/<Family>` links straight to
 a card. Search filters the cards and the index together. Each demo mounts as its
 card nears the view (or at once when jumped to).
 
+The catalog's primitives appear in their categories beside the families. Their
+cards are marked Primitive and show the `components/ui/<file>` path to import
+them from. Searching "primitive" lists them.
+
 Each family's demo lives in `studio/src/pages/components-gallery/`, one file per
 area, and `studio/src/pages/components-page.tsx` gathers them into the fixture
 map used by the gallery and `tests/components-catalog.test.tsx`. Each canonical

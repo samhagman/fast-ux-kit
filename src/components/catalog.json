@@ -868,5 +868,193 @@
     "owner": "native",
     "status": "styled",
     "parts": ["BarList"]
+  },
+  {
+    "name": "Badge",
+    "exportName": "Badge",
+    "category": "Display",
+    "description": "A short status or count label with filled, secondary, outline, ghost and danger treatments.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Badge"],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/badge"
+  },
+  {
+    "name": "Kbd",
+    "exportName": "Kbd",
+    "category": "Display",
+    "description": "A single keycap, or a group of them, for a shortcut written inline.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Kbd", "KbdGroup"],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/kbd"
+  },
+  {
+    "name": "Item",
+    "exportName": "Item",
+    "category": "Display",
+    "description": "A row with media, a title, a description and actions, alone or in a list.",
+    "owner": "native",
+    "status": "styled",
+    "parts": [
+      "Item",
+      "ItemGroup",
+      "ItemSeparator",
+      "ItemMedia",
+      "ItemContent",
+      "ItemTitle",
+      "ItemDescription",
+      "ItemActions",
+      "ItemHeader",
+      "ItemFooter"
+    ],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/item"
+  },
+  {
+    "name": "Skeleton",
+    "exportName": "Skeleton",
+    "category": "Feedback",
+    "description": "A placeholder block that holds the shape of content while it loads.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Skeleton"],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/skeleton"
+  },
+  {
+    "name": "Empty",
+    "exportName": "Empty",
+    "category": "Feedback",
+    "description": "An empty state with an icon, a title, an explanation and the next action.",
+    "owner": "native",
+    "status": "styled",
+    "parts": [
+      "Empty",
+      "EmptyHeader",
+      "EmptyMedia",
+      "EmptyTitle",
+      "EmptyDescription",
+      "EmptyContent"
+    ],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/empty"
+  },
+  {
+    "name": "ButtonGroup",
+    "exportName": "ButtonGroup",
+    "category": "Actions",
+    "description": "Related buttons joined into one bar, with optional text and separators.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["ButtonGroup", "ButtonGroupText", "ButtonGroupSeparator"],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/button-group"
+  },
+  {
+    "name": "Label",
+    "exportName": "Label",
+    "category": "Inputs",
+    "description": "A styled native label for composing your own controls.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Label"],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/label"
+  },
+  {
+    "name": "InputGroup",
+    "exportName": "InputGroup",
+    "category": "Inputs",
+    "description": "An input or text area with icons, text and buttons attached at either end.",
+    "owner": "native",
+    "status": "styled",
+    "parts": [
+      "InputGroup",
+      "InputGroupAddon",
+      "InputGroupButton",
+      "InputGroupText",
+      "InputGroupInput",
+      "InputGroupTextarea"
+    ],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/input-group"
+  },
+  {
+    "name": "DropdownMenu",
+    "exportName": "DropdownMenu",
+    "category": "Navigation",
+    "description": "A composable menu with checkbox and radio items, groups and submenus.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": [
+      "DropdownMenu",
+      "DropdownMenuTrigger",
+      "DropdownMenuContent",
+      "DropdownMenuGroup",
+      "DropdownMenuLabel",
+      "DropdownMenuItem",
+      "DropdownMenuCheckboxItem",
+      "DropdownMenuRadioGroup",
+      "DropdownMenuRadioItem",
+      "DropdownMenuSeparator",
+      "DropdownMenuShortcut",
+      "DropdownMenuSub",
+      "DropdownMenuSubTrigger",
+      "DropdownMenuSubContent",
+      "DropdownMenuPortal"
+    ],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/dropdown-menu"
+  },
+  {
+    "name": "ContextMenu",
+    "exportName": "ContextMenu",
+    "category": "Navigation",
+    "description": "A menu opened by right-click or long press on its area.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": [
+      "ContextMenu",
+      "ContextMenuTrigger",
+      "ContextMenuContent",
+      "ContextMenuGroup",
+      "ContextMenuLabel",
+      "ContextMenuItem",
+      "ContextMenuCheckboxItem",
+      "ContextMenuRadioGroup",
+      "ContextMenuRadioItem",
+      "ContextMenuSeparator",
+      "ContextMenuShortcut",
+      "ContextMenuSub",
+      "ContextMenuSubTrigger",
+      "ContextMenuSubContent",
+      "ContextMenuPortal"
+    ],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/context-menu"
+  },
+  {
+    "name": "Command",
+    "exportName": "Command",
+    "category": "Navigation",
+    "description": "A filterable command list with groups and shortcuts, inline or as a palette dialog.",
+    "owner": "base-ui",
+    "status": "styled",
+    "parts": [
+      "Command",
+      "CommandDialog",
+      "CommandInput",
+      "CommandList",
+      "CommandEmpty",
+      "CommandGroup",
+      "CommandItem",
+      "CommandShortcut",
+      "CommandSeparator"
+    ],
+    "layer": "primitive",
+    "importPath": "@samhagman/fast-ux-kit/components/ui/command"
   }
 ]

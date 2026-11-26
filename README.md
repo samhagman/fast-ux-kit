@@ -140,6 +140,10 @@ shows on the state's card and in full in the details panel.
 
 The package root exposes the portable core, rich-document functions and reader
 APIs. The tool-specific entries select the new outliner and machine interfaces.
+Each file of the shared shadcn layer is also an entry,
+`/components/ui/<file>`. The catalog lists the ones no family covers, such as
+`Badge`, `Skeleton`, `Empty` and `Kbd`, as
+[primitives](docs/COMPONENT_API.md#primitives).
 
 ## Editorial UI
 

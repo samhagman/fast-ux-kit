@@ -21,7 +21,10 @@ await build({
   platform: "node",
   target: "es2022",
   packages: "external",
-  alias: { "@samhagman/fast-ux-kit/components": join(root, "src/components/index.tsx") },
+  alias: {
+    "@samhagman/fast-ux-kit/components/ui": join(root, "src/components/ui"),
+    "@samhagman/fast-ux-kit/components": join(root, "src/components/index.tsx"),
+  },
   jsx: "automatic",
   logLevel: "silent",
 });
@@ -42,7 +45,9 @@ const { componentFixtures, ComponentsPage } = (await import(pathToFileURL(output
 };
 const catalog = JSON.parse(await readFile(join(root, "src/components/catalog.json"), "utf8")) as {
   name: string;
+  layer?: "primitive";
 }[];
+const primitives = catalog.filter((entry) => entry.layer === "primitive");
 class PointerEventStub extends dom.window.MouseEvent {
   readonly pointerId: number;
   readonly pointerType: string;
@@ -55,6 +60,11 @@ class PointerEventStub extends dom.window.MouseEvent {
 Object.defineProperty(dom.window, "PointerEvent", { configurable: true, value: PointerEventStub });
 Object.defineProperty(globalThis, "PointerEvent", { configurable: true, value: PointerEventStub });
 Object.defineProperty(globalThis, "DOMRect", { configurable: true, value: dom.window.DOMRect });
+// The context-menu trigger passes an AbortSignal to document listeners; jsdom accepts only its own.
+Object.defineProperty(globalThis, "AbortController", {
+  configurable: true,
+  value: dom.window.AbortController,
+});
 Object.defineProperty(dom.window.Element.prototype, "getAnimations", {
   configurable: true,
   value: () => [],
@@ -91,8 +101,9 @@ after(async () => {
   await rm(scratch, { recursive: true, force: true });
 });
 
-test("every canonical family has one working gallery fixture", () => {
-  assert.equal(catalog.length, 92);
+test("every canonical family and primitive has one working gallery fixture", () => {
+  assert.equal(catalog.length - primitives.length, 92);
+  assert.equal(primitives.length, 11);
   assert.deepEqual(
     Object.keys(componentFixtures).sort(),
     catalog.map((entry) => entry.name).sort(),
@@ -126,6 +137,7 @@ for (const entry of catalog) {
           element.focus();
           fireEvent.focus(element);
         }
+        if (action.event === "context") fireEvent.contextMenu(element);
         if (action.event === "hover") {
           fireEvent.pointerEnter(element, { pointerType: "mouse" });
           fireEvent.mouseOver(element);
@@ -172,13 +184,22 @@ test("the gallery is one scrolling page: every family's card, filtered by search
   assert.ok(view.getByRole("heading", { name: "App components" }));
   assert.equal(
     view.container.querySelectorAll("[data-family]").length,
-    92,
-    "the index lists every family",
+    catalog.length,
+    "the index lists every family and primitive",
   );
   assert.equal(
     view.container.querySelectorAll("article[id^=family-]").length,
-    92,
-    "one card per family",
+    catalog.length,
+    "one card per family and primitive",
+  );
+  assert.equal(
+    view.container.querySelectorAll("article[data-layer=primitive]").length,
+    primitives.length,
+    "primitive cards are marked",
+  );
+  assert.ok(
+    view.getByText("@samhagman/fast-ux-kit/components/ui/badge"),
+    "a primitive card names the module to import it from",
   );
   assert.equal(view.getAllByRole("tab").length, 16, "one tab per category");
   await act(async () => {
