@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -68,6 +68,21 @@ try {
     "jsdom@26.1.0",
     "esbuild@0.25.12",
   ]);
+  // The compiled stylesheet carries the text styles and the tokens they read.
+  const compiled = await readFile(
+    join(fixture, "node_modules/@samhagman/fast-ux-kit/dist/library.css"),
+    "utf8",
+  );
+  assert.match(compiled, /--fux-heading-display:/, "the display-size token ships");
+  assert.match(
+    compiled,
+    /\.fux-heading\[data-size=["']?display["']?\]\{font-size:clamp\(var\(--fux-heading-title\)/,
+    "display headings are styled from tokens",
+  );
+  assert.match(
+    compiled,
+    /\.fux-dl\[data-layout=["']?inline["']?\]>div\{[^}]*flex-(?:wrap|flow):wrap/,
+  );
   await writeFile(
     join(fixture, "consumer.tsx"),
     `
@@ -75,7 +90,7 @@ import assert from 'node:assert/strict';
 import * as React from 'react';
 import { renderToString } from 'react-dom/server';
 import { validateOutline, createOutlineEditorState, reduceOutlineEditor } from '@samhagman/fast-ux-kit/core';
-import { Alert, AlertTitle, Button, ColorPicker, CommandLine, DatePicker, Grid, Split, componentManifest } from '@samhagman/fast-ux-kit/components';
+import { Alert, AlertTitle, Button, ColorPicker, CommandLine, DatePicker, DescriptionList, Grid, Heading, Split, componentManifest } from '@samhagman/fast-ux-kit/components';
 import { Outliner, OutlinerWorkspace, type OutlineItem, type OutlinerHandle, type OutlineWorkspaceSnapshot, createNotePageRegistry, defineNotePageExtension, NotePageView, type NotePageType, type OutlineCollaboration, type OutlineFieldEvent } from '@samhagman/fast-ux-kit/outliner';
 import { MachineGraphView } from '@samhagman/fast-ux-kit/machine-graph';
 import { MachineView as DeprecatedMachineView, type MachineViewProps } from '@samhagman/fast-ux-kit/machine-view';
@@ -93,7 +108,7 @@ const state = reduceOutlineEditor(createOutlineEditorState(nodes), {type:'text',
 assert.equal(state.nodes[0]?.text,'Two');
 const machine: MachineDocument = {version:1,rootId:'main',machines:[{id:'main',label:'Consumer machine',nodes:[{id:'idle',kind:'atomic',label:'Idle'}],transitions:[]}]};
 assert.deepEqual(createMachineSnapshot(machine).activeIds,['idle']);
-assert.equal(componentManifest.filter(entry=>entry.layer==='family').length,96);
+assert.equal(componentManifest.filter(entry=>entry.layer==='family').length,100);
 assert.equal(componentManifest.filter(entry=>entry.layer==='primitive').length,11);
 for (const entry of [OutlinerWorkspace, MachineGraphView, MachineTree, legacyReader.OutlineEditor, rich, root]) assert.ok(entry);
 const acceptWorkspace = (event: OutlineWorkspaceSnapshot) => event.documents;
@@ -101,6 +116,8 @@ assert.equal(typeof acceptWorkspace,'function');
 assert.match(renderToString(<Button>Save</Button>),/Save/);
 assert.match(renderToString(<Alert variant="error"><AlertTitle>Sync stopped</AlertTitle></Alert>),/role="alert"[^>]*>.*Sync stopped/);
 assert.match(renderToString(<CommandLine label="Install command" command="npm install example" prompt/>),/aria-label="Install command"[\\s\\S]*npm install example/);
+assert.match(renderToString(<Heading level={3} size="display">Members</Heading>),/<h3 class="fux-heading" data-size="display">Members<\\/h3>/);
+assert.match(renderToString(<DescriptionList items={[{term:'Owner',detail:'Rania'}]}/>),/<dl class="fux-dl" data-layout="stacked"><div><dt>Owner<\\/dt><dd>Rania<\\/dd><\\/div><\\/dl>/);
 assert.match(renderToString(<ColorPicker label="Accent" defaultValue="#225544"/>),/Accent/);
 assert.match(renderToString(<Grid min={240} gap="sm-md">Card</Grid>),/--fux-grid-min:240px" class="fux-layout fux-grid" data-gap="sm-md">Card/);
 assert.match(renderToString(<Split side="12rem"><Split.Side as="nav">Pages</Split.Side><Split.Main>Body</Split.Main></Split>),/<nav class="fux-split-side">Pages<\\/nav><div class="fux-split-main">Body/);

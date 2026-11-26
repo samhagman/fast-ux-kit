@@ -51,6 +51,22 @@
   --fux-tint: var(--fux-surface);
   --fux-tint-border: var(--fux-border);
 }
+/* Text roles for Heading, Text, Eyebrow and DescriptionList. Fonts come from the theme's
+   --font-heading (falling back to --font-sans) and --font-mono; colours from its roles. */
+:root {
+  --fux-heading-display: 2rem;
+  --fux-heading-title: 1.5rem;
+  --fux-heading-section: 1.25rem;
+  --fux-heading-subsection: 1.0625rem;
+  --fux-heading-weight: 600;
+  --fux-heading-leading: 1.25;
+  --fux-heading-tracking: -0.015em;
+  --fux-body-sm: 0.875rem;
+  --fux-body-md: 1rem;
+  --fux-body-lg: 1.125rem;
+  --fux-eyebrow-size: 0.6875rem;
+  --fux-eyebrow-tracking: 0.1em;
+}
 
 /* Components inherit semantic roles; both owner systems use the same scale. */
 :root {

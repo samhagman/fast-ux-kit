@@ -906,6 +906,42 @@
     "parts": ["Alert", "AlertTitle", "AlertDescription", "AlertActions"]
   },
   {
+    "name": "Heading",
+    "exportName": "Heading",
+    "category": "Typography",
+    "description": "A heading whose level is the element and whose size is the look, in the theme's heading font.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Heading"]
+  },
+  {
+    "name": "Text",
+    "exportName": "Text",
+    "category": "Typography",
+    "description": "Body text as a paragraph or a span, at a theme size and tone.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Text"]
+  },
+  {
+    "name": "Eyebrow",
+    "exportName": "Eyebrow",
+    "category": "Typography",
+    "description": "A small uppercase kicker or label line above a heading.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Eyebrow"]
+  },
+  {
+    "name": "DescriptionList",
+    "exportName": "DescriptionList",
+    "category": "Data display",
+    "description": "Terms and their details as a real dl, stacked or side by side.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["DescriptionList"]
+  },
+  {
     "name": "Badge",
     "exportName": "Badge",
     "category": "Display",
