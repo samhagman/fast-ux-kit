@@ -2,6 +2,25 @@ import * as React from "react";
 import { cx } from "./atoms.js";
 import { tokenizeCode } from "./tokenize.js";
 import { useCopy } from "../hooks/use-copy.js";
+import {
+  terminalRows,
+  terminalTones,
+  type TerminalLine,
+  type TerminalSegment,
+} from "../core/terminal.js";
+
+export {
+  TERMINAL_TONES,
+  parseAnsi,
+  terminalCopyText,
+  terminalRows,
+  terminalTones,
+  type TerminalLine,
+  type TerminalReadOptions,
+  type TerminalRow,
+  type TerminalSegment,
+  type TerminalTone,
+} from "../core/terminal.js";
 
 // ---------------------------------------------------------------------------------------------
 // Molecules: one block in the reading column. Each renders to plain, script-free markup with no
@@ -312,29 +331,61 @@ function CodeCopy({
 }
 
 export interface TerminalProps extends Omit<React.ComponentProps<"div">, "children"> {
-  /** The transcript. A line that starts with the prompt and a space is something the reader types. */
-  readonly children: string;
+  /**
+   * The transcript, as text or as one entry per line. A line is a string or a list of segments,
+   * `{ text, tone, decorative }`. A line whose text starts with the prompt and a space is something
+   * the reader types.
+   */
+  readonly children: string | readonly TerminalLine[];
   readonly prompt?: string;
   /** A name for the transcript: "zsh", "Blender console". */
   readonly title?: string;
+  /** Read ANSI colour, bold, dim and reset codes in plain-text lines onto tones. */
+  readonly ansi?: boolean;
+  /** Paint the terminal's own dark or light ground. By default it follows the page. */
+  readonly ground?: "dark" | "light";
+}
+function terminalSegment(segment: TerminalSegment, index: number): React.ReactNode {
+  const tones = terminalTones(segment.tone);
+  if (!tones.length && !segment.decorative) return segment.text;
+  return (
+    <span
+      className="fux-terminal-text"
+      key={index}
+      data-tone={tones.length ? tones.join(" ") : undefined}
+      data-decorative={segment.decorative ? "" : undefined}
+      aria-hidden={segment.decorative ? "true" : undefined}
+    >
+      {segment.text}
+    </span>
+  );
 }
 /** What the reader types and what comes back, as two visibly different channels. */
-export function Terminal({ children, prompt = "$", title, className, ...props }: TerminalProps) {
-  const lines = children.replace(/^\n+|\n+$/g, "").split("\n");
+export function Terminal({
+  children,
+  prompt = "$",
+  title,
+  ansi,
+  ground,
+  className,
+  ...props
+}: TerminalProps) {
+  const rows = terminalRows(children, { prompt, ansi });
   return (
-    <div className={cx("fux-terminal", className)} {...props}>
+    <div className={cx("fux-terminal", className)} data-ground={ground} {...props}>
       {title && <div className="fux-terminal-title">{title}</div>}
       <pre className="fux-terminal-pre">
-        {lines.map((line, index) => {
-          const typed = line.startsWith(`${prompt} `);
+        {rows.map((row, index) => {
+          const typed = row.kind === "in";
           return (
-            <span className="fux-terminal-line" data-kind={typed ? "in" : "out"} key={index}>
+            <span className="fux-terminal-line" data-kind={row.kind} key={index}>
+              {row.lead.map(terminalSegment)}
               {typed && (
                 <span className="fux-terminal-prompt" aria-hidden="true">
                   {prompt}{" "}
                 </span>
               )}
-              {typed ? line.slice(prompt.length + 1) : line}
+              {row.segments.map(terminalSegment)}
               {"\n"}
             </span>
           );

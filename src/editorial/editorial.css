@@ -16,6 +16,31 @@
   --fux-ed-good: var(--success, #2f6b4a);
   --fux-ed-mark: color-mix(in srgb, var(--fux-ed-accent) 13%, transparent);
 
+  /* Terminal tones, one set per ground. Each colour keeps at least 4.5:1 on its ground, and on
+     the kit's tinted papers. Override these to retheme a terminal; a tone never takes a raw colour. */
+  --fux-terminal-light-ground: #ffffff;
+  --fux-terminal-light-ink: #1d2321;
+  --fux-terminal-light-output: #56605b;
+  --fux-terminal-light-rule: #d5d9d2;
+  --fux-terminal-light-accent: #7d5410;
+  --fux-terminal-light-dim: #646b67;
+  --fux-terminal-light-success: #1c6b3c;
+  --fux-terminal-light-warning: #8a4b00;
+  --fux-terminal-light-danger: #b3261e;
+  --fux-terminal-light-info: #1f5eb4;
+  --fux-terminal-light-link: #4b3fc0;
+  --fux-terminal-dark-ground: #16181d;
+  --fux-terminal-dark-ink: #e8eaed;
+  --fux-terminal-dark-output: #b9c0c8;
+  --fux-terminal-dark-rule: #343a44;
+  --fux-terminal-dark-accent: #e2b46a;
+  --fux-terminal-dark-dim: #959ca6;
+  --fux-terminal-dark-success: #6fcf97;
+  --fux-terminal-dark-warning: #efbf5e;
+  --fux-terminal-dark-danger: #ff8d85;
+  --fux-terminal-dark-info: #7cb6ff;
+  --fux-terminal-dark-link: #aab2ff;
+
   --fux-ed-serif: var(--font-serif, ui-serif, "Iowan Old Style", Georgia, "Times New Roman", serif);
   --fux-ed-sans: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
   --fux-ed-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
@@ -929,6 +954,79 @@
 }
 .fux-terminal-prompt {
   color: var(--fux-ed-accent);
+  user-select: none;
+}
+
+/* Terminal tones. A segment's data-tone lists one weight and one colour role. The terminal
+   resolves each role from the set for its ground: the page's by default, or its own `ground`. */
+.fux-terminal {
+  --fux-terminal-accent: var(--fux-ed-accent);
+  --fux-terminal-bold: var(--fux-ed-ink);
+  --fux-terminal-dim: var(--fux-terminal-light-dim);
+  --fux-terminal-success: var(--fux-terminal-light-success);
+  --fux-terminal-warning: var(--fux-terminal-light-warning);
+  --fux-terminal-danger: var(--fux-terminal-light-danger);
+  --fux-terminal-info: var(--fux-terminal-light-info);
+  --fux-terminal-link: var(--fux-terminal-light-link);
+}
+:where(.dark) .fux-terminal,
+.fux-terminal[data-ground="dark"] {
+  --fux-terminal-dim: var(--fux-terminal-dark-dim);
+  --fux-terminal-success: var(--fux-terminal-dark-success);
+  --fux-terminal-warning: var(--fux-terminal-dark-warning);
+  --fux-terminal-danger: var(--fux-terminal-dark-danger);
+  --fux-terminal-info: var(--fux-terminal-dark-info);
+  --fux-terminal-link: var(--fux-terminal-dark-link);
+}
+.fux-terminal[data-ground="dark"] {
+  --fux-ed-raised: var(--fux-terminal-dark-ground);
+  --fux-ed-ink: var(--fux-terminal-dark-ink);
+  --fux-ed-ink-soft: var(--fux-terminal-dark-output);
+  --fux-ed-rule: var(--fux-terminal-dark-rule);
+  --fux-ed-accent: var(--fux-terminal-dark-accent);
+  color-scheme: dark;
+}
+.fux-terminal[data-ground="light"] {
+  --fux-ed-raised: var(--fux-terminal-light-ground);
+  --fux-ed-ink: var(--fux-terminal-light-ink);
+  --fux-ed-ink-soft: var(--fux-terminal-light-output);
+  --fux-ed-rule: var(--fux-terminal-light-rule);
+  --fux-ed-accent: var(--fux-terminal-light-accent);
+  --fux-terminal-dim: var(--fux-terminal-light-dim);
+  --fux-terminal-success: var(--fux-terminal-light-success);
+  --fux-terminal-warning: var(--fux-terminal-light-warning);
+  --fux-terminal-danger: var(--fux-terminal-light-danger);
+  --fux-terminal-info: var(--fux-terminal-light-info);
+  --fux-terminal-link: var(--fux-terminal-light-link);
+  color-scheme: light;
+}
+.fux-terminal-text[data-tone~="bold"] {
+  color: var(--fux-terminal-bold);
+  font-weight: 700;
+}
+/* Colour roles come after bold so a bold success line keeps its colour. */
+.fux-terminal-text[data-tone~="dim"] {
+  color: var(--fux-terminal-dim);
+}
+.fux-terminal-text[data-tone~="accent"] {
+  color: var(--fux-terminal-accent);
+}
+.fux-terminal-text[data-tone~="success"] {
+  color: var(--fux-terminal-success);
+}
+.fux-terminal-text[data-tone~="warning"] {
+  color: var(--fux-terminal-warning);
+}
+.fux-terminal-text[data-tone~="danger"] {
+  color: var(--fux-terminal-danger);
+}
+.fux-terminal-text[data-tone~="info"] {
+  color: var(--fux-terminal-info);
+}
+.fux-terminal-text[data-tone~="link"] {
+  color: var(--fux-terminal-link);
+}
+.fux-terminal-text[data-decorative] {
   user-select: none;
 }
 
