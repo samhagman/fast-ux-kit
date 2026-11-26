@@ -44,6 +44,24 @@ single option ID. `CheckboxGroup` uses an array of option IDs. Options expose
 `Tree` also accepts controlled expansion through `expandedIds` and
 `onExpandedChange`.
 
+A `Tree` or `NavigationTree` node can carry a `badge`, such as a count, drawn
+like a tab badge. `badgePlacement` on the tree sets where badges sit: `"end"`
+(the default) pins them to the row's inline-end edge, so a long label truncates
+before it, and `"start"` puts them just before the label, after the disclosure,
+guides and icon. A node's own `badgePlacement` overrides the tree's. The badge
+text joins the row's accessible name, and a navigation link's, so a reader hears
+"Inbox, 3". Give `badgeLabel` for a badge that is not plain text, such as a dot.
+
+```tsx
+<NavigationTree
+  label="Mail"
+  items={[
+    { id: "inbox", label: "Inbox", href: "/inbox", badge: 3 },
+    { id: "drafts", label: "Drafts", href: "/drafts", badge: <Dot />, badgeLabel: "unsaved" },
+  ]}
+/>
+```
+
 `Table` takes `rows`, typed `columns` and an optional sort descriptor. A sortable
 column supplies `allowsSorting` and a comparator. Selection uses stable row IDs.
 
