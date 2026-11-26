@@ -414,7 +414,7 @@ export const overlaysMediaFixtures: Readonly<Record<string, ComponentFixture>> =
     [click("button", 'button[aria-pressed="true"]')],
   ),
   ToggleButtonGroup: example(
-    "Choose an alignment.",
+    "Choose an alignment. The highlight slides to the new choice; with several choices on, each one fades in and out.",
     (s) => (
       <>
         <C.ToggleButtonGroup defaultValue={["left"]} onValueChange={s.report}>
