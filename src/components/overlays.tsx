@@ -23,6 +23,8 @@ import { Kbd } from "./ui/kbd.js";
 import { Toggle } from "./ui/toggle.js";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.js";
 import { TooltipContent as TooltipContentPrimitive } from "./ui/tooltip.js";
+import { useSlidingIndicator } from "../hooks/use-sliding-indicator.js";
+import { mergeRefs } from "../lib/merge-refs.js";
 import { cn } from "../lib/utils.js";
 
 export {
@@ -66,26 +68,85 @@ export { HoverCard, HoverCardTrigger } from "./ui/hover-card.js";
 export { ScrollBar } from "./ui/scroll-area.js";
 
 /** A pressed toggle reads as selected: a signal tint instead of the hover grey. */
-const pressed =
-  "aria-pressed:bg-signal-muted aria-pressed:text-signal data-pressed:bg-signal-muted data-pressed:text-signal aria-pressed:hover:bg-signal-muted data-pressed:hover:bg-signal-muted";
+const pressedText =
+  "aria-pressed:text-signal data-pressed:text-signal aria-pressed:hover:text-signal data-pressed:hover:text-signal";
+const pressedFill =
+  "aria-pressed:bg-signal-muted data-pressed:bg-signal-muted aria-pressed:hover:bg-signal-muted data-pressed:hover:bg-signal-muted";
+const pressed = cn(pressedFill, pressedText);
+/** Under a sliding indicator the selected item stays clear, so the indicator shows through. */
+const pressedClear =
+  "aria-pressed:bg-transparent data-pressed:bg-transparent aria-pressed:hover:bg-transparent data-pressed:hover:bg-transparent";
+/** An item under the pointer gets the muted tint; a selected item keeps its selected look. */
+const groupItemHover = "hover:bg-muted hover:text-foreground";
+/** Selection and hover fade on the kit's motion duration; reduced motion makes them instant. */
+const groupItemFade =
+  "transition-[color,background-color,border-color,box-shadow] duration-(--fux-motion-duration) ease-(--ease-standard) motion-reduce:transition-none";
 
 export function ToggleButton({ className, ...props }: React.ComponentProps<typeof Toggle>) {
   return <Toggle {...props} className={cn(pressed, className)} />;
 }
 
-/** Items share borders by default, like a segmented control. */
+/** True inside a single-selection group once its indicator has been measured. */
+const ToggleIndicatorContext = React.createContext(false);
+
+/**
+ * Items share borders by default, like a segmented control. With single selection one indicator
+ * (the group's `::before`) slides to the selected item; with `multiple`, each item's selected fill
+ * fades in and out.
+ */
 export function ToggleButtonGroup({
   variant = "outline",
   spacing = 0,
+  className,
+  children,
+  ref,
+  onValueChange,
   ...props
 }: React.ComponentProps<typeof ToggleGroup>) {
-  return <ToggleGroup variant={variant} spacing={spacing} {...props} />;
+  const group = React.useRef<HTMLDivElement>(null);
+  const sliding = !props.multiple;
+  // Uncontrolled selection lives inside Base UI; a change re-measures the indicator.
+  const [changes, changed] = React.useReducer((count: number) => count + 1, 0);
+  const placed = useSlidingIndicator(
+    group,
+    sliding ? ':scope > [data-slot="toggle-group-item"][data-pressed]' : null,
+    [changes, props.value, children, variant, spacing, props.size, props.orientation],
+  );
+  const groupRef = React.useMemo(() => mergeRefs(group, ref), [ref]);
+  return (
+    <ToggleGroup
+      ref={groupRef}
+      variant={variant}
+      spacing={spacing}
+      data-indicator={placed ? "" : undefined}
+      className={cn(sliding && "fux-sliding-group relative isolate", className)}
+      onValueChange={(value, details) => {
+        changed();
+        onValueChange?.(value, details);
+      }}
+      {...props}
+    >
+      <ToggleIndicatorContext.Provider value={placed}>{children}</ToggleIndicatorContext.Provider>
+    </ToggleGroup>
+  );
 }
 export function ToggleButtonGroupItem({
   className,
   ...props
 }: React.ComponentProps<typeof ToggleGroupItem>) {
-  return <ToggleGroupItem {...props} className={cn(pressed, className)} />;
+  const underIndicator = React.useContext(ToggleIndicatorContext);
+  return (
+    <ToggleGroupItem
+      {...props}
+      className={cn(
+        groupItemHover,
+        underIndicator ? pressedClear : pressedFill,
+        pressedText,
+        groupItemFade,
+        className,
+      )}
+    />
+  );
 }
 
 /** The popover surface sits a little further from its trigger and casts a larger shadow. */

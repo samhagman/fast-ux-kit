@@ -30,6 +30,7 @@ import { Input } from "./ui/input.js";
 import { Textarea } from "./ui/textarea.js";
 import { Checkbox as CheckboxControl } from "./ui/checkbox.js";
 import { Switch as SwitchControl } from "./ui/switch.js";
+import { mergeRefs } from "../lib/merge-refs.js";
 import { cn } from "../lib/utils.js";
 
 export { Button, Input, Textarea };
@@ -90,15 +91,6 @@ function AddonButton({ className, ...props }: React.ComponentProps<typeof Button
       {...props}
     />
   );
-}
-
-function mergeRefs<T>(...refs: Array<React.Ref<T> | undefined>) {
-  return (node: T | null) => {
-    for (const ref of refs) {
-      if (typeof ref === "function") ref(node);
-      else if (ref) (ref as React.RefObject<T | null>).current = node;
-    }
-  };
 }
 
 // ---------------------------------------------------------------------------------------------
