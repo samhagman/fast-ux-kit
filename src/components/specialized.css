@@ -144,3 +144,30 @@
     scroll-behavior: auto;
   }
 }
+/*
+ * One pill glides over static dots. Its place is a slide index: the scroll progress while the
+ * viewport moves, otherwise the settled slide, which the server renders too. Each dot slot is
+ * --fux-carousel-dot wide, so index n centres the pill on dot n, from the inline start in
+ * either writing direction.
+ */
+.fux-carousel-dots {
+  --fux-carousel-dot: 1.5rem;
+  --fux-carousel-pill: 1.25rem;
+}
+.fux-carousel-pill {
+  inline-size: var(--fux-carousel-pill);
+  inset-inline-start: calc(
+    var(--fux-carousel-progress, var(--fux-carousel-index, 0)) * var(--fux-carousel-dot) +
+      (var(--fux-carousel-dot) - var(--fux-carousel-pill)) / 2
+  );
+}
+@media (forced-colors: active) {
+  .fux-carousel-dot {
+    background: ButtonText;
+    forced-color-adjust: none;
+  }
+  .fux-carousel-pill {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+}

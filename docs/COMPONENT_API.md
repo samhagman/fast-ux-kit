@@ -118,6 +118,15 @@ storage. `FileUpload` adds a local selected-file list.
 `SignaturePad` supports pointer drawing and typed entry, with controlled value,
 clear, undo and export. Browser canvas operations remain client-side.
 
+`Carousel` takes a `label` and its slides as children. The arrows, the dots and
+the arrow, Home and End keys on the focused viewport move between slides. The dots
+stay still while one pill glides over them with the scroll and lands on the
+current dot when the scroll settles; with reduced motion it moves straight to
+the dot once the slide settles. The current slide, its dot's `aria-current` and
+the count change when the scroll comes to rest, not on the way past a slide.
+`showCount={false}` hides the "2 / 3" count, and a visually hidden live region
+still announces "Slide 2 of 3".
+
 `Pagination` uses `count`, `pageSize`, `page` and `onPageChange`. With many pages,
 each "…" gap is a button that opens a field for typing the exact page; in `compact`
 mode the "Page 2 of 12" readout does the same. `jumpLabel` and `goLabel` name that
