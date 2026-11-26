@@ -59,6 +59,15 @@ const project = {
   notes: "Inspection moved to the second week of March; the crew lead has the revised drawings.",
   attachments: [],
 };
+const approvalFlow = {
+  initial: "draft",
+  states: {
+    draft: { on: { SUBMIT: "review" } },
+    review: { on: { APPROVE: "published", REJECT: "draft" } },
+    published: { type: "final" },
+  },
+  owners: ["editor"],
+};
 const circular: Record<string, unknown> = { name: "Node A" };
 circular.self = circular;
 
@@ -315,6 +324,13 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
             defaultExpandedIds={["$", "$/deep", "$/deep/a", "$/deep/a/b"]}
           />
           <C.JsonTreeView value={circular} label="Circular" defaultExpandedIds={["$"]} />
+          <C.JsonTreeView
+            value={approvalFlow}
+            label="One-line values, no counts"
+            defaultExpandedIds={["$", "$/states", "$/states/review", "$/states/review/on"]}
+            inlineSmallValues
+            showCounts={false}
+          />
         </Variants>
       </>
     ),
