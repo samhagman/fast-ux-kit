@@ -187,6 +187,79 @@ field and its button. `Timer` supports
 start, pause and reset. `Clipboard` handles explicit copying. `DownloadTrigger`
 provides a validated download link. `QrCode` renders an encoded SVG.
 
+## Terminal transcripts
+
+`Terminal` takes a transcript as text. A line that starts with the prompt and a
+space (`$ ` by default, or `prompt`) is something the reader types; every other
+line is output. That string form renders exactly as it always has.
+
+To style text inside a line, pass one entry per line instead. A line is a string
+or a list of segments, `{ text, tone, decorative }`:
+
+```tsx
+import { Terminal, type TerminalLine } from "@samhagman/fast-ux-kit/components";
+
+const lines: TerminalLine[] = [
+  [{ text: "▍", tone: "accent", decorative: true }, { text: "$ fieldbook sync" }],
+  [{ text: "✓ ", tone: "success" }, { text: "42 notes", tone: "bold" }, { text: " synced" }],
+  [
+    { text: "view: ", tone: "dim" },
+    { text: "https://notes.test/sync", tone: "link" },
+  ],
+];
+
+<Terminal title="zsh">{lines}</Terminal>;
+```
+
+`tone` is one of a fixed set, or a weight with a colour (`["bold", "success"]`):
+`dim`, `bold`, `accent`, `success`, `warning`, `danger`, `info` and `link`. Tones
+name a role, never a colour, and unknown tones are ignored. Colour is never the
+only signal, so keep the words or a mark that says what a line means (`✓`,
+`error:`). Segments are text, never markup.
+
+A `decorative` segment, such as a marker or a bar, is drawn but is not part of the
+text. Screen readers skip it, as they skip the prompt, and a copy leaves both out.
+Decorative segments at the start of a line come before the prompt, so a marked
+line can still be a typed one.
+
+`ansi` reads ANSI SGR codes in plain-text lines onto the same tones: bold (1), dim
+(2), normal (22), reset (0), the 16 foreground colours and the first 16 of the 256
+colours. Black and grey read as `dim`, red as `danger`, green as `success`, yellow
+as `warning`, blue as `info`, magenta as `accent`, cyan as `link`, and white as
+the plain ink. Backgrounds, other styles, other escape sequences (cursor moves,
+titles, links) and control characters are dropped, and a malformed sequence is
+dropped up to the character that broke it. Without `ansi`, escape codes stay
+literal text, as before.
+
+```tsx
+<Terminal ansi>{"$ fieldbook check\n\u001b[32m✓\u001b[0m 42 notes are valid"}</Terminal>
+```
+
+The same model is available without React from `@samhagman/fast-ux-kit/core`:
+`parseAnsi`, `terminalRows` and `terminalCopyText`, which returns what a reader
+copies, with no codes, prompts or decorative segments.
+
+A terminal follows the page's ground. `ground="dark"` or `ground="light"` paints
+its own. Each tone reads a token from the set for its ground, defined on `:root`
+in the editorial stylesheet, and each default keeps at least 4.5:1 contrast on
+its ground. Override them on `:root` or any ancestor to retheme:
+
+| Tone      | Light ground token             | Dark ground token             |
+| --------- | ------------------------------ | ----------------------------- |
+| `dim`     | `--fux-terminal-light-dim`     | `--fux-terminal-dark-dim`     |
+| `success` | `--fux-terminal-light-success` | `--fux-terminal-dark-success` |
+| `warning` | `--fux-terminal-light-warning` | `--fux-terminal-dark-warning` |
+| `danger`  | `--fux-terminal-light-danger`  | `--fux-terminal-dark-danger`  |
+| `info`    | `--fux-terminal-light-info`    | `--fux-terminal-dark-info`    |
+| `link`    | `--fux-terminal-light-link`    | `--fux-terminal-dark-link`    |
+| `accent`  | `--fux-terminal-light-accent`  | `--fux-terminal-dark-accent`  |
+
+`accent` is the prompt's colour and `bold` uses the ink, so on the page's ground
+they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
+`--fux-terminal-{light,dark}-ground`, `-ink`, `-output` (the output text) and
+`-rule`. The dark set applies inside the app theme's `.dark` and on
+`ground="dark"`.
+
 ## Complete catalog
 
 | Category      | Families                                                                                                                                  |
