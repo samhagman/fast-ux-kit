@@ -4,12 +4,16 @@ import * as C from "@samhagman/fast-ux-kit/components";
 import {
   BookOpen,
   Boxes,
+  CircleCheck,
   Columns3,
+  FilePlus,
   Gauge,
+  Hourglass,
   LayoutGrid,
   LifeBuoy,
   List,
   Rows3,
+  Send,
   Sparkles,
   Workflow,
 } from "lucide-react";
@@ -58,6 +62,15 @@ const project = {
   ],
   notes: "Inspection moved to the second week of March; the crew lead has the revised drawings.",
   attachments: [],
+};
+const approvalFlow = {
+  initial: "draft",
+  states: {
+    draft: { on: { SUBMIT: "review" } },
+    review: { on: { APPROVE: "published", REJECT: "draft" } },
+    published: { type: "final" },
+  },
+  owners: ["editor"],
 };
 const circular: Record<string, unknown> = { name: "Node A" };
 circular.self = circular;
@@ -182,10 +195,30 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
               <Slide
                 key={index}
                 title={`Chapter ${index + 1}`}
-                text="The dots stay centered and the current one is stretched."
+                text="The dots stay centered and the pill glides across them as you scroll."
               />
             ))}
           </C.Carousel>
+          <C.Carousel label="Without the count" showCount={false}>
+            <Slide
+              title="Dots only"
+              text="The count is hidden. Screen readers still hear which slide is showing."
+            />
+            <Slide
+              title="Second slide"
+              text="Swipe, use the arrows or pick a dot: the announcement follows."
+            />
+            <Slide title="Third slide" text="The pill lands on the last dot." />
+          </C.Carousel>
+        </Variants>
+        <Variants title="Right to left" layout="stack">
+          <div dir="rtl" className="w-full">
+            <C.Carousel label="Right-to-left notes">
+              <Slide title="First" text="The first slide sits at the right." />
+              <Slide title="Second" text="Next moves leftward, and so does the pill." />
+              <Slide title="Third" text="The pill ends on the leftmost dot." />
+            </C.Carousel>
+          </div>
         </Variants>
       </>
     ),
@@ -295,6 +328,13 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
             defaultExpandedIds={["$", "$/deep", "$/deep/a", "$/deep/a/b"]}
           />
           <C.JsonTreeView value={circular} label="Circular" defaultExpandedIds={["$"]} />
+          <C.JsonTreeView
+            value={approvalFlow}
+            label="One-line values, no counts"
+            defaultExpandedIds={["$", "$/states", "$/states/review", "$/states/review/on"]}
+            inlineSmallValues
+            showCounts={false}
+          />
         </Variants>
       </>
     ),
@@ -560,7 +600,7 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
     [click("button", ".fixture-status", "draft")],
   ),
   Steps: example(
-    "Move through a short sequence. Completed steps show a check and fill the connecting line.",
+    "Move through a short sequence. Completed steps show a check and fill the connecting line. The log variant lists past entries, each with its own state.",
     (s) => (
       <>
         <C.Steps
@@ -607,6 +647,51 @@ export const specializedFixtures: Readonly<Record<string, ComponentFixture>> = {
               { id: "c", title: "Ship" },
             ]}
           />
+        </Variants>
+        <Variants title="Log" layout="stack">
+          <div className="w-full max-w-xl">
+            <C.Steps
+              label="Document history"
+              variant="log"
+              items={[
+                {
+                  id: "created",
+                  title: "Created in draft",
+                  meta: "ada · 14:01:48",
+                  aside: "#1",
+                  icon: <FilePlus className="size-3.5" />,
+                },
+                {
+                  id: "submit",
+                  title: (
+                    <>
+                      <code className="font-mono text-xs">SUBMIT</code> · draft → review
+                    </>
+                  ),
+                  meta: "ada · 14:01:52",
+                  aside: "#2",
+                  icon: <Send className="size-3.5" />,
+                },
+                {
+                  id: "ask",
+                  title: "Asked the owner: Approve?",
+                  description: "Closes after 24 h",
+                  meta: "waiting for grace",
+                  status: "waiting",
+                  statusLabel: "waiting for an answer",
+                  aside: "#3",
+                  icon: <Hourglass className="size-3.5" />,
+                },
+                {
+                  id: "answer",
+                  title: "Answered approve · review → approved",
+                  meta: "grace · 14:20:03",
+                  aside: "#4",
+                  icon: <CircleCheck className="size-3.5" />,
+                },
+              ]}
+            />
+          </div>
         </Variants>
       </>
     ),

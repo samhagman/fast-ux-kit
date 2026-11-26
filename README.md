@@ -1,7 +1,7 @@
 # Fast UX Kit
 
 A React component library for structured writing and interactive tools. It
-includes an outliner, a state-machine canvas, a machine hierarchy view, 92 app
+includes an outliner, a state-machine canvas, a machine hierarchy view, 94 app
 component families built on a shared shadcn and Base UI layer, and Editorial UI:
 35 forms for explaining something on a page.
 
@@ -125,7 +125,7 @@ shows on the state's card and in full in the details panel.
 
 | Entry            | Purpose                                                   |
 | ---------------- | --------------------------------------------------------- |
-| `/components`    | The 92-family app component catalog                       |
+| `/components`    | The 94-family app component catalog                       |
 | `/editorial`     | Editorial UI: atoms, molecules and organisms for articles |
 | `/editorial.css` | The standalone stylesheet for Editorial UI                |
 | `/outliner`      | Outliner, document workspace, types and host seams        |
@@ -140,6 +140,10 @@ shows on the state's card and in full in the details panel.
 
 The package root exposes the portable core, rich-document functions and reader
 APIs. The tool-specific entries select the new outliner and machine interfaces.
+Each file of the shared shadcn layer is also an entry,
+`/components/ui/<file>`. The catalog lists the ones no family covers, such as
+`Badge`, `Skeleton`, `Empty` and `Kbd`, as
+[primitives](docs/COMPONENT_API.md#primitives).
 
 ## Editorial UI
 

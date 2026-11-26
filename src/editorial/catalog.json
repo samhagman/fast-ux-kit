@@ -158,7 +158,7 @@
     "exportName": "CodeBlock",
     "level": "molecule",
     "job": "Show real code and explain the lines that matter.",
-    "description": "A listing with its file path, line numbers, marked lines and notes beside them.",
+    "description": "A listing with its file path, line numbers, marked lines, notes beside them and an optional Copy action.",
     "parts": ["CodeBlock"],
     "app": true
   },

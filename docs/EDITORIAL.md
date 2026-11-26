@@ -191,14 +191,26 @@ evaluated, and the tokenizer never drops or reorders a character.
 Long lines wrap with a hanging indent instead of scrolling sideways, so a line a
 note points at is never cut off, on a phone or beside its notes.
 
+`copyable` adds a Copy action at the end of the header bar, which then appears even
+without a `filename`. It copies the listing as written, without line numbers, and a
+status region announces the result. Server markup holds the action in place,
+disabled, and it becomes active after hydration. `copyLabel`, `copiedLabel` and
+`failedLabel` change its words. A single shell command reads better as the app
+catalog's `CommandLine`.
+
 The tokenizer is deliberately small, and it prefers leaving text plain to marking it
 wrongly. A keyword used as a member or an object key (`z.enum`, `{ from: 1 }`) stays
 plain, a quote that never closes on its line is treated as an apostrophe, and `#`
 starts a shell or YAML comment only at the start of a line or after a space.
 
+`Terminal` can also colour and weight text inside a line, from segments with a
+fixed set of tones or from ANSI codes, on the page's ground or its own dark or
+light one. See [Terminal transcripts](COMPONENT_API.md#terminal-transcripts).
+
 ## Tests
 
-| Suite                              | Coverage                                                                                                                    |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `tests/editorial.test.tsx`         | Manifest and exports, script-free and style-free rendering, the tokenizer, the React-only bundle, the standalone stylesheet |
-| `tests/editorial-gallery.test.tsx` | A Studio fixture for every family, the explorable and walkthrough interactions, the sample article                          |
+| Suite                              | Coverage                                                                                                                         |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/editorial.test.tsx`         | Manifest and exports, script-free and style-free rendering, the tokenizer, the React-only bundle, the standalone stylesheet      |
+| `tests/editorial-gallery.test.tsx` | A Studio fixture for every family, the explorable and walkthrough interactions, the sample article                               |
+| `tests/terminal.test.tsx`          | Terminal: unchanged string output, segment tones, the ANSI reader, plain-text copy, hydration, both grounds' tokens and contrast |

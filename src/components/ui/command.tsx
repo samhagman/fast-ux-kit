@@ -226,6 +226,20 @@ function CommandDialog({
     </Dialog>
   );
 }
+/**
+ * As the query changes, Base UI scrolls the nearest scrolling ancestor of an inline list back to
+ * its top. A short command list does not scroll itself, so that ancestor can be the page. Keep
+ * everything outside the command where it was; the list inside still resets.
+ */
+function keepOuterScroll(input: HTMLElement) {
+  const saved: [HTMLElement, number][] = [];
+  for (let node = input.closest("[cmdk-root]")?.parentElement; node; node = node.parentElement)
+    if (node.scrollTop) saved.push([node, node.scrollTop]);
+  if (!saved.length) return;
+  queueMicrotask(() => {
+    for (const [node, top] of saved) if (node.scrollTop !== top) node.scrollTop = top;
+  });
+}
 interface CommandInputProps extends Omit<React.ComponentProps<"input">, "onChange"> {
   onValueChange?: (value: string) => void;
 }
@@ -250,6 +264,7 @@ function CommandInput({ className, value, onValueChange, ...props }: CommandInpu
           )}
           {...props}
           onChange={(event) => {
+            keepOuterScroll(event.currentTarget);
             context.setQuery(event.target.value);
             onValueChange?.(event.target.value);
           }}

@@ -1,17 +1,29 @@
 # Component coverage
 
-The canonical inventory contains 92 families. Its source is
+The canonical inventory contains 94 families. Its source is
 `src/components/catalog.json`, exposed as `componentManifest`. Leaf parts and
 utility functions are listed separately from canonical families.
 
+The catalog also lists 11 primitives from the shared shadcn layer, each with
+`layer: "primitive"` and its own `components/ui/<file>` import path. They have
+gallery fixtures like the families. `tests/component-manifest.test.ts` resolves
+every entry's parts from its import path and checks that each `components/ui`
+file is either listed or backed by a named family. `npm run test:consumer`
+imports every entry from its import path in the packed package.
+`tests/command-scroll.test.tsx` checks that typing in an inline `Command` leaves
+the page's scroll position alone.
+
 ## Executable coverage
 
-| Suite                                  | Coverage                                                                                                                                                     |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tests/components-catalog.test.tsx`    | A real gallery fixture for every family, rendered semantics and applicable action flows                                                                      |
-| `tests/color-date-components.test.tsx` | Color immutability and alpha, controlled edits, invalid input, keyboard channels, date bounds, leap days, time zones, read-only values and unfinished ranges |
-| `studio/tests/`                        | Outliner commands, editing, focus, clipboard, date handling, search, workspace behavior and machine tools                                                    |
-| `npm run test:consumer`                | Packed ESM entries, declarations, independent installation, rendering, hydration, styles and dependency boundaries                                           |
+| Suite                                    | Coverage                                                                                                                                                                                |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/components-catalog.test.tsx`      | A real gallery fixture for every family, rendered semantics and applicable action flows                                                                                                 |
+| `tests/components-*-polish.test.tsx`     | Per-family states and styling hooks, including where the `ToggleButtonGroup` and `SegmentGroup` highlights land, multiple-selection fades, hover and reduced motion                     |
+| `tests/components-alert.test.tsx`        | Alert roles per tone and the role override, its slots and reachable action, the page size and heading title, stable server rendering and hydration, logical sides and token-only colors |
+| `tests/components-command-line.test.tsx` | `CommandLine` and the copyable `CodeBlock`: what is copied (no prompt, no line numbers), the announcement, accessible names, the overflow track and server markup                       |
+| `tests/color-date-components.test.tsx`   | Color immutability and alpha, controlled edits, invalid input, keyboard channels, date bounds, leap days, time zones, read-only values and unfinished ranges                            |
+| `studio/tests/`                          | Outliner commands, editing, focus, clipboard, date handling, search, workspace behavior and machine tools                                                                               |
+| `npm run test:consumer`                  | Packed ESM entries, declarations, independent installation, rendering, hydration, styles and dependency boundaries                                                                      |
 
 The same per-family fixtures power the Studio gallery and the catalog tests.
 Interactive examples exercise changes such as menu selection, file choice,

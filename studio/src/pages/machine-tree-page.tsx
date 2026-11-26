@@ -139,7 +139,45 @@ const withRegion: MachineDocument = {
   })),
 };
 
+/**
+ * A trial that is paid for, handed to sales, or runs out: three short alternatives from one state.
+ * Paying is reached two ways, so it stays on the spine; Sales call and Expired stand beside it as
+ * columns in a wide tree, and hang off the spine one under another in a canvas 520px or narrower.
+ */
+const trial: MachineDocument = {
+  version: 1,
+  rootId: "trial-signup",
+  machines: [
+    {
+      id: "trial-signup",
+      label: "Trial signup",
+      initialId: "trial",
+      nodes: [
+        { id: "trial", label: "Trial", kind: "atomic" },
+        { id: "sales-call", label: "Sales call", kind: "atomic" },
+        { id: "paying", label: "Paying", kind: "atomic" },
+        { id: "expired", label: "Expired", kind: "final" },
+        { id: "cancelled", label: "Cancelled", kind: "final" },
+      ],
+      transitions: [
+        { id: "trial-paid", sourceId: "trial", targetId: "paying", event: "PAID" },
+        { id: "trial-big", sourceId: "trial", targetId: "sales-call", event: "BIG_ACCOUNT" },
+        { id: "trial-lapse", sourceId: "trial", targetId: "expired", event: "after 14d" },
+        { id: "sales-closed", sourceId: "sales-call", targetId: "paying", event: "CLOSED" },
+        { id: "paying-cancel", sourceId: "paying", targetId: "cancelled", event: "CANCEL" },
+      ],
+    },
+  ],
+};
+
 const synthetic: readonly TreeCase[] = [
+  {
+    id: "trial",
+    label: "Trial signup, with alternatives",
+    document: trial,
+    options: {},
+    scenarios: [],
+  },
   {
     id: "regions",
     label: "Release approval, with a region",

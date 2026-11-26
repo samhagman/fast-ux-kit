@@ -40,6 +40,9 @@ import { useTreeBase } from "./machine-tree-controller.js";
  * tree's own shape: a state's routes stay inside its tree item and sibling states stay siblings, so
  * DOM order is keyboard order. A column's label is its source state's own route row, set over the
  * column by a shared grid (the fork's tracks, passed down with `subgrid`).
+ *
+ * A canvas 520px wide or less has no room for columns: it asks the core for a plan without them
+ * (`sideBySide: false`), so every alternative hangs off the spine under its one label instead.
  */
 
 /** Every row a flow places, in the order it is drawn. */
@@ -93,27 +96,27 @@ export function FlowSteps({
             }
           >
             <StateCell id={step.rowId} step={step} flow={flow} />
+            {/* One element per alternative, keyed by the states it holds: when the canvas crosses the
+                width where columns stack, its states keep their elements (and focus). */}
             {layout
-              ? layout.segments.map(
-                  ({ segment, row, through }, i) =>
-                    segment.kind === "branch" && (
-                      <FlowBranch
-                        key={i}
-                        branch={segment.branch}
-                        flow={flow}
-                        row={row + 1}
-                        through={through}
-                      />
-                    ),
+              ? layout.segments.flatMap(({ segment, row, through }) =>
+                  segment.kind === "branch"
+                    ? [
+                        <FlowBranch
+                          key={branchKey(segment.branch)}
+                          branch={segment.branch}
+                          flow={flow}
+                          place={{ row: row + 1, through }}
+                        />,
+                      ]
+                    : [],
                 )
               : step.columns.map((branch, i) => (
-                  <FlowColumn
-                    key={i}
+                  <FlowBranch
+                    key={branchKey(branch)}
                     branch={branch}
                     flow={flow}
-                    index={i}
-                    closes={i <= last}
-                    end={i === last}
+                    place={{ column: i + 1, closes: i <= last, end: i === last }}
                   />
                 ))}
           </div>
@@ -151,65 +154,55 @@ export function stepLayout(step: MachineFlowStep) {
   return { segments, rows: row, flowsOn };
 }
 
-/** One alternative hanging off the spine: its states indented, and a curve back if it flows back. */
+/** The direct route on has no states of its own, and there is at most one per fork. */
+const branchKey = (branch: MachineFlowBranch) => branch.steps[0]?.rowId ?? "on";
+
+/** Where an alternative is drawn: a column of its own, or hanging off the spine in the fork's rows. */
+type BranchPlace =
+  | {
+      /** The column, from 1. */
+      readonly column: number;
+      /** The closing line runs under this column. */
+      readonly closes: boolean;
+      /** The closing line ends here. */
+      readonly end: boolean;
+    }
+  | {
+      /** The fork's row it is drawn in. */
+      readonly row: number;
+      /** The spine runs on past it. */
+      readonly through: boolean;
+    };
+
+/**
+ * One alternative: a column beside the others, or, stacked, its states indented under its label
+ * with a curve back if it flows back. Its label is the source state's own route row, drawn above it.
+ */
 function FlowBranch({
   branch,
   flow,
-  row,
-  through,
+  place,
 }: {
   readonly branch: MachineFlowBranch;
   readonly flow: MachineFlow;
-  readonly row: number;
-  readonly through: boolean;
+  readonly place: BranchPlace;
 }) {
+  const column = "column" in place ? place : undefined;
+  const stacked = "row" in place ? place : undefined;
   return (
     <div
       role="none"
       data-mt-col=""
+      data-pass={column && !branch.steps.length ? "" : undefined}
       data-rejoins={branch.rejoins || undefined}
-      data-through={through || branch.rejoins ? "" : undefined}
-      style={{ "--mt-row": row } as React.CSSProperties}
+      data-closes={column?.closes ? (column.end ? "end" : "") : undefined}
+      data-through={stacked && (stacked.through || branch.rejoins) ? "" : undefined}
+      style={
+        {
+          [column ? "--mt-col" : "--mt-row"]: column ? column.column : stacked!.row,
+        } as React.CSSProperties
+      }
     >
-      <FlowSteps steps={branch.steps} flow={flow} column />
-      <span aria-hidden data-mt-close="" />
-    </div>
-  );
-}
-
-function FlowColumn({
-  branch,
-  flow,
-  index,
-  closes,
-  end,
-}: {
-  readonly branch: MachineFlowBranch;
-  readonly flow: MachineFlow;
-  readonly index: number;
-  /** The closing line runs under this column. */
-  readonly closes: boolean;
-  /** The closing line ends here. */
-  readonly end: boolean;
-}) {
-  const { rows } = useTree();
-  return (
-    <div
-      role="none"
-      data-mt-col=""
-      data-pass={branch.steps.length ? undefined : ""}
-      data-rejoins={branch.rejoins || undefined}
-      data-closes={closes ? (end ? "end" : "") : undefined}
-      style={{ "--mt-col": index + 1 } as React.CSSProperties}
-    >
-      {/* Stacked (a narrow host): the labels are up in the state's own list, so each block says which it is. */}
-      <span
-        aria-hidden
-        data-mt-caption=""
-        className="font-mono text-[10.5px] text-muted-foreground"
-      >
-        {routeNames(branch.routes, rows).join(" · ")}
-      </span>
       <FlowSteps steps={branch.steps} flow={flow} column />
       <span aria-hidden data-mt-close="" />
     </div>
@@ -250,16 +243,6 @@ export const landingWords = (landing: MachineFlowLanding) => LANDING[landing].wo
 /* ───────────────────────────── routes from inside a box ───────────────────────────── */
 
 const eventOf = (row: MachineTreeRow | undefined) => row?.transition?.event || "automatic";
-function routeNames(
-  routes: readonly MachineFlowRoute[],
-  rows: ReadonlyMap<string, MachineTreeRow>,
-): string[] {
-  return [
-    ...new Set(
-      routes.flatMap((route) => route.transitionRowIds.map((id) => eventOf(rows.get(id)))),
-    ),
-  ];
-}
 /** The states inside `box` that can hold the run. */
 function leavesOf(
   box: MachineTreeRow,

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import * as React from "react";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { renderToString } from "react-dom/server";
+import { layOutRow } from "./row-geometry.js";
 import {
   Avatar,
   AvatarGroup,
@@ -73,6 +76,172 @@ test("a toggle group shares borders by default and still selects one item", () =
   assert.equal(group.getAttribute("data-spacing"), "0");
   fireEvent.click(view.getByRole("button", { name: "Right" }));
   assert.deepEqual(changes.at(-1), ["right"]);
+});
+
+const indicatorBox = (group: HTMLElement) =>
+  Object.fromEntries(
+    ["x", "y", "width", "height"].map((key) => [
+      key,
+      group.style.getPropertyValue(`--fux-indicator-${key}`),
+    ]),
+  );
+const alignment = (props: React.ComponentProps<typeof ToggleButtonGroup>) => (
+  <ToggleButtonGroup {...props}>
+    <ToggleButtonGroupItem value="left">Left</ToggleButtonGroupItem>
+    <ToggleButtonGroupItem value="center">Center</ToggleButtonGroupItem>
+    <ToggleButtonGroupItem value="right">Right</ToggleButtonGroupItem>
+  </ToggleButtonGroup>
+);
+
+test("a single-selection toggle group slides one indicator to the selected item", () => {
+  const restore = layOutRow({ width: 60, height: 32 });
+  try {
+    const view = render(alignment({ defaultValue: ["left"] }));
+    const group = view.container.querySelector<HTMLElement>('[data-slot="toggle-group"]')!;
+    assert.ok(group.hasAttribute("data-indicator"), "the indicator is placed");
+    assert.match(group.className, /\bfux-sliding-group\b/);
+    assert.deepEqual(indicatorBox(group), { x: "0px", y: "0px", width: "60px", height: "32px" });
+
+    fireEvent.click(view.getByRole("button", { name: "Right" }));
+    assert.equal(view.getByRole("button", { name: "Right" }).getAttribute("aria-pressed"), "true");
+    assert.deepEqual(indicatorBox(group), { x: "120px", y: "0px", width: "60px", height: "32px" });
+
+    // The selected item stays clear so the indicator shows through, and keeps its signal text.
+    const right = view.getByRole("button", { name: "Right" });
+    assert.match(right.className, /(^|\s)data-pressed:bg-transparent(\s|$)/);
+    assert.match(right.className, /(^|\s)data-pressed:text-signal(\s|$)/);
+    assert.doesNotMatch(right.className, /(^|\s)data-pressed:bg-signal-muted(\s|$)/);
+    // The items are still the group's own children, so the shared-border corners stay put.
+    assert.equal(group.firstElementChild?.textContent, "Left");
+  } finally {
+    restore();
+  }
+});
+
+test("a controlled toggle group moves its indicator with the value it is given", () => {
+  const restore = layOutRow({ width: 50, height: 28 });
+  try {
+    function Controlled() {
+      const [value, setValue] = React.useState<unknown[]>(["right"]);
+      return (
+        <>
+          {alignment({ value, onValueChange: setValue })}
+          <button type="button" onClick={() => setValue([])}>
+            Clear
+          </button>
+        </>
+      );
+    }
+    const view = render(<Controlled />);
+    const group = view.container.querySelector<HTMLElement>('[data-slot="toggle-group"]')!;
+    assert.equal(indicatorBox(group).x, "100px");
+    fireEvent.click(view.getByRole("button", { name: "Center" }));
+    assert.equal(indicatorBox(group).x, "50px");
+    fireEvent.click(view.getByRole("button", { name: "Clear" }));
+    assert.equal(group.hasAttribute("data-indicator"), false, "no selection, no indicator");
+  } finally {
+    restore();
+  }
+});
+
+test("before the indicator is measured, the selected item carries its own fill", () => {
+  const html = renderToString(alignment({ defaultValue: ["center"] }));
+  const page = new dom.window.DOMParser().parseFromString(html, "text/html");
+  const group = page.querySelector('[data-slot="toggle-group"]')!;
+  assert.equal(group.hasAttribute("data-indicator"), false);
+  const center = page.querySelector('[aria-pressed="true"]')!;
+  assert.equal(center.textContent, "Center");
+  assert.match(center.className, /(^|\s)data-pressed:bg-signal-muted(\s|$)/);
+});
+
+test("with several selections there is no indicator; each selected item fades its own fill", () => {
+  const restore = layOutRow();
+  try {
+    const view = render(
+      <ToggleButtonGroup multiple defaultValue={["bold"]}>
+        <ToggleButtonGroupItem value="bold">Bold</ToggleButtonGroupItem>
+        <ToggleButtonGroupItem value="italic">Italic</ToggleButtonGroupItem>
+      </ToggleButtonGroup>,
+    );
+    const group = view.container.querySelector<HTMLElement>('[data-slot="toggle-group"]')!;
+    fireEvent.click(view.getByRole("button", { name: "Italic" }));
+    assert.deepEqual(
+      view.getAllByRole("button").map((item) => item.getAttribute("aria-pressed")),
+      ["true", "true"],
+    );
+    assert.equal(group.hasAttribute("data-indicator"), false);
+    assert.doesNotMatch(group.className, /fux-sliding-group/);
+    assert.equal(group.style.getPropertyValue("--fux-indicator-x"), "");
+    for (const item of view.getAllByRole("button")) {
+      assert.match(item.className, /(^|\s)data-pressed:bg-signal-muted(\s|$)/);
+      assert.match(
+        item.className,
+        /(^|\s)transition-\[color,background-color,border-color,box-shadow\](\s|$)/,
+      );
+      assert.match(item.className, /(^|\s)duration-\(--fux-motion-duration\)(\s|$)/);
+      assert.match(item.className, /(^|\s)ease-\(--ease-standard\)(\s|$)/);
+      assert.doesNotMatch(item.className, /(^|\s)transition-all(\s|$)/);
+    }
+  } finally {
+    restore();
+  }
+});
+
+test("hover tints an unselected item and leaves the selected look alone", () => {
+  const restore = layOutRow();
+  try {
+    const view = render(
+      <>
+        {alignment({ defaultValue: ["left"] })}
+        <ToggleButtonGroup multiple defaultValue={["bold"]}>
+          <ToggleButtonGroupItem value="bold">Bold</ToggleButtonGroupItem>
+        </ToggleButtonGroup>
+      </>,
+    );
+    for (const item of view.getAllByRole("button")) {
+      assert.match(item.className, /(^|\s)hover:bg-muted(\s|$)/, "unselected hover tint");
+      assert.match(item.className, /(^|\s)data-pressed:hover:text-signal(\s|$)/);
+    }
+    // Under the indicator the selected item stays clear on hover; alone it keeps its own fill.
+    const left = view.getByRole("button", { name: "Left" });
+    assert.match(left.className, /(^|\s)data-pressed:hover:bg-transparent(\s|$)/);
+    const bold = view.getByRole("button", { name: "Bold" });
+    assert.match(bold.className, /(^|\s)data-pressed:hover:bg-signal-muted(\s|$)/);
+  } finally {
+    restore();
+  }
+});
+
+test("reduced motion makes the indicator and the selection fades change at once", () => {
+  const css = readFileSync(
+    new URL("../src/components/overlays-media.css", import.meta.url),
+    "utf8",
+  ).replace(/\s+/g, " ");
+  const slide = css.match(
+    /\.fux-sliding-indicator, \.fux-sliding-group\[data-indicator\]::before \{[^}]*\}/,
+  )?.[0];
+  assert.ok(slide, "one rule moves both indicators");
+  assert.match(slide, /transition-property: transform, width, height, border-radius;/);
+  assert.match(slide, /transition-duration: calc\(var\(--fux-motion-duration, 140ms\) \* 1\.6\);/);
+  assert.match(slide, /transition-timing-function: var\(--ease-standard\);/);
+  const reduced =
+    css.match(/@media \(prefers-reduced-motion: reduce\) \{ ([^{}]*\{[^}]*\} )+\}/g) ?? [];
+  assert.ok(
+    reduced.some((block) =>
+      /\.fux-sliding-indicator, \.fux-sliding-group\[data-indicator\]::before \{ transition: none; \}/.test(
+        block,
+      ),
+    ),
+    "reduced motion turns the slide off",
+  );
+  const tokens = readFileSync(new URL("../src/tokens.css", import.meta.url), "utf8");
+  assert.match(
+    tokens,
+    /prefers-reduced-motion: reduce\)\s*\{\s*:root\s*\{\s*--fux-motion-duration: 0ms;/,
+  );
+  const view = render(alignment({ defaultValue: ["left"] }));
+  for (const item of view.getAllByRole("button"))
+    assert.match(item.className, /(^|\s)motion-reduce:transition-none(\s|$)/);
 });
 
 test("a destructive modal dialog shows a warning mark, a named title and the requested size", async () => {
