@@ -233,6 +233,9 @@
   --fux-ed-serif: var(--fux-scope-font-body);
   font-family: var(--fux-scope-font-body);
 }
+/* The `font-heading` utility reads --fux-font-heading. --font-heading, which Heading reads, is
+   resolved once at :root, so it is set again here or a scope's heading face never reaches it. */
 .fux-theme-scope[data-tokens~="font-head"] {
   --fux-font-heading: var(--fux-scope-font-head);
+  --font-heading: var(--fux-scope-font-head);
 }
