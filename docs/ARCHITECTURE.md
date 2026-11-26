@@ -3,7 +3,7 @@
 | Layer                | Responsibility                                                                                     |
 | -------------------- | -------------------------------------------------------------------------------------------------- |
 | `src/core`           | Portable document models, validation, immutable commands, search, policy and machine simulation    |
-| `src/components`     | The 98-family shadcn/Base UI catalog and native compositions                                       |
+| `src/components`     | The 100-family shadcn/Base UI catalog and native compositions                                       |
 | `src/editorial`      | Editorial UI: article layout, figures, notes, code and explorable frames. React and plain CSS only |
 | `src/outliner`       | Structured writing, note editing, document navigation and host seams                               |
 | `src/machine-graph`  | State-machine canvas, inspection and local simulation                                              |

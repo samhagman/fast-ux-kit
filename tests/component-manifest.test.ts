@@ -16,7 +16,7 @@ async function load(importPath: string): Promise<Record<string, unknown>> {
 }
 
 test("all manifest parts resolve to supported public exports or compound members", async () => {
-  assert.equal(families.length, 98);
+  assert.equal(families.length, 100);
   assert.equal(primitives.length, 11);
   assert.equal(Components.componentManifest.length, families.length + primitives.length);
   for (const entry of Components.componentManifest) {

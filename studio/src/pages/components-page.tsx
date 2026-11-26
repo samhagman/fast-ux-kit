@@ -44,6 +44,8 @@ const WIDE = new Set([
   "DateRangePicker",
   "ColorPicker",
   "Splitter",
+  "Grid",
+  "Split",
   "Carousel",
   "Marquee",
   "ImageCropper",
