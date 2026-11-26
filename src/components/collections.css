@@ -124,7 +124,9 @@ span.fux-tree-disclosure {
 .fux-tree-row[aria-selected="true"] .fux-tree-icon {
   color: var(--signal);
 }
+/* Relative, so the hidden badge text after a truncated label is clipped with it. */
 .fux-tree-label {
+  position: relative;
   flex: 1 1 auto;
   min-inline-size: 0;
   overflow: hidden;
@@ -145,6 +147,25 @@ span.fux-tree-disclosure {
   color: var(--muted-foreground);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
+}
+/* The badge never shrinks, so a long label truncates before it reaches the badge. */
+.fux-tree-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  block-size: 1.25rem;
+  white-space: nowrap;
+}
+.fux-tree-badge[data-placement="end"] {
+  margin-inline-start: 0.5rem;
+}
+.fux-tree-badge[data-placement="start"] {
+  margin-inline-end: 0.5rem;
+}
+.fux-tree-row[aria-selected="true"] .fux-tree-badge {
+  background: var(--signal);
+  color: var(--signal-foreground);
 }
 
 /* ---- Tabs -------------------------------------------------------------------------------- */
@@ -222,7 +243,8 @@ span.fux-tree-disclosure {
   opacity: 0.5;
   pointer-events: none;
 }
-.fux-tab-badge {
+.fux-tab-badge,
+.fux-tree-badge {
   min-inline-size: 1.25rem;
   padding-inline: 0.3125rem;
   border-radius: 999px;
