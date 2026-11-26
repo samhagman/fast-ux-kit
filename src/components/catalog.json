@@ -819,7 +819,7 @@
     "name": "CodeBlock",
     "exportName": "CodeBlock",
     "category": "Code",
-    "description": "A listing with its file path, line numbers, marked lines and notes beside them.",
+    "description": "A listing with its file path, line numbers, marked lines, notes beside them and an optional Copy action.",
     "owner": "native",
     "status": "styled",
     "parts": ["CodeBlock"]
@@ -832,6 +832,15 @@
     "owner": "native",
     "status": "styled",
     "parts": ["Terminal"]
+  },
+  {
+    "name": "CommandLine",
+    "exportName": "CommandLine",
+    "category": "Code",
+    "description": "One shell command in a box with a Copy button, scrolling sideways when long.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["CommandLine"]
   },
   {
     "name": "FileTree",
@@ -868,6 +877,15 @@
     "owner": "native",
     "status": "styled",
     "parts": ["BarList"]
+  },
+  {
+    "name": "Alert",
+    "exportName": "Alert",
+    "category": "Feedback",
+    "description": "A message that stays in the page, saying what happened and the next step, in info, success, warning and error tones.",
+    "owner": "native",
+    "status": "styled",
+    "parts": ["Alert", "AlertTitle", "AlertDescription", "AlertActions"]
   },
   {
     "name": "Badge",

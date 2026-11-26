@@ -7,7 +7,7 @@ hierarchy views.
 | Section        | What it holds                                                                                             |
 | -------------- | --------------------------------------------------------------------------------------------------------- |
 | Foundations    | Type, colour, space and motion tokens shared by both component sets                                       |
-| App Components | A searchable gallery of the 92 families for building applications                                         |
+| App Components | A searchable gallery of the 94 families for building applications                                         |
 | Editorial UI   | 35 forms for explaining on a page, by atom, molecule and organism, and one sample article built from them |
 
 The overview introduces the kit and links to each live tool. The shared shell

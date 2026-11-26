@@ -1,7 +1,7 @@
 # Component API
 
 Import components from `@samhagman/fast-ux-kit/components` and load
-`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 92 canonical
+`@samhagman/fast-ux-kit/styles.css` once. The catalog contains 94 canonical
 families. `componentManifest` provides each family's name, category, description,
 interaction owner and exported parts.
 
@@ -140,6 +140,70 @@ tooltip timing. `ModalDialog` is a controlled recipe with `title`, `open`,
 steps with descriptions and optional target getters. `Toast` or `Toaster` mounts
 the notification surface, while `toast` creates a notification.
 
+## Alerts
+
+`Alert` is a message that stays in the page until the reader deals with it,
+unlike a toast, which times out. It says what happened and offers the next step.
+
+```tsx
+import {
+  Alert,
+  AlertTitle,
+  AlertDescription,
+  AlertActions,
+  Button,
+  Link,
+} from "@samhagman/fast-ux-kit/components";
+import { CircleAlertIcon } from "lucide-react";
+
+<Alert variant="error" icon={<CircleAlertIcon />}>
+  <AlertTitle>Sync stopped</AlertTitle>
+  <AlertDescription>3 notes on this device have not reached the server.</AlertDescription>
+  <AlertActions>
+    <Button size="sm" variant="outline" onClick={retry}>
+      Try again
+    </Button>
+    <Link href="/sync">See what is waiting</Link>
+  </AlertActions>
+</Alert>;
+```
+
+- `variant` is `info` (the default), `success`, `warning` or `error`. shadcn's
+  `default` and `destructive` are aliases for `info` and `error`, and
+  `data-variant` reports the resolved tone.
+- `error` renders `role="alert"`, which interrupts; the others render
+  `role="status"`, which waits its turn. Pass `role` to choose another. Mount
+  the alert when the event happens, so assistive technology announces it.
+- `icon` is an optional leading icon, hidden from assistive technology because
+  the title carries the meaning. A bare `svg` as the first child also works.
+- `size="page"` makes the alert a full-page refusal, such as "This link
+  expired" or "This task is already closed". It keeps the same tones and roles.
+  The title takes the theme's heading font at display size (`text-2xl`), the
+  description takes body size (`text-base`), the padding is roomier, and no
+  icon is shown, even when one is passed. `size` defaults to `"default"`.
+- `AlertTitle` renders a `div`. Pass `asChild` to render a real heading
+  instead, at the level the page needs:
+
+  ```tsx
+  <Alert size="page" variant="error">
+    <AlertTitle asChild>
+      <h1>This link expired</h1>
+    </AlertTitle>
+    <AlertDescription>Invitation links last 7 days. This one was sent on 3 March.</AlertDescription>
+    <AlertActions>
+      <Link href="/invitations/new">Ask for a new link</Link>
+    </AlertActions>
+  </Alert>
+  ```
+
+- `AlertActions` holds the next step: links, buttons or both, in reading order.
+- Every color mixes theme tokens: the tone reads `--signal`, `--success`,
+  `--warning` or `--destructive` through `--fux-alert-tone`, over `--card`,
+  `--border`, `--card-foreground` and `--muted-foreground`. Restyle all alerts
+  through those tokens, or one alert through `className`, for example
+  `[--fux-alert-tone:var(--chart-3)]`. Sides are logical, so alerts mirror in
+  right-to-left text.
+
 ## Dates and colors
 
 Date and time components retain `@internationalized/date` values. Use
@@ -190,6 +254,103 @@ field and its button. `Timer` supports
 start, pause and reset. `Clipboard` handles explicit copying. `DownloadTrigger`
 provides a validated download link. `QrCode` renders an encoded SVG.
 
+## Code
+
+`CommandLine` shows one shell command in a monospace box with a Copy button at
+its inline end. `label` names the box. `prompt` draws a decorative prompt (`true`
+for `$`, or your own text) that is left out of the copy, out of a selection made
+by hand, and out of what assistive technology reads. A long command scrolls sideways inside the box under a thin
+scrollbar, and the button stays in view. The command always reads left to right;
+the box itself follows the page direction. After a copy the button shows
+`copiedLabel` for `resetDelay` milliseconds and a status region announces it. If
+the browser refuses, `failedLabel` is announced and the command is selected for a
+manual copy.
+
+```tsx
+import { CodeBlock, CommandLine } from "@samhagman/fast-ux-kit/components";
+
+<CommandLine label="Install command" command="npm install @example/notes" prompt />;
+<CodeBlock code={source} language="ts" filename="src/count.ts" copyable />;
+```
+
+`CodeBlock` takes `copyable` to add a Copy action to its header bar. It copies the
+listing as written, without line numbers, and announces the result the same way.
+`copyLabel`, `copiedLabel` and `failedLabel` name it in both components. The
+action renders disabled in server markup and becomes active after hydration.
+
+## Terminal transcripts
+
+`Terminal` takes a transcript as text. A line that starts with the prompt and a
+space (`$ ` by default, or `prompt`) is something the reader types; every other
+line is output. That string form renders exactly as it always has.
+
+To style text inside a line, pass one entry per line instead. A line is a string
+or a list of segments, `{ text, tone, decorative }`:
+
+```tsx
+import { Terminal, type TerminalLine } from "@samhagman/fast-ux-kit/components";
+
+const lines: TerminalLine[] = [
+  [{ text: "▍", tone: "accent", decorative: true }, { text: "$ fieldbook sync" }],
+  [{ text: "✓ ", tone: "success" }, { text: "42 notes", tone: "bold" }, { text: " synced" }],
+  [
+    { text: "view: ", tone: "dim" },
+    { text: "https://notes.test/sync", tone: "link" },
+  ],
+];
+
+<Terminal title="zsh">{lines}</Terminal>;
+```
+
+`tone` is one of a fixed set, or a weight with a colour (`["bold", "success"]`):
+`dim`, `bold`, `accent`, `success`, `warning`, `danger`, `info` and `link`. Tones
+name a role, never a colour, and unknown tones are ignored. Colour is never the
+only signal, so keep the words or a mark that says what a line means (`✓`,
+`error:`). Segments are text, never markup.
+
+A `decorative` segment, such as a marker or a bar, is drawn but is not part of the
+text. Screen readers skip it, as they skip the prompt, and a copy leaves both out.
+Decorative segments at the start of a line come before the prompt, so a marked
+line can still be a typed one.
+
+`ansi` reads ANSI SGR codes in plain-text lines onto the same tones: bold (1), dim
+(2), normal (22), reset (0), the 16 foreground colours and the first 16 of the 256
+colours. Black and grey read as `dim`, red as `danger`, green as `success`, yellow
+as `warning`, blue as `info`, magenta as `accent`, cyan as `link`, and white as
+the plain ink. Backgrounds, other styles, other escape sequences (cursor moves,
+titles, links) and control characters are dropped, and a malformed sequence is
+dropped up to the character that broke it. Without `ansi`, escape codes stay
+literal text, as before.
+
+```tsx
+<Terminal ansi>{"$ fieldbook check\n\u001b[32m✓\u001b[0m 42 notes are valid"}</Terminal>
+```
+
+The same model is available without React from `@samhagman/fast-ux-kit/core`:
+`parseAnsi`, `terminalRows` and `terminalCopyText`, which returns what a reader
+copies, with no codes, prompts or decorative segments.
+
+A terminal follows the page's ground. `ground="dark"` or `ground="light"` paints
+its own. Each tone reads a token from the set for its ground, defined on `:root`
+in the editorial stylesheet, and each default keeps at least 4.5:1 contrast on
+its ground. Override them on `:root` or any ancestor to retheme:
+
+| Tone      | Light ground token             | Dark ground token             |
+| --------- | ------------------------------ | ----------------------------- |
+| `dim`     | `--fux-terminal-light-dim`     | `--fux-terminal-dark-dim`     |
+| `success` | `--fux-terminal-light-success` | `--fux-terminal-dark-success` |
+| `warning` | `--fux-terminal-light-warning` | `--fux-terminal-dark-warning` |
+| `danger`  | `--fux-terminal-light-danger`  | `--fux-terminal-dark-danger`  |
+| `info`    | `--fux-terminal-light-info`    | `--fux-terminal-dark-info`    |
+| `link`    | `--fux-terminal-light-link`    | `--fux-terminal-dark-link`    |
+| `accent`  | `--fux-terminal-light-accent`  | `--fux-terminal-dark-accent`  |
+
+`accent` is the prompt's colour and `bold` uses the ink, so on the page's ground
+they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
+`--fux-terminal-{light,dark}-ground`, `-ink`, `-output` (the output text) and
+`-rule`. The dark set applies inside the app theme's `.dark` and on
+`ground="dark"`.
+
 ## Complete catalog
 
 | Category      | Families                                                                                                                                  |
@@ -203,11 +364,13 @@ provides a validated download link. `QrCode` renders an encoded SVG.
 | Overlays      | `Dialog`, `ModalDialog`, `Popover`, `Tooltip`, `Sheet`, `Drawer`, `FloatingPanel`, `HoverCard`, `Tour`                                    |
 | Date and time | `Calendar`, `RangeCalendar`, `DateField`, `DatePicker`, `DateRangePicker`, `TimeField`                                                    |
 | Color         | `ColorArea`, `ColorField`, `ColorPicker`, `ColorSlider`, `ColorSwatch`, `ColorSwatchPicker`, `ColorWheel`                                 |
-| Feedback      | `ProgressBar`, `Meter`, `Timer`, `Toast`                                                                                                  |
+| Feedback      | `ProgressBar`, `Meter`, `Timer`, `Toast`, `Alert`                                                                                         |
 | Files         | `DropZone`, `FileTrigger`, `DownloadTrigger`, `FileUpload`                                                                                |
 | Layout        | `Separator`, `Stack`, `Row`, `Panel`, `ScrollArea`, `Splitter`                                                                            |
-| Display       | `Avatar`, `Carousel`, `Marquee`                                                                                                           |
+| Display       | `Avatar`, `Carousel`, `Marquee`, `KeyChord`                                                                                               |
 | Media         | `ImageCropper`, `QrCode`, `SignaturePad`                                                                                                  |
+| Code          | `CodeBlock`, `Terminal`, `CommandLine`, `FileTree`                                                                                        |
+| Data display  | `Sparkline`, `BarList`                                                                                                                    |
 
 The Studio's `#/components` page contains an executable example for every
 family. The exported TypeScript declarations define the complete prop and event
