@@ -133,6 +133,16 @@ export interface MachineTreeProps extends MachineInspectionProps {
    * component, even if focus has fallen back to the page body. Default true.
    */
   readonly captureFindShortcut?: boolean;
+  /**
+   * How a state's alternatives are laid out when there are two or more short ones. `"auto"` (the
+   * default) stands them side by side as columns while the canvas is wider than 520px and stacks
+   * them, each hanging off the spine under its own label, when it is 520px or narrower. A server
+   * cannot measure, so `"auto"` renders columns until the canvas is measured on the client. Pass
+   * `"stacked"` or `"columns"` to keep one layout at every width, for example to server-render a
+   * host you know is narrow. The same states are on the spine in both; stacked, a state's routes
+   * are listed in the order the document declares them.
+   */
+  readonly alternatives?: "auto" | "columns" | "stacked";
   /** Writing direction. Defaults to the direction inherited from the page (followed live). */
   readonly dir?: Dir;
   /**
