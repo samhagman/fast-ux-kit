@@ -44,6 +44,21 @@ single option ID. `CheckboxGroup` uses an array of option IDs. Options expose
 `Tree` also accepts controlled expansion through `expandedIds` and
 `onExpandedChange`.
 
+`JsonTreeView` draws any `value` as a read-only `Tree`, with the same selection
+and expansion props. Each object or array row shows its size, such as "3 keys";
+`showCounts={false}` renders no count at all, and the disclosure button names
+the row by its key alone. `inlineSmallValues` (default `false`) draws a small
+object or array on its parent's row as one leaf, such as
+`on: { SUBMIT: "review" }`. A value is small when it has exactly one entry and
+that entry is a primitive or is itself small, so `draft: { on: { SUBMIT:
+"review" } }`, `tags: ["a"]` and `rows: [{ id: 1 }]` each take one row. Values
+nested more than 3 levels deep (`JSON_INLINE_MAX_DEPTH`) or longer than 40
+characters (`JSON_INLINE_MAX_LENGTH`) stay expandable, as does the root row.
+An inline row is one treeitem named by its key and its text, and its parts keep
+the `data-json-part` (`key`, `colon`, `bracket`) and `data-json-kind` hooks
+inside a `data-json-part="inline"` wrapper. The rule itself is `inlineJson` in
+the portable core.
+
 `Table` takes `rows`, typed `columns` and an optional sort descriptor. A sortable
 column supplies `allowsSorting` and a comparator. Selection uses stable row IDs.
 
