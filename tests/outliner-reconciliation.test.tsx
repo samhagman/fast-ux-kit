@@ -555,3 +555,46 @@ for (const afterPaint of [false, true]) {
     });
   }
 }
+
+// Ordinary typing: each keystroke is dispatched with afterPaint, so nothing renders until the next
+// frame. A host that echoes later (a server round trip) and re-renders for an unrelated reason in
+// that window (a "Saving…" flag, say) reuses the reconciliation memo computed before the keystroke.
+test("a deferred keystroke survives an unrelated parent re-render before the host echoes", () => {
+  const frameDescriptor = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame")!;
+  Object.defineProperty(globalThis, "requestAnimationFrame", {
+    configurable: true,
+    value: () => 0, // hold the deferred render
+  });
+  try {
+    const initial = nodes("");
+    const changes: Change[] = [];
+    let controller!: Controller;
+    let rerender!: () => void;
+    function Harness() {
+      const [, setTick] = React.useState(0);
+      rerender = () => setTick((n) => n + 1);
+      controller = useOutliner({
+        value: initial,
+        trackEdits: false,
+        onValueChange(next, meta) {
+          changes.push({ nodes: next, meta });
+        },
+      });
+      return null;
+    }
+    render(<Harness />);
+    act(() => {
+      controller.dispatch(textAction("A"), { afterPaint: true });
+    });
+    assert.equal(controller.latestNodes()[0]!.text, "A", "the store has the keystroke");
+    act(() => rerender());
+    assert.equal(controller.latestNodes()[0]!.text, "A", "the keystroke survives the re-render");
+    act(() => {
+      controller.dispatch(textAction("AB"));
+    });
+    assert.equal(changes.length, 2);
+    assert.equal(changes[1]!.meta.base, changes[0]!.nodes, "the next edit chains from the first");
+  } finally {
+    Object.defineProperty(globalThis, "requestAnimationFrame", frameDescriptor);
+  }
+});
