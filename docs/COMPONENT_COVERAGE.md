@@ -4,6 +4,15 @@ The canonical inventory contains 94 families. Its source is
 `src/components/catalog.json`, exposed as `componentManifest`. Leaf parts and
 utility functions are listed separately from canonical families.
 
+The catalog also lists 11 primitives from the shared shadcn layer, each with
+`layer: "primitive"` and its own `components/ui/<file>` import path. They have
+gallery fixtures like the families. `tests/component-manifest.test.ts` resolves
+every entry's parts from its import path and checks that each `components/ui`
+file is either listed or backed by a named family. `npm run test:consumer`
+imports every entry from its import path in the packed package.
+`tests/command-scroll.test.tsx` checks that typing in an inline `Command` leaves
+the page's scroll position alone.
+
 ## Executable coverage
 
 | Suite                                    | Coverage                                                                                                                                                                                |

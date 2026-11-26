@@ -5,6 +5,9 @@ Import components from `@samhagman/fast-ux-kit/components` and load
 families. `componentManifest` provides each family's name, category, description,
 interaction owner and exported parts.
 
+The catalog also lists 11 [primitives](#primitives) from the shared shadcn layer.
+Each manifest entry gives its `layer` and the `importPath` to import it from.
+
 Apply the application's global reset before the kit stylesheet. A Tailwind v4
 application can import `tailwindcss/preflight.css` in its `base` layer. The
 application also owns its page layout and font choices.
@@ -372,3 +375,66 @@ they follow `--fux-ed-accent` and `--fux-ed-ink`. An own ground also sets
 The Studio's `#/components` page contains an executable example for every
 family. The exported TypeScript declarations define the complete prop and event
 contracts. [Coverage and verification](COMPONENT_COVERAGE.md).
+
+## Primitives
+
+The families are built on a shared shadcn layer. Each file in that layer is its
+own entry, `@samhagman/fast-ux-kit/components/ui/<file>`, and the stylesheet that
+styles the families styles it too. The catalog lists the primitives no family
+covers, so a gallery or a tool can find them without reading the source.
+
+```tsx
+import { Badge } from "@samhagman/fast-ux-kit/components/ui/badge";
+import { Kbd, KbdGroup } from "@samhagman/fast-ux-kit/components/ui/kbd";
+
+<Badge variant="secondary">Draft</Badge>;
+<KbdGroup>
+  <Kbd>⌘</Kbd>
+  <Kbd>K</Kbd>
+</KbdGroup>;
+```
+
+Primitives sit in the same categories as the families. In `componentManifest`
+they have `layer: "primitive"` and an `importPath` naming their module. Families
+have `layer: "family"` and the `importPath` `@samhagman/fast-ux-kit/components`.
+In `catalog.json` itself, only primitives carry the two fields. An entry without
+them is a family.
+
+```tsx
+import { componentManifest } from "@samhagman/fast-ux-kit/components";
+
+for (const entry of componentManifest) {
+  const module = await import(entry.importPath);
+  const Component = module[entry.exportName];
+}
+```
+
+| Primitive      | Category   | Import path                                          |
+| -------------- | ---------- | ---------------------------------------------------- |
+| `Badge`        | Display    | `@samhagman/fast-ux-kit/components/ui/badge`         |
+| `Kbd`          | Display    | `@samhagman/fast-ux-kit/components/ui/kbd`           |
+| `Item`         | Display    | `@samhagman/fast-ux-kit/components/ui/item`          |
+| `Skeleton`     | Feedback   | `@samhagman/fast-ux-kit/components/ui/skeleton`      |
+| `Empty`        | Feedback   | `@samhagman/fast-ux-kit/components/ui/empty`         |
+| `ButtonGroup`  | Actions    | `@samhagman/fast-ux-kit/components/ui/button-group`  |
+| `Label`        | Inputs     | `@samhagman/fast-ux-kit/components/ui/label`         |
+| `InputGroup`   | Inputs     | `@samhagman/fast-ux-kit/components/ui/input-group`   |
+| `DropdownMenu` | Navigation | `@samhagman/fast-ux-kit/components/ui/dropdown-menu` |
+| `ContextMenu`  | Navigation | `@samhagman/fast-ux-kit/components/ui/context-menu`  |
+| `Command`      | Navigation | `@samhagman/fast-ux-kit/components/ui/command`       |
+
+`Menu` covers a plain list of actions; `DropdownMenu` adds checkbox and radio
+items, submenus and your own trigger. For a labeled input with an icon or a unit,
+`Field`'s `startAddon` and `endAddon` are enough; `InputGroup` is for addons on a
+text area, above or below the control, or around a control you label yourself.
+`ItemGroup` has the list role, so give each `Item` in it `role="listitem"`.
+
+The other files in the layer back a family, and the family is the one to use:
+`alert` (`Alert`), `breadcrumb` (`Breadcrumbs`), `button` (`Button`), `calendar` (`Calendar`),
+`checkbox` (`Checkbox`), `dialog` (`Dialog`), `drawer` (`Drawer`), `field` and
+`input` (`Field`, `Fieldset`), `hover-card` (`HoverCard`), `popover` (`Popover`),
+`progress` (`ProgressBar`), `resizable` (`Splitter`), `scroll-area`
+(`ScrollArea`), `select` (`Select`), `separator` (`Separator`), `sheet`
+(`Sheet`), `sonner` (`Toast`), `switch` (`Switch`), `tabs` (`Tabs`), `textarea`
+(`TextArea`), `toggle` (`ToggleButton`), `toggle-group` (`ToggleButtonGroup`)
+and `tooltip` (`Tooltip`). `compat` holds the layer's internal helpers.
