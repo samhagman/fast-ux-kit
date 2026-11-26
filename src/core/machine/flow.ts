@@ -84,7 +84,8 @@ export interface MachineFlowStep {
   readonly columns: readonly MachineFlowBranch[];
   /**
    * The alternatives are drawn one under another instead of side by side: there is only one, or one
-   * of them is too long to stand beside the others without pushing the rest off the page.
+   * of them is too long to stand beside the others without pushing the rest off the page, or the
+   * plan was made without side by side (`sideBySide: false`).
    */
   readonly stacked: boolean;
   /** Routes that carry on to the next step. Empty when side-by-side columns carry them instead. */
@@ -282,8 +283,22 @@ function dominators(
 /** Root-first list of rows from the machine row down to `rowId`. */
 type PathOf = (rowId: string) => readonly string[];
 
-export function planMachineTreeFlow(model: MachineTreeModel): MachineTreeFlowPlan {
+export interface MachineTreeFlowOptions {
+  /**
+   * Let small alternatives stand side by side as columns (default true). False stacks every set of
+   * alternatives, each hanging off the spine under its own label: for a view too narrow for
+   * columns. Only the placement of alternatives changes; the spine and the order the routes are
+   * tried in stay the same.
+   */
+  readonly sideBySide?: boolean;
+}
+
+export function planMachineTreeFlow(
+  model: MachineTreeModel,
+  options: MachineTreeFlowOptions = {},
+): MachineTreeFlowPlan {
   if (model.rows.length > MAX_ROWS) return EMPTY_PLAN;
+  const columnsAllowed = options.sideBySide !== false;
   const byId = new Map<string, MachineTreeRow>(model.rows.map((row) => [row.id, row]));
   const occurrenceOf = new Map<string, number>();
   const machineOccurrence = (row: MachineTreeRow) => {
@@ -622,8 +637,9 @@ export function planMachineTreeFlow(model: MachineTreeModel): MachineTreeFlowPla
       const carry = [...onward, ...rejoin];
       // Side by side only while every alternative is small, and there is more than one of them: a
       // single alternative reads better hanging off the spine, and a long one would push the rest
-      // off the page.
+      // off the page. A view too narrow for columns asks for none.
       const sideBySide =
+        columnsAllowed &&
         columns.length > 1 &&
         [...forks.keys()].every((child) => D.size.get(child)! <= COLUMN_STEPS);
       const step: DraftStep = {
