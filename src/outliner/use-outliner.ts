@@ -697,17 +697,24 @@ export function useOutliner(options: UseOutlinerOptions) {
 
   // The host's answer to this render's `value`: echo (commit), external (one step), or nothing yet.
   const incoming = options.value;
-  const reconciled = React.useMemo(
-    () =>
-      incoming === undefined
-        ? null
-        : reconcileOutline(store.current, incoming, {
-            ...editorOptions.current,
-            collaboration: options.collaboration,
-          }),
+  const reconciliation = React.useMemo(
+    () => {
+      const source = store.current;
+      return {
+        source,
+        result:
+          incoming === undefined
+            ? null
+            : reconcileOutline(source, incoming, {
+                ...editorOptions.current,
+                collaboration: options.collaboration,
+              }),
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [incoming, version, options.collaboration],
   );
+  const reconciled = reconciliation.result;
   // What renders: the newest pending proposal (optimistic, the default) or only what the host
   // echoed. Uncontrolled there is nothing pending, so both are the editor itself.
   const optimistic = options.optimistic !== false;
@@ -721,6 +728,17 @@ export function useOutliner(options: UseOutlinerOptions) {
   const externalChange = reconciled?.outcome === "external" && reconciled.state !== store.current;
   const renderedSeq = seq.current + (externalChange ? 1 : 0);
   React.useLayoutEffect(() => {
+    // A descendant layout effect can dispatch or reject after this render read the store.
+    // Reconcile that newer state on the next render; never overwrite it or replay an action.
+    // A reused memo (including repeated effects) may already have installed its result.
+    if (
+      reconciled &&
+      store.current !== reconciliation.source &&
+      store.current !== reconciled.state
+    ) {
+      bump();
+      return;
+    }
     // The render above already shows the answer; only the store catches up (no second render).
     if (reconciled && reconciled.state !== store.current) {
       store.current = reconciled.state;
