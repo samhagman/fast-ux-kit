@@ -49,7 +49,8 @@ edits the document or executes a workflow.
 ### Showing a machine on a page
 
 `chrome="none"` shows only the machine: the flow outline as a picture, with no
-toolbar, run footer or panel. The default, `chrome="full"`, is the workspace.
+toolbar, run footer or panel, and nothing to press but its fold chevrons. The
+default, `chrome="full"`, is the workspace.
 
 ```tsx
 <MachineTree document={document} chrome="none" />
@@ -61,12 +62,19 @@ own size. In a box with a height, it fits both ways; with an auto height, the bo
 takes the picture's height at the width's scale. The canvas measures itself as
 usual, so a box 520px wide or less stacks the alternatives first.
 
-Nothing in it scrolls, pans, folds, selects or takes a click, and ⌘F and ⌘K stay
-the page's. The outline is inert, so no row is a tab stop; the root is one image
-named "{label} state hierarchy" and described in words, as Machine Graph's
-picture is. Folds follow the
-usual props, so `defaultCollapsedIds={[]}` opens every region; an inspection
-session or `activeStates` still marks where the run is.
+It sits on the `--surface` colour, with no dot grid behind it. A container's
+chevron still folds and unfolds it, by click, tap, Enter or Space, and the
+outline is refitted (still never enlarged, still centred). Nothing else scrolls,
+pans, selects or takes a click or hover, the wheel and drags reach the page, and
+⌘F and ⌘K stay the page's.
+
+The root is one group named "{label} state hierarchy" and described in words, as
+Machine Graph's picture is. It is a group rather than an image because an image
+cannot hold controls. The rows carry no tree roles and are not tab stops; the
+fold buttons are the only tab stops, each a button named "Fold {name}" or
+"Unfold {name}" (a container state, or the machine itself) with `aria-expanded`. Folds start from the usual props, so
+`defaultCollapsedIds={[]}` opens every region; an inspection session or
+`activeStates` still marks where the run is.
 
 ### Flow outline
 

@@ -18,13 +18,19 @@ export function MachinePresentationDemo({
 }) {
   const code =
     view === "graph" ? '<MachineGraphView chrome="none" />' : '<MachineTree chrome="none" />';
+  const controls =
+    view === "graph"
+      ? "nothing to pan, zoom or press"
+      : "nothing to scroll or select, though a container's chevron still folds it";
+  const keyboard =
+    view === "graph" ? "the parts inside are not tab stops" : "only the fold buttons are tab stops";
   return (
     <div data-demo-presentation={view} dir={dir} className="h-full overflow-y-auto">
       <article className="mx-auto grid max-w-3xl gap-4 px-4 py-6 text-ui">
         <p className="text-muted-foreground">
           <code className="font-mono text-[12px] text-foreground">{code}</code> shows only the
-          machine: no toolbar, status bar or panel, nothing to pan, zoom or press. It fits the box
-          it is given and stays centred as the box resizes.
+          machine: no toolbar, status bar or panel, {controls}. It fits the box it is given and
+          stays centred as the box resizes.
         </p>
         <figure className="grid gap-2">
           <div className="h-[min(440px,60vh)]">{children}</div>
@@ -34,7 +40,7 @@ export function MachinePresentationDemo({
         </figure>
         <p className="text-muted-foreground">
           The page scrolls past it as it would past an image. A screen reader hears its name and a
-          sentence per transition; the parts inside are not tab stops.
+          sentence per transition; {keyboard}.
         </p>
       </article>
     </div>

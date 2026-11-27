@@ -658,21 +658,26 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
             settling && "mv-settling",
             dropTarget === "__root" && "mv-drop-root",
             !revealed && "mv-unrevealed",
+            // Chromeless is the machine on a plain ground: no dot grid behind it.
+            still && "!bg-surface",
           )}
-          // MIT attribution stays visible. Desktop: React Flow's own, at the logical end of the
-          // canvas. Phone: it moves into the status bar (MachineStatusBar), so it never prints over
-          // a note or a state above the peek bar or sheet.
+          // MIT attribution stays visible in the workspace. Desktop: React Flow's own, at the logical
+          // end of the canvas. Phone: it moves into the status bar (MachineStatusBar), so it never
+          // prints over a note or a state above the peek bar or sheet. Chromeless shows the machine
+          // alone, so it has none (React Flow is MIT: the notice is not required).
           attributionPosition={dir === "rtl" ? "bottom-left" : "bottom-right"}
-          proOptions={{ hideAttribution: chrome.compact }}
+          proOptions={{ hideAttribution: chrome.compact || still }}
           data-mode={mv.mode}
           aria-label={`${mv.graph.label} statechart`}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={16}
-            size={1}
-            className="!bg-canvas [&_circle]:!fill-foreground/15"
-          />
+          {!still && (
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={16}
+              size={1}
+              className="!bg-canvas [&_circle]:!fill-foreground/15"
+            />
+          )}
           {/* React Flow pins its own box to `direction: ltr`; this layer restores the page's
             direction so the palette and zoom/Fit controls sit at the logical start/end. */}
           {!still && (

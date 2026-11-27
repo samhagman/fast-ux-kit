@@ -1,7 +1,9 @@
 // `chrome="none"` on Machine Graph and Machine Tree in a real browser, on the built Studio
 // (`npm run docs:build` first): the machine is whole and centred in its box at desktop and phone
-// widths, light and dark, left to right and right to left; it refits when the box resizes; the
-// wheel and a drag stay the page's; nothing in it is a tab stop; and it is one named image.
+// widths, light and dark, left to right and right to left, on a plain ground (no dot grid, no React
+// Flow attribution); it refits when the box resizes; the wheel and a drag stay the page's. The graph
+// is one named image with no tab stops. The tree is one named group whose only tab stops are its
+// fold buttons, and folding a container refits it, still whole and centred.
 import { chromium } from "playwright-core";
 import { createServer } from "node:http";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
@@ -43,9 +45,15 @@ await new Promise((done) => server.listen(0, "127.0.0.1", done));
 const base = `http://127.0.0.1:${server.address().port}/`;
 let browser;
 const checks = [];
+// A failed check is recorded and the run carries on, so one run reports every failure; it fails at the end.
+const failures = [];
 const check = (name, condition, detail) => {
-  assert.ok(condition, `${name}${detail === undefined ? "" : `: ${JSON.stringify(detail)}`}`);
-  checks.push(name);
+  if (condition) checks.push(name);
+  else {
+    const failure = `${name}${detail === undefined ? "" : `: ${JSON.stringify(detail)}`}`;
+    failures.push(failure);
+    console.error(`FAIL ${failure}`);
+  }
 };
 
 /** How the picture sits in its box: the gaps on each side, in screen px. */
@@ -120,21 +128,37 @@ async function staysStill(page, picture, moving) {
   return { moved: before !== after, wheels };
 }
 
-/** Tabs from the page's own Presentation button: focus never lands inside the picture. */
+/**
+ * Tabs from the page's own Presentation button, twelve times: what focus lands on inside the
+ * picture, as "tag name" (a fold button reads "button Fold Preparing").
+ */
 async function tabStops(page, picture) {
   await page.getByRole("button", { name: "Presentation" }).focus();
   const inside = [];
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press("Tab");
-    inside.push(
-      await page.evaluate(
-        (s) => document.querySelector(s).contains(document.activeElement),
-        picture,
-      ),
-    );
+    const stop = await page.evaluate((s) => {
+      const active = document.activeElement;
+      if (!active || !document.querySelector(s).contains(active)) return null;
+      return `${active.tagName.toLowerCase()} ${active.getAttribute("aria-label") ?? ""}`.trim();
+    }, picture);
+    if (stop) inside.push(stop);
   }
-  return inside.filter(Boolean).length;
+  return inside;
 }
+
+/** The ground behind the machine: no background image, and the same colour as the surface token. */
+const ground = (page, selector) =>
+  page.evaluate((s) => {
+    const element = document.querySelector(s);
+    const probe = document.createElement("div");
+    probe.style.background = "var(--surface)";
+    element.appendChild(probe);
+    const surface = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const style = getComputedStyle(element);
+    return { image: style.backgroundImage, color: style.backgroundColor, surface };
+  }, selector);
 
 try {
   browser = await chromium.launch({
@@ -176,6 +200,25 @@ try {
           graph,
         );
         check(`${at}: graph shows only the machine`, graphChrome.length === 0, graphChrome);
+        const graphMarks = await page.evaluate(
+          (g) => ({
+            attribution: document.querySelectorAll(`${g} .react-flow__attribution`).length,
+            pattern: document.querySelectorAll(`${g} .react-flow__background, ${g} pattern`).length,
+          }),
+          graph,
+        );
+        check(
+          `${at}: graph has no React Flow attribution`,
+          graphMarks.attribution === 0,
+          graphMarks,
+        );
+        check(`${at}: graph has no dot grid`, graphMarks.pattern === 0, graphMarks);
+        const graphGround = await ground(page, `${graph} .react-flow`);
+        check(
+          `${at}: graph sits on the plain surface`,
+          graphGround.image === "none" && graphGround.color === graphGround.surface,
+          graphGround,
+        );
         const graphGaps = await placement(page, graph, `${graph} .react-flow__node`);
         check(`${at}: graph is whole and centred in its box`, centred(graphGaps, 16), graphGaps);
         const graphName = await page
@@ -194,7 +237,8 @@ try {
             / from Draft to Review/.test(graphText ?? ""),
           graphText,
         );
-        check(`${at}: graph has no tab stops`, (await tabStops(page, graph)) === 0);
+        const graphStops = await tabStops(page, graph);
+        check(`${at}: graph has no tab stops`, graphStops.length === 0, graphStops);
         const graphStill = await staysStill(page, graph, `${graph} .react-flow__viewport`);
         check(
           `${at}: graph lets the wheel and a drag through, and does not move`,
@@ -226,15 +270,48 @@ try {
         );
         check(`${at}: tree shows only the machine`, treeChrome.length === 0, treeChrome);
         const canvas = `${tree} [data-mt-canvas]`;
-        const treeGaps = await placement(page, canvas, `${tree} [data-mt-fit]`);
+        // Measured against the tree's own box, which clips: a canvas taller than the box would hide
+        // the bottom of a picture that is "centred" in the canvas.
+        const treeGaps = await placement(page, tree, `${tree} [data-mt-fit]`);
         check(`${at}: tree is whole and centred in its box`, centred(treeGaps, 0), treeGaps);
         const scale = await page
           .locator(`${tree} [data-mt-fit]`)
           .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).a);
         check(`${at}: tree is never enlarged`, scale > 0 && scale <= 1, scale);
-        const treeName = await page.getByRole("img", { name: /state hierarchy$/ }).count();
-        check(`${at}: tree is one image named "… state hierarchy"`, treeName === 1);
-        check(`${at}: tree has no tab stops`, (await tabStops(page, tree)) === 0);
+        const treeName = await page
+          .getByRole("group", { name: "Parallel launch readiness state hierarchy" })
+          .count();
+        const treeImage = await page.getByRole("img", { name: /state hierarchy$/ }).count();
+        check(
+          `${at}: tree is one group named "Parallel launch readiness state hierarchy", not an image`,
+          treeName === 1 && treeImage === 0,
+          { treeName, treeImage },
+        );
+        const treeText = await page
+          .locator(tree)
+          .evaluate(
+            (element) =>
+              document.getElementById(element.getAttribute("aria-describedby"))?.textContent,
+          );
+        check(
+          `${at}: tree is described in words`,
+          /states: Preparing, Connection/.test(treeText ?? ""),
+          treeText,
+        );
+        const treeGround = await ground(page, canvas);
+        check(
+          `${at}: tree sits on the plain surface, no dot grid`,
+          treeGround.image === "none" && treeGround.color === treeGround.surface,
+          treeGround,
+        );
+        const treeStops = await tabStops(page, tree);
+        check(
+          `${at}: Tab reaches only the tree's fold buttons, each once`,
+          treeStops.length > 0 &&
+            treeStops.every((stop) => /^button (Fold|Unfold) \S/.test(stop)) &&
+            new Set(treeStops).size === treeStops.length,
+          treeStops,
+        );
         const treeStill = await staysStill(page, canvas, `${tree} [data-mt-fit]`);
         const scrolled = await page.locator(canvas).evaluate((element) => element.scrollTop);
         check(
@@ -248,8 +325,64 @@ try {
         await page.setViewportSize({ width: width === 1280 ? 900 : 340, height: 700 });
         await page.waitForTimeout(300);
         await settled(page, `${tree} [data-mt-fit]`);
-        const treeResized = await placement(page, canvas, `${tree} [data-mt-fit]`);
+        const treeResized = await placement(page, tree, `${tree} [data-mt-fit]`);
         check(`${at}: tree refits when its box resizes`, centred(treeResized, 0), treeResized);
+        await page.setViewportSize({ width, height: 900 });
+        await page.waitForTimeout(300);
+        await settled(page, `${tree} [data-mt-fit]`);
+
+        // Fold a container with a click: the outline changes, and is refitted whole and centred.
+        const size = () =>
+          page
+            .locator(`${tree} [data-mt-fit]`)
+            .evaluate((element) => [element.offsetWidth, element.offsetHeight].join("x"));
+        const before = await size();
+        const foldPreparing = page.getByRole("button", { name: "Fold Preparing" });
+        check(
+          `${at}: tree's Preparing has a fold button, expanded`,
+          (await foldPreparing.getAttribute("aria-expanded")) === "true",
+        );
+        await foldPreparing.click();
+        await settled(page, `${tree} [data-mt-fit]`);
+        const unfold = page.getByRole("button", { name: "Unfold Preparing" });
+        const folded = {
+          expanded: await unfold.getAttribute("aria-expanded"),
+          before,
+          after: await size(),
+          inside: await page
+            .locator(`${tree} [data-mt-fit]`)
+            .evaluate((element) => element.textContent.includes("Loading settings")),
+        };
+        check(
+          `${at}: a click folds Preparing: "Unfold Preparing", collapsed, its inside hidden`,
+          folded.expanded === "false" && folded.before !== folded.after && !folded.inside,
+          folded,
+        );
+        const foldedGaps = await placement(page, tree, `${tree} [data-mt-fit]`);
+        const foldedScale = await page
+          .locator(`${tree} [data-mt-fit]`)
+          .evaluate((element) => new DOMMatrix(getComputedStyle(element).transform).a);
+        check(
+          `${at}: folded, the tree is refitted whole and centred, never enlarged`,
+          centred(foldedGaps, 0) && foldedScale > 0 && foldedScale <= 1,
+          { ...foldedGaps, scale: foldedScale },
+        );
+        const scrolledFolded = await page.locator(canvas).evaluate((element) => element.scrollTop);
+        check(`${at}: folding scrolls nothing`, scrolledFolded === 0, scrolledFolded);
+        await page
+          .locator(tree)
+          .screenshot({ path: resolve(artifacts, `tree-folded-${width}-${scheme}-${dir}.png`) });
+        // And with the keyboard: Enter on the focused button unfolds it again.
+        await unfold.focus();
+        await page.keyboard.press("Enter");
+        await settled(page, `${tree} [data-mt-fit]`);
+        const reopened = page.getByRole("button", { name: "Fold Preparing" });
+        check(
+          `${at}: Enter on "Unfold Preparing" opens it again, refitted`,
+          (await reopened.getAttribute("aria-expanded")) === "true" &&
+            (await size()) === before &&
+            centred(await placement(page, tree, `${tree} [data-mt-fit]`), 0),
+        );
         await page.close();
       }
 
@@ -276,21 +409,49 @@ try {
   );
   const peek = await page.locator(`${full} [data-mv-toolbar]`).count();
   check("control: the full view has its toolbar", peek === 1);
+  const fullMarks = await page.evaluate(
+    (g) => ({
+      attribution: document.querySelectorAll(`${g} .react-flow__attribution`).length,
+      grid: document.querySelectorAll(`${g} .react-flow__background`).length,
+    }),
+    full,
+  );
+  check(
+    "control: the full graph keeps React Flow's attribution and its dot grid",
+    fullMarks.attribution === 1 && fullMarks.grid === 1,
+    fullMarks,
+  );
+  await page
+    .locator(full)
+    .screenshot({ path: resolve(artifacts, "control-graph-full-1280-light.png") });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.waitForTimeout(400);
   check(
     "control: the full view at 375px is the phone shell (peek bar)",
     (await page.locator(`${full} [data-slot=machine-peek]`).count()) === 1,
   );
+  // Control: the full tree keeps its dot grid and its navigable tree.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${base}#/machine-tree`);
+  const fullTree = '[data-slot="machine-tree"]:not([data-chrome])';
+  await page.locator(`${fullTree} [role=tree]`).waitFor();
+  const fullTreeGround = await ground(page, `${fullTree} [data-mt-canvas]`);
+  check(
+    "control: the full tree keeps its dot grid",
+    fullTreeGround.image.includes("radial-gradient"),
+    fullTreeGround,
+  );
   await page.close();
 
-  assert.deepEqual(errors, []);
-  checks.push("No browser page errors");
+  check("No browser page errors", errors.length === 0, errors);
   await writeFile(
     resolve(artifacts, "results.json"),
-    JSON.stringify({ checks, browser: await browser.version() }, null, 2),
+    JSON.stringify({ checks, failures, browser: await browser.version() }, null, 2),
   );
-  console.log(JSON.stringify({ checks: checks.length, artifacts }, null, 2));
+  console.log(
+    JSON.stringify({ checks: checks.length, failures: failures.length, artifacts }, null, 2),
+  );
+  assert.deepEqual(failures, [], `${failures.length} check(s) failed`);
 } finally {
   await browser?.close();
   await new Promise((done) => server.close(done));

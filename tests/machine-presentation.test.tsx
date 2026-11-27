@@ -167,6 +167,18 @@ function liveControls(root: Element) {
   ].filter((el) => !el.closest("[inert]") && el.getAttribute("tabindex") !== "-1");
 }
 
+/** Asserts nothing matches. A boolean, so a failure never asks node to print a jsdom element. */
+function none(root: Element, selector: string, message: string) {
+  assert.equal(!!root.querySelector(selector), false, message);
+}
+
+/** The text drawn on screen: without the hidden description and the screen-reader-only live regions. */
+function drawn(root: Element) {
+  const shown = root.cloneNode(true) as HTMLElement;
+  for (const hidden of shown.querySelectorAll("[hidden], .sr-only")) hidden.remove();
+  return shown.textContent ?? "";
+}
+
 /** The accessible name and description of the presentation, from its own attributes. */
 function named(root: HTMLElement) {
   const describedBy = root.getAttribute("aria-describedby");
@@ -200,6 +212,15 @@ test("graph chrome=none: only the machine, no toolbar, status bar, inspector, mi
   for (const hidden of shown.querySelectorAll("[hidden], .sr-only")) hidden.remove();
   assert.equal(shown.textContent?.includes("valid"), false, "no validity status");
   assert.equal(shown.textContent?.includes("3 states"), false, "no state count");
+});
+
+test("graph chrome=none: a plain ground, with no React Flow attribution and no dot grid", async () => {
+  const { container } = graph({ chrome: "none" });
+  await settle();
+  none(container, ".react-flow__attribution", "no attribution");
+  none(container, ".react-flow__background", "no dot grid");
+  const flow = container.querySelector<HTMLElement>(".react-flow")!;
+  assert.ok(flow.className.includes("bg-surface"), "the surface token is the ground");
 });
 
 test("graph chrome=none: names itself, describes the machine, and has nothing to tab to", async () => {
@@ -259,6 +280,8 @@ test("graph default: the full view is unchanged (toolbar, status bar, inspector,
   assert.equal(container.querySelector("[inert]"), null);
   const pane = container.querySelector<HTMLElement>(".react-flow__pane")!;
   assert.ok(pane.classList.contains("draggable"), "the pane pans");
+  assert.ok(container.querySelector(".react-flow__attribution"), "the attribution shows");
+  assert.ok(container.querySelector(".react-flow__background"), "the dot grid shows");
 });
 
 /** A host run of the order, now in Packed. */
@@ -300,15 +323,19 @@ test("tree chrome=none: names itself, describes the machine, and has nothing to 
   await settle(2);
   const root = container.querySelector<HTMLElement>("[data-slot=machine-tree]")!;
   const { role, name, description } = named(root);
-  assert.equal(role, "img");
+  // A group, not an image: an image cannot hold the fold buttons a container gets.
+  assert.equal(role, "group");
   assert.equal(name, "Order state hierarchy");
   assert.match(description ?? "", /3 states: Placed, Packed and Cancelled/);
   assert.match(description ?? "", /PACK from Placed to Packed/);
   assert.equal(container.querySelector("[role=tree]"), null, "no tree to navigate");
-  assert.ok(root.querySelector("[inert] [data-mt-item]"), "the drawing is inert");
+  none(container, "[role=treeitem]", "no tree items outside a tree");
+  none(container, "[aria-selected]", "nothing selectable");
+  // The machine's own fold button is the one control (its diagnostic mark is drawing, not a popover).
   assert.deepEqual(
-    liveControls(root).map((el) => el.outerHTML.slice(0, 80)),
-    [],
+    liveControls(root).map((el) => el.getAttribute("aria-label") ?? el.outerHTML.slice(0, 80)),
+    ["Fold Order"],
+    "nothing to tab to but the fold button",
   );
   assert.equal(named(root).name, "Order state hierarchy");
   cleanup();
@@ -342,6 +369,111 @@ test("tree chrome=none: the whole machine is scaled to fit its box, centred, and
   assert.equal(fit.parentElement!.style.width, "800px");
 });
 
+test("tree chrome=none: a plain ground, with no dot grid behind the machine", async () => {
+  const { container } = tree({ chrome: "none" });
+  await settle(2);
+  const scroller = container.querySelector<HTMLElement>("[data-mt-canvas]")!;
+  assert.equal(scroller.style.backgroundImage, "", "no dot grid");
+  assert.ok(scroller.className.includes("bg-surface"), "the surface token is the ground");
+  assert.equal(scroller.className.includes("bg-canvas"), false);
+});
+
+// A link with one container: Connection holds Dialing and Online.
+const nested: MachineDocument = {
+  version: 1,
+  rootId: "link",
+  machines: [
+    {
+      id: "link",
+      label: "Link",
+      initialId: "connection",
+      nodes: [
+        { id: "connection", label: "Connection", kind: "compound", initialId: "dialing" },
+        { id: "dialing", label: "Dialing", kind: "atomic", parentId: "connection" },
+        { id: "online", label: "Online", kind: "atomic", parentId: "connection" },
+        { id: "offline", label: "Offline", kind: "final" },
+      ],
+      transitions: [
+        { id: "answer", sourceId: "dialing", targetId: "online", event: "ANSWER" },
+        { id: "drop", sourceId: "connection", targetId: "offline", event: "DROP" },
+      ],
+    },
+  ],
+};
+
+test("tree chrome=none: a container's chevron is a real button that folds and unfolds it", async () => {
+  const { container } = tree({ chrome: "none", document: nested });
+  await settle(2);
+  const root = container.querySelector<HTMLElement>("[data-slot=machine-tree]")!;
+  const fold = () =>
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
+      /^(Fold|Unfold) Connection$/.test(b.getAttribute("aria-label") ?? ""),
+    );
+  const button = fold();
+  assert.ok(button, "Connection has a fold button");
+  assert.equal(button.getAttribute("type"), "button");
+  assert.equal(button.getAttribute("aria-label"), "Fold Connection");
+  assert.equal(button.getAttribute("aria-expanded"), "true");
+  assert.equal(!!button.closest("[inert], [aria-hidden=true]"), false, "reachable and announced");
+  assert.ok(drawn(container).includes("Dialing"), "open: its states are drawn");
+  // The fold buttons are the only things a keyboard reaches.
+  assert.deepEqual(
+    liveControls(root).map((el) => el.getAttribute("aria-label") ?? el.outerHTML.slice(0, 80)),
+    ["Fold Link", "Fold Connection"],
+  );
+  await act(async () => button.click());
+  await settle(4);
+  assert.equal(fold()!.getAttribute("aria-label"), "Unfold Connection");
+  assert.equal(fold()!.getAttribute("aria-expanded"), "false");
+  assert.equal(drawn(container).includes("Dialing"), false, "folded: its states are hidden");
+  assert.equal(
+    named(root).name,
+    "Link state hierarchy",
+    "still the same named group after folding",
+  );
+  // Pressing it (Enter or Space on a button is a click) opens it again.
+  await act(async () => fold()!.click());
+  await settle(4);
+  assert.equal(fold()!.getAttribute("aria-expanded"), "true");
+  assert.ok(drawn(container).includes("Dialing"), "unfolded: drawn again");
+});
+
+test("tree chrome=none: folding refits the picture, never past its own size, and stays static", async () => {
+  canvas = { width: 400, height: 720 };
+  content = { width: 800, height: 600 };
+  const { container } = tree({ chrome: "none", document: nested });
+  await settle(2);
+  const fit = container.querySelector<HTMLElement>("[data-mt-fit]")!;
+  assert.equal(fit.style.transform, "scale(0.5)");
+  assert.ok(fit.className.includes("pointer-events-none"), "only the fold buttons take a pointer");
+  const button = container.querySelector<HTMLButtonElement>(
+    "button[aria-label='Fold Connection']",
+  )!;
+  assert.ok(button.className.includes("pointer-events-auto"));
+  // A wheel over the button is the page's.
+  const wheel = new window.WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true });
+  button.dispatchEvent(wheel);
+  assert.equal(wheel.defaultPrevented, false, "the wheel scrolls the page");
+  // Folded, the outline is smaller: it is refitted at its own size, not enlarged.
+  content = { width: 300, height: 200 };
+  await act(async () => button.click());
+  await resize();
+  assert.equal(fit.style.transform, "scale(1)");
+  assert.equal(fit.parentElement!.style.width, "300px");
+  assert.equal(fit.parentElement!.style.height, "200px");
+  // Its keys are the page's: ⌘F with focus on a fold button opens no find field.
+  button.focus();
+  const press = new window.KeyboardEvent("keydown", {
+    key: "f",
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  button.dispatchEvent(press);
+  assert.equal(press.defaultPrevented, false, "⌘F is the page's");
+  none(container, "[data-mt-toolbar]", "no find field");
+});
+
 test("tree chrome=none: an inspection session still marks where the run is", async () => {
   const { container } = tree({ chrome: "none", inspectionSession: session });
   await settle(2);
@@ -349,6 +481,13 @@ test("tree chrome=none: an inspection session still marks where the run is", asy
   assert.ok(
     active.some((el) => el.textContent?.includes("Packed")),
     "Packed is the active leaf",
+  );
+  assert.deepEqual(
+    liveControls(container.querySelector("[data-slot=machine-tree]")!).map(
+      (el) => el.getAttribute("aria-label") ?? el.outerHTML.slice(0, 80),
+    ),
+    ["Fold Order"],
+    "a run adds no controls",
   );
 });
 
@@ -378,6 +517,10 @@ test("tree default: the full view is unchanged (toolbar, footer, a navigable tre
   assert.equal(container.querySelector("[data-mt-fit]"), null);
   assert.ok(
     container.querySelector<HTMLElement>("[data-mt-canvas]")!.className.includes("overflow-auto"),
+  );
+  assert.ok(
+    container.querySelector<HTMLElement>("[data-mt-canvas]")!.style.backgroundImage,
+    "the full canvas keeps its dot grid",
   );
   fireEvent.pointerDown(container.querySelector("[data-mt-canvas]")!);
   const press = new window.KeyboardEvent("keydown", {

@@ -42,6 +42,7 @@ document. The default, `chrome="full"`, is the workspace described here.
 | With `chrome="none"`           | What happens                                                    |
 | ------------------------------ | --------------------------------------------------------------- |
 | Toolbar, status bar, inspector | Not drawn; nor are the minimap, zoom and Fit controls, palette  |
+| Ground                         | Plain surface: no dot grid and no React Flow attribution        |
 | A box under 768px wide         | Still the plain canvas: no peek bar or sheet                    |
 | Fit                            | The whole machine, centred with a margin, refitted on resize    |
 | Pointer, wheel, keys           | Nothing pans, zooms, drags or selects; the page scrolls past it |
@@ -52,7 +53,9 @@ Give the box a height, as the full view needs. The drawing is inert, so no state
 or transition is a tab stop; the image's description names the states and says
 each transition as "EVENT [guard] from Source to Target" (up to 40 of each). The view is the one machine `document.rootId` names: a
 submachine cannot be opened from a picture. An inspection session still marks
-its active states. React Flow's attribution stays in the corner.
+its active states. The machine sits on the `--surface` colour with nothing drawn
+behind it; React Flow's attribution is left out (React Flow is MIT licensed, so
+the notice is not required; the full view keeps it).
 
 ### Sending an event
 

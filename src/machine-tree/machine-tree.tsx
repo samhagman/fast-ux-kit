@@ -266,11 +266,12 @@ export function MachineTreeRoot({
                         ref={layout.rootRef}
                         data-slot="machine-tree"
                         dir={props.dir}
-                        // Chromeless is one picture: named, and described in words (the drawing is inert).
+                        // Chromeless is one picture, named and described in words. A group, not an image:
+                        // its containers' fold buttons are real controls, and an image cannot hold any.
                         {...(chromeless
                           ? {
                               "data-chrome": "none",
-                              role: "img",
+                              role: "group",
                               "aria-label": `${ctl.base.label} state hierarchy`,
                               "aria-describedby": descriptionId,
                             }
@@ -278,6 +279,8 @@ export function MachineTreeRoot({
                         // Portalled parts (dialog, popovers) bubble here too: the focus hand-off sees them all.
                         onFocus={(event) => nav.noteFocus(event.target as HTMLElement)}
                         onKeyDown={(event) => {
+                          // Chromeless has no find field or palette: ⌘F and ⌘K on a fold button are the page's.
+                          if (chromeless) return;
                           if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
                           const key = event.key.toLowerCase();
                           if (key === "f") {
