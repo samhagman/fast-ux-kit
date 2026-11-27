@@ -1,5 +1,6 @@
 import * as React from "react";
 import { MachineObservationDemo } from "@/demo/machine-observation-demo";
+import { MachinePresentationDemo } from "@/demo/machine-presentation-demo";
 import { Button } from "@samhagman/fast-ux-kit/components/ui/button";
 import type {
   MachineDocument,
@@ -227,6 +228,10 @@ export function MachineTreePage() {
   const [inspectDemo, setInspectDemo] = React.useState(
     () => new URLSearchParams(window.location.search).get("inspect") === "1",
   );
+  // `?chrome=none` (the Presentation button): the example as a picture on a page, `chrome="none"`.
+  const [presentation, setPresentation] = React.useState(
+    () => new URLSearchParams(window.location.search).get("chrome") === "none",
+  );
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-background/60 px-4">
@@ -245,9 +250,23 @@ export function MachineTreePage() {
         <div className="ms-auto flex items-center gap-2">
           <Button
             size="sm"
+            variant={presentation ? "secondary" : "outline"}
+            aria-pressed={presentation}
+            onClick={() => {
+              setPresentation((value) => !value);
+              setInspectDemo(false);
+            }}
+          >
+            Presentation
+          </Button>
+          <Button
+            size="sm"
             variant={inspectDemo ? "secondary" : "outline"}
             aria-pressed={inspectDemo}
-            onClick={() => setInspectDemo((value) => !value)}
+            onClick={() => {
+              setInspectDemo((value) => !value);
+              setPresentation(false);
+            }}
           >
             Inspect sample run
           </Button>
@@ -292,7 +311,18 @@ export function MachineTreePage() {
           pair ? "grid min-h-0 flex-1 grid-rows-2 gap-4 p-0 sm:p-4" : "min-h-0 flex-1 p-0 sm:p-4"
         }
       >
-        {inspectDemo ? (
+        {presentation && !inspectDemo ? (
+          <MachinePresentationDemo view="tree" label={lab.label} dir={dir}>
+            <MachineTree
+              key={caseId}
+              document={lab.document}
+              chrome="none"
+              {...(lab.maxItems ? { maxItems: lab.maxItems } : {})}
+              {...(dir ? { dir } : {})}
+              className="h-full"
+            />
+          </MachinePresentationDemo>
+        ) : inspectDemo ? (
           <MachineObservationDemo dir={dir} view="tree" />
         ) : (
           <MachineTree
@@ -318,7 +348,7 @@ export function MachineTreePage() {
             className="h-full max-sm:rounded-none max-sm:border-x-0"
           />
         )}
-        {pair && !inspectDemo && (
+        {pair && !inspectDemo && !presentation && (
           <MachineTree
             key={`${caseId}-pair`}
             document={lab.document}

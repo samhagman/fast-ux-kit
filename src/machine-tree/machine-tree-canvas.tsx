@@ -75,7 +75,8 @@ import { simStateOf, type SimState } from "../machine-shared/machine-sim.js";
 
 /** The scrollable dot-grid canvas holding the tree, the truncation notice and the replay cue. */
 export function MachineTreeCanvas() {
-  const { model, rows, rootGraph, documentItems, label, elements, stateRowIds } = useTreeBase();
+  const { model, rows, rootGraph, documentItems, label, elements, stateRowIds, chromeless } =
+    useTreeBase();
   const layout = useTreeLayout();
   const nav = useTreeNavigation();
   const { sim } = useTreeSimulation();
@@ -97,34 +98,79 @@ export function MachineTreeCanvas() {
         .find((el): el is HTMLElement => !!el),
   });
   useNarrowCanvas(layout.scrollerRef, layout.setCanvasNarrow);
+  const picture = React.useRef<HTMLDivElement>(null);
+  const fit = useFitToBox(layout.scrollerRef, picture, chromeless);
   const steps = sim.snapshot ? Math.max(0, sim.snapshot.trace.length - 1) : 0;
+  const drawn = roots.map((id, index) =>
+    rows.get(id)?.kind === "node" ? (
+      <StateCell key={id} id={id} />
+    ) : (
+      <MachineSection
+        key={id}
+        id={id}
+        primary={index === 0 && rows.get(id)?.machineId === rootGraph.id}
+        divided={index > 0}
+      />
+    ),
+  );
+  const truncation = model.truncated && (
+    <div
+      role="status"
+      className="flex shrink-0 items-center gap-2 border-b border-hairline bg-[color-mix(in_oklab,var(--warning)_9%,var(--surface))] px-3 py-1.5 text-[12px]"
+    >
+      <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <span>
+        Showing <bdi className="font-mono tabular-nums">{model.rows.length}</bdi> of{" "}
+        <bdi className="font-mono tabular-nums">{ctl.documentItems}</bdi> items — raise{" "}
+        <code className="font-mono text-[11px]">maxItems</code> to see all. Counts in headings are
+        document totals.
+      </span>
+    </div>
+  );
+  if (chromeless)
+    // A still picture on a plain ground: the outline at its own size, scaled down to fit the box and
+    // centred in it, refitted when a fold changes its size. Its containers' fold buttons are its only
+    // controls: the rest takes no pointer (no click, hover or drag), has no tab stop and no tree
+    // roles, and the box does not scroll, so the wheel is the page's. The root names and describes it.
+    return (
+      // `min-h-0`: a child of the root's column, it takes the box's height, not the outline's.
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {truncation}
+        <div
+          ref={ctl.scrollerRef}
+          data-mt-canvas=""
+          className="grid min-h-0 min-w-0 flex-1 place-items-center overflow-hidden bg-surface"
+        >
+          <div
+            className="relative"
+            style={
+              fit ? { width: fit.width * fit.scale, height: fit.height * fit.scale } : undefined
+            }
+          >
+            <div
+              ref={picture}
+              data-mt-fit=""
+              className={cn(
+                "pointer-events-none grid w-max content-start gap-8 p-4 select-none sm:p-6",
+                fit && "absolute start-0 top-0 origin-top-left rtl:origin-top-right",
+              )}
+              style={fit ? { transform: `scale(${fit.scale})` } : undefined}
+            >
+              {drawn}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   return (
     <div className="relative flex min-w-0 flex-1 flex-col">
-      {model.truncated && (
-        <div
-          role="status"
-          className="flex shrink-0 items-center gap-2 border-b border-hairline bg-[color-mix(in_oklab,var(--warning)_9%,var(--surface))] px-3 py-1.5 text-[12px]"
-        >
-          <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-warning" />
-          <span>
-            Showing <bdi className="font-mono tabular-nums">{model.rows.length}</bdi> of{" "}
-            <bdi className="font-mono tabular-nums">{ctl.documentItems}</bdi> items — raise{" "}
-            <code className="font-mono text-[11px]">maxItems</code> to see all. Counts in headings
-            are document totals.
-          </span>
-        </div>
-      )}
+      {truncation}
       <LookInside>
         <div
           ref={ctl.scrollerRef}
           data-mt-canvas=""
           className="min-w-0 flex-1 overflow-auto bg-canvas"
-          style={{
-            backgroundImage:
-              "radial-gradient(color-mix(in oklab, var(--foreground) 9%, transparent) 1px, transparent 1px)",
-            backgroundSize: "16px 16px",
-            scrollPaddingBottom: covered,
-          }}
+          style={{ ...CANVAS_DOTS, scrollPaddingBottom: covered }}
           onClick={(event) => event.target === event.currentTarget && ctl.select(null)}
         >
           <div
@@ -141,18 +187,7 @@ export function MachineTreeCanvas() {
             )}
             style={covered ? { paddingBottom: `calc(${covered} + 1rem)` } : undefined}
           >
-            {roots.map((id, index) =>
-              rows.get(id)?.kind === "node" ? (
-                <StateCell key={id} id={id} />
-              ) : (
-                <MachineSection
-                  key={id}
-                  id={id}
-                  primary={index === 0 && rows.get(id)?.machineId === rootGraph.id}
-                  divided={index > 0}
-                />
-              ),
-            )}
+            {drawn}
             {ctl.searching && ctl.matchIds.length === 0 && (
               <div
                 role="status"
@@ -229,6 +264,59 @@ export function MachineTreeCanvas() {
       </LookInside>
     </div>
   );
+}
+
+/** The canvas's dot grid. */
+const CANVAS_DOTS = {
+  backgroundImage:
+    "radial-gradient(color-mix(in oklab, var(--foreground) 9%, transparent) 1px, transparent 1px)",
+  backgroundSize: "16px 16px",
+} as const;
+
+/**
+ * `chrome="none"`: the scale that fits the picture (`content`, at its own size) inside the box
+ * (`box`), never above 1, refitted when either changes size. `null` until measured (and on the
+ * server), when the picture is drawn at its own size. The wrapper takes the scaled size, so a box
+ * with an auto height takes the picture's height: the box is then as tall as the picture at the
+ * width's scale, which is a fixed point (one more measure finds the same scale).
+ */
+function useFitToBox(
+  box: React.RefObject<HTMLElement | null>,
+  content: React.RefObject<HTMLElement | null>,
+  enabled: boolean,
+) {
+  const [fit, setFit] = React.useState<{
+    readonly width: number;
+    readonly height: number;
+    readonly scale: number;
+  } | null>(null);
+  React.useLayoutEffect(() => {
+    const outer = box.current;
+    const inner = content.current;
+    if (!enabled || !outer || !inner) return;
+    const measure = () => {
+      const width = inner.offsetWidth;
+      const height = inner.offsetHeight;
+      if (!width || !height || !outer.clientWidth) return;
+      const scale = Math.min(
+        1,
+        outer.clientWidth / width,
+        outer.clientHeight ? outer.clientHeight / height : 1,
+      );
+      setFit((old) =>
+        old && old.width === width && old.height === height && Math.abs(old.scale - scale) < 0.001
+          ? old
+          : { width, height, scale },
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(outer);
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, [box, content, enabled]);
+  return enabled ? fit : null;
 }
 
 /** A canvas this wide or narrower has no room for alternatives side by side: they stack. */
@@ -363,7 +451,16 @@ export function useItemProps(
   label: string,
   extra: { expanded?: boolean | undefined; disabled?: boolean; description?: string } = {},
 ) {
-  const { select, setFocusId, refFor, activate, follow } = useTree();
+  const { select, setFocusId, refFor, activate, follow, chromeless } = useTree();
+  // Chromeless draws no tree: a row is plain drawing, with no tree role, tab stop or action.
+  if (chromeless)
+    return {
+      ref: refFor(row.id),
+      "data-mt-item": "",
+      "data-row-id": row.id,
+      onFocus: () => {},
+      onClick: () => {},
+    } as const;
   return {
     ref: refFor(row.id),
     role: "treeitem",
@@ -396,7 +493,15 @@ export function useItemProps(
  * toolbar's Diagnostics popover lists every issue, so the mark itself stays out of the tab order.
  */
 export function IssueMark({ messages }: { readonly messages: readonly string[] | undefined }) {
+  const { chromeless } = useTree();
   if (!messages?.length) return null;
+  // Chromeless: drawn, not a control (the picture's only controls are its fold buttons).
+  if (chromeless)
+    return (
+      <span aria-hidden className="grid size-4 shrink-0 place-items-center">
+        <TriangleAlert className="size-3.5 text-warning" />
+      </span>
+    );
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -425,6 +530,42 @@ export function IssueMark({ messages }: { readonly messages: readonly string[] |
         ))}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Chromeless: a container's chevron as a real button, the picture's only control. It takes the
+ * pointer the rest of the picture does not, and is a tab stop with its own name and state.
+ */
+function FoldButton({
+  label,
+  open,
+  onToggle,
+  className,
+  iconClassName,
+}: {
+  readonly label: string;
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  readonly className: string;
+  readonly iconClassName: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={`${open ? "Fold" : "Unfold"} ${label}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+      className={cn(
+        "pointer-events-auto outline-none focus-visible:outline-2 focus-visible:outline-ring",
+        className,
+      )}
+    >
+      <ChevronRight aria-hidden className={cn(iconClassName, open && "rotate-90 rtl:-rotate-90")} />
+    </button>
   );
 }
 
@@ -474,6 +615,7 @@ export const MachineSection = React.memo(function MachineSection({
     rootMachineId,
     first,
     issues,
+    chromeless,
   } = useTree();
   const flags = useRowFlags(id, first);
   const row = visible.get(id)!;
@@ -512,19 +654,29 @@ export const MachineSection = React.memo(function MachineSection({
           flags & FLAG.flash && "mt-flash",
         )}
       >
-        {foldable && (
-          <span
-            aria-hidden
-            onClick={(event) => (event.stopPropagation(), toggle(id))}
+        {foldable && chromeless ? (
+          <FoldButton
+            label={row.label}
+            open={open}
+            onToggle={() => toggle(id)}
             className="mt-hit grid size-5 cursor-pointer place-items-center rounded-[5px] text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ChevronRight
-              className={cn(
-                "size-3.5 transition-transform duration-150 rtl:-scale-x-100",
-                open && "rotate-90 rtl:-rotate-90",
-              )}
-            />
-          </span>
+            iconClassName="size-3.5 transition-transform duration-150 rtl:-scale-x-100"
+          />
+        ) : (
+          foldable && (
+            <span
+              aria-hidden
+              onClick={(event) => (event.stopPropagation(), toggle(id))}
+              className="mt-hit grid size-5 cursor-pointer place-items-center rounded-[5px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronRight
+                className={cn(
+                  "size-3.5 transition-transform duration-150 rtl:-scale-x-100",
+                  open && "rotate-90 rtl:-rotate-90",
+                )}
+              />
+            </span>
+          )
         )}
         <span
           dir="auto"
@@ -536,10 +688,12 @@ export const MachineSection = React.memo(function MachineSection({
           <Highlight text={row.label} />
         </span>
         <IssueMark messages={issues.get(id)} />
-        <span className="font-mono text-[10.5px] text-muted-foreground tabular-nums">
-          <bdi>{plural(states, "state")}</bdi> ·{" "}
-          <bdi>{plural(row.graph.transitions.length, "transition")}</bdi>
-        </span>
+        {!chromeless && (
+          <span className="font-mono text-[10.5px] text-muted-foreground tabular-nums">
+            <bdi>{plural(states, "state")}</bdi> ·{" "}
+            <bdi>{plural(row.graph.transitions.length, "transition")}</bdi>
+          </span>
+        )}
         {!primary && (
           <span
             dir="auto"
@@ -772,10 +926,22 @@ export function StateBlock({
   /** Take the card's own width: in the flow outline a card is not stretched to its longest route. */
   readonly natural?: boolean | undefined;
 }) {
-  const { toggle, searching, sim, links, rows, follow, rootMachineId, query, issues, coarse } =
-    useTree();
+  const {
+    toggle,
+    searching,
+    sim,
+    links,
+    rows,
+    follow,
+    rootMachineId,
+    query,
+    issues,
+    coarse,
+    chromeless,
+  } = useTree();
   // Resting the pointer on a shut box floats its inside over the canvas (machine-tree-flow).
-  const look = useLookInside(row.id, container && !open && !searching && !coarse);
+  // Chromeless has no float: the picture takes no hover.
+  const look = useLookInside(row.id, container && !open && !searching && !coarse && !chromeless);
   const { inspectionMachineId, presentation: descriptions } = useTree();
   const presentation = descriptions?.nodes?.[row.elementId];
   const node = row.node!;
@@ -848,22 +1014,32 @@ export function StateBlock({
         isMatch && !lane && !(container && open) && "rounded-b-[9px]",
       )}
     >
-      {container && (
-        <span
-          aria-hidden
-          onClick={(event) => {
-            event.stopPropagation();
-            toggle(row.id);
-          }}
+      {container && chromeless ? (
+        <FoldButton
+          label={row.label}
+          open={open}
+          onToggle={() => toggle(row.id)}
           className="mt-hit -ms-1 grid size-5 shrink-0 cursor-pointer place-items-center rounded-[5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ChevronRight
-            className={cn(
-              "size-3.5 transition-transform duration-150 ease-[var(--ease-standard)] rtl:-scale-x-100",
-              open && "rotate-90 rtl:-rotate-90",
-            )}
-          />
-        </span>
+          iconClassName="size-3.5 transition-transform duration-150 ease-[var(--ease-standard)] rtl:-scale-x-100"
+        />
+      ) : (
+        container && (
+          <span
+            aria-hidden
+            onClick={(event) => {
+              event.stopPropagation();
+              toggle(row.id);
+            }}
+            className="mt-hit -ms-1 grid size-5 shrink-0 cursor-pointer place-items-center rounded-[5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                "size-3.5 transition-transform duration-150 ease-[var(--ease-standard)] rtl:-scale-x-100",
+                open && "rotate-90 rtl:-rotate-90",
+              )}
+            />
+          </span>
+        )
       )}
       {pseudo && <span aria-hidden className="size-2 shrink-0 rounded-full bg-foreground/70" />}
       {final && (

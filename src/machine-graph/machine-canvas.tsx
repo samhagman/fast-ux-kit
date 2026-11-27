@@ -98,6 +98,8 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
   React.useEffect(() => () => window.clearTimeout(revealTimer.current), []);
   const layout = mv.layout;
   const design = mv.mode === "design" && mv.editable;
+  /** `chrome="none"`: a still picture of the machine. */
+  const still = chrome.chromeless;
   const coarse = useMediaQuery("(pointer: coarse)");
   const selectedNode = mv.selection?.type === "node" ? mv.selection.id : null;
   const selectedEdge = mv.selection?.type === "transition" ? mv.selection.id : null;
@@ -156,6 +158,12 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
   );
   const fitRef = React.useRef(fit);
   fitRef.current = fit;
+  // Chromeless: the whole machine stays fitted and centred whenever the box changes size.
+  React.useEffect(() => {
+    if (!chrome.chromeless || !width || !height || !nodesRef.current.length) return;
+    const frame = requestAnimationFrame(() => fitRef.current(false));
+    return () => cancelAnimationFrame(frame);
+  }, [chrome.chromeless, width, height]);
 
   // Rebuild flow nodes from each fresh layout. Positions come from layout (which already
   // honours the user's pinned positions); measurement and selection carry over.
@@ -184,6 +192,12 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
     if (wait > 0) {
       window.clearTimeout(revealTimer.current);
       revealTimer.current = window.setTimeout(() => setRevealed(true), Math.min(150, wait));
+    }
+    if (chrome.chromeless) {
+      // Every layout (the opening one, a measured pass, a new document) is refitted, never glided.
+      mv.fitPending.current = null;
+      requestAnimationFrame(() => fitRef.current(false));
+      return;
     }
     if (shifted && opening && !pending) {
       requestAnimationFrame(() => fitRef.current(false));
@@ -627,9 +641,16 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
           selectionKeyCode={null}
           multiSelectionKeyCode={null}
           nodesConnectable={design}
-          nodesFocusable
-          edgesFocusable
-          elementsSelectable
+          // Chromeless is a picture: no tab stops, no selection, and the wheel and drags stay the page's.
+          nodesFocusable={!still}
+          edgesFocusable={!still}
+          elementsSelectable={!still}
+          nodesDraggable={!still}
+          panOnDrag={!still}
+          zoomOnScroll={!still}
+          zoomOnPinch={!still}
+          zoomOnDoubleClick={!still}
+          preventScrolling={!still}
           minZoom={0.001}
           maxZoom={2}
           className={cn(
@@ -637,33 +658,40 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
             settling && "mv-settling",
             dropTarget === "__root" && "mv-drop-root",
             !revealed && "mv-unrevealed",
+            // Chromeless is the machine on a plain ground: no dot grid behind it.
+            still && "!bg-surface",
           )}
-          // MIT attribution stays visible. Desktop: React Flow's own, at the logical end of the
-          // canvas. Phone: it moves into the status bar (MachineStatusBar), so it never prints over
-          // a note or a state above the peek bar or sheet.
+          // MIT attribution stays visible in the workspace. Desktop: React Flow's own, at the logical
+          // end of the canvas. Phone: it moves into the status bar (MachineStatusBar), so it never
+          // prints over a note or a state above the peek bar or sheet. Chromeless shows the machine
+          // alone, so it has none (React Flow is MIT: the notice is not required).
           attributionPosition={dir === "rtl" ? "bottom-left" : "bottom-right"}
-          proOptions={{ hideAttribution: chrome.compact }}
+          proOptions={{ hideAttribution: chrome.compact || still }}
           data-mode={mv.mode}
           aria-label={`${mv.graph.label} statechart`}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={16}
-            size={1}
-            className="!bg-canvas [&_circle]:!fill-foreground/15"
-          />
+          {!still && (
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={16}
+              size={1}
+              className="!bg-canvas [&_circle]:!fill-foreground/15"
+            />
+          )}
           {/* React Flow pins its own box to `direction: ltr`; this layer restores the page's
             direction so the palette and zoom/Fit controls sit at the logical start/end. */}
-          <div
-            dir={dir}
-            data-mv-overlays
-            className="pointer-events-none absolute inset-0 z-10 [&>*]:pointer-events-auto"
-          >
-            <ZoomControls onFit={() => fit(true, true)} />
-            <AnimatePresence>{design && <DesignPalette key="palette" />}</AnimatePresence>
-          </div>
+          {!still && (
+            <div
+              dir={dir}
+              data-mv-overlays
+              className="pointer-events-none absolute inset-0 z-10 [&>*]:pointer-events-auto"
+            >
+              <ZoomControls onFit={() => fit(true, true)} />
+              <AnimatePresence>{design && <DesignPalette key="palette" />}</AnimatePresence>
+            </div>
+          )}
           <ZoomVar />
-          <OverflowHint />
+          {!still && <OverflowHint />}
           {chrome.minimap && (
             <MiniMap
               pannable
@@ -681,8 +709,8 @@ export const MachineCanvas = React.memo(function MachineCanvas() {
               style={{ width: 168, height: 104 }}
             />
           )}
-          <SelectionToolbar />
-          <Choreographer />
+          {!still && <SelectionToolbar />}
+          {!still && <Choreographer />}
         </ReactFlow>
       </EdgeEnvContext.Provider>
     </DragContext.Provider>

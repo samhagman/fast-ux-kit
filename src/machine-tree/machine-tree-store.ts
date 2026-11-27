@@ -168,6 +168,8 @@ export interface TreeModelCtx {
   readonly sim: SimView;
   /** Coarse pointer (touch): larger targets, no hover-only affordances. */
   readonly coarse: boolean;
+  /** `chrome="none"`: a still picture, so a machine's header leaves out its counts. */
+  readonly chromeless: boolean;
   readonly handoff: FocusHandoff;
   readonly toggle: (rowId: string) => void;
   readonly select: (rowId: string | null) => void;

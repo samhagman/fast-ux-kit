@@ -69,6 +69,8 @@ export interface TreeBase {
   readonly rootGraph: MachineGraph;
   /** This instance's accessible name (the `label` prop, else the root machine's label). */
   readonly label: string;
+  /** `chrome="none"`: only the machine, a still picture fitted to its box (see `MachineTreeProps`). */
+  readonly chromeless: boolean;
   readonly sim: MachineSimulation;
   /** How the topology is drawn: declared regions, reading order, and placement per container. */
   readonly flowPlan: MachineTreeFlowPlan;
@@ -278,6 +280,7 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
     runtimeRef,
     rootGraph,
     label: props.label?.trim() || rootGraph.label,
+    chromeless: props.chrome === "none",
     sim,
     flowPlan,
     topology,
@@ -339,6 +342,7 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       layoutEpoch,
       sim: run.view,
       coarse,
+      chromeless: base.chromeless,
       handoff,
       toggle: nav.toggle,
       select: nav.select,
@@ -374,6 +378,7 @@ export function useMachineTreeController(props: MachineTreeProps): MachineTreeCo
       layoutEpoch,
       run.view,
       coarse,
+      base.chromeless,
       handoff,
       nav.toggle,
       nav.select,

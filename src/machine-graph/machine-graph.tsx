@@ -36,6 +36,7 @@ import { PeekBar } from "./machine-phone.js";
 import { MachineCommands } from "./machine-commands.js";
 import { viewportDuration } from "./machine-viewport.js";
 import { MachineToasterHost, useMachineToaster } from "../machine-shared/machine-toast.js";
+import { describeMachine } from "../machine-shared/machine-copy.js";
 
 /**
  * Machine Graph: a statechart editor and simulator.
@@ -67,6 +68,12 @@ export type MachineGraphViewProps = UseMachineGraphOptions & {
   readonly toolbarStart?: React.ReactNode;
   /** Writing direction; defaults to the direction inherited from the page. */
   readonly dir?: Dir;
+  /**
+   * `full` (the default): the workspace, with its toolbar, status bar, inspector and canvas
+   * controls. `none`: only the machine, read-only and static, fitted and centred in the box (and
+   * refitted when the box resizes), for showing a machine on a page. The page scrolls past it.
+   */
+  readonly chrome?: "full" | "none";
 };
 
 /**
@@ -102,11 +109,12 @@ export function MachineGraphView(props: MachineGraphViewProps) {
 }
 
 /** Container width, not viewport width: the component may sit in any layout. */
-function useCompact(ref: React.RefObject<HTMLElement | null>) {
+function useCompact(ref: React.RefObject<HTMLElement | null>, enabled = true) {
   const [compact, setCompact] = React.useState(false);
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (!enabled) return setCompact(false);
     const measure = () => setCompact(el.getBoundingClientRect().width < COMPACT_BREAKPOINT);
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -116,7 +124,7 @@ function useCompact(ref: React.RefObject<HTMLElement | null>) {
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [ref]);
+  }, [ref, enabled]);
   return compact;
 }
 
@@ -214,9 +222,12 @@ function useFocusContinuity(
 
 function MachineGraphInner(props: MachineGraphViewProps) {
   const { className, toolbarStart, dir } = props;
+  /** `chrome="none"`: only the machine (see `MachineGraphViewProps.chrome`). */
+  const chromeless = props.chrome === "none";
   const root = React.useRef<HTMLDivElement>(null);
   const direction = useResolvedDirection(root, dir);
-  const compact = useCompact(root);
+  // The phone shell is chrome too: a chromeless view keeps the plain canvas at any width.
+  const compact = useCompact(root, !chromeless);
   // The canvas size before React Flow measures it: the real canvas column (no magic chrome numbers).
   const column = React.useRef<HTMLDivElement>(null);
   const measureViewport = React.useCallback(() => {
@@ -227,14 +238,16 @@ function MachineGraphInner(props: MachineGraphViewProps) {
   const toasterId = `machine-graph-${React.useId()}`;
   // Phone notices go to this view's own touch toaster, under its toolbar (the tree does the same).
   const touch = useMachineToaster(root, { toolbar: "[data-mv-toolbar]" });
-  const mv = useMachineGraph(props, {
+  // Chromeless is read-only: nothing on screen could edit, and no key is listened for.
+  const mv = useMachineGraph(chromeless ? { ...props, readOnly: true } : props, {
     compact,
     measureViewport,
-    toasterId: compact ? undefined : toasterId,
+    // Only the full desktop shell mounts this view's own toaster (ViewToaster).
+    toasterId: compact || chromeless ? undefined : toasterId,
     touchToast: touch.toast.show,
   });
   const diagram = useDiagramFacts(mv);
-  const canvas = useCanvasController(mv, diagram);
+  const canvasController = useCanvasController(mv, diagram);
   const flow = useReactFlow();
   /** Selection as it was before React Flow handled this keydown (Enter selects first). */
   const selectedBeforeKey = React.useRef<string | null>(null);
@@ -243,7 +256,7 @@ function MachineGraphInner(props: MachineGraphViewProps) {
   const [snap, setSnap] = React.useState<SheetSnap>("peek");
   const [sheetInset, setSheetInset] = React.useState(0);
   const [minimapPref, setMinimapPref] = React.useState<boolean | null>(null);
-  const minimap = !compact && (minimapPref ?? countStates(mv.graph) >= 12);
+  const minimap = !compact && !chromeless && (minimapPref ?? countStates(mv.graph) >= 12);
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [commandsOpen, setCommandsOpen] = React.useState(false);
   // Switching between phone and desktop shells resets the panel to that shell's default.
@@ -252,6 +265,7 @@ function MachineGraphInner(props: MachineGraphViewProps) {
 
   const chrome = React.useMemo<MachineChrome>(
     () => ({
+      chromeless,
       compact,
       panelOpen,
       setPanelOpen: setPanelPref,
@@ -264,7 +278,7 @@ function MachineGraphInner(props: MachineGraphViewProps) {
       showShortcuts: () => setShortcutsOpen(true),
       showCommands: () => setCommandsOpen(true),
     }),
-    [compact, panelOpen, snap, sheetInset, minimap],
+    [chromeless, compact, panelOpen, snap, sheetInset, minimap],
   );
 
   // Shortcuts live on the document while the component is "active" (focus inside, or the
@@ -276,6 +290,7 @@ function MachineGraphInner(props: MachineGraphViewProps) {
   const chromeRef = React.useRef(chrome);
   chromeRef.current = chrome;
   React.useEffect(() => {
+    if (chromeless) return;
     const onKey = (event: KeyboardEvent) => {
       const el = root.current;
       if (!el) return;
@@ -366,7 +381,62 @@ function MachineGraphInner(props: MachineGraphViewProps) {
     };
     window.document.addEventListener("keydown", onKey);
     return () => window.document.removeEventListener("keydown", onKey);
-  }, [flow]);
+  }, [flow, chromeless]);
+  // Built on an id the view already has: no extra `useId`, so the default view's ids stay as they were.
+  const descriptionId = `${toasterId}-description`;
+
+  const canvas = (
+    <CanvasBoundary resetKey={mv.machineId}>
+      <DiagramContext.Provider value={diagram}>
+        <CanvasContext.Provider value={canvasController}>
+          <MachineCanvas />
+        </CanvasContext.Provider>
+      </DiagramContext.Provider>
+    </CanvasBoundary>
+  );
+  const layoutError = mv.layoutError && (
+    <p
+      role="status"
+      className="absolute inset-x-3 top-3 z-10 rounded-md border bg-surface p-2 text-2xs"
+    >
+      Layout unavailable: {mv.layoutError}. The last diagram is retained.
+    </p>
+  );
+
+  if (chromeless)
+    // A picture of the machine: named and described as one image; the drawing itself is inert, so
+    // nothing in it is a tab stop, takes a click or captures the wheel.
+    return (
+      <DirectionScope dir={direction}>
+        <MachineContext.Provider value={mv}>
+          <ChromeContext.Provider value={chrome}>
+            <div
+              ref={root}
+              dir={dir}
+              role="img"
+              aria-label={`${mv.graph.label} statechart`}
+              aria-describedby={descriptionId}
+              data-slot="machine-graph"
+              data-chrome="none"
+              className={cn(
+                "relative flex min-h-0 flex-col overflow-hidden rounded-xl border bg-surface text-ui",
+                className,
+              )}
+            >
+              <div ref={column} data-mv-column className="relative min-h-0 min-w-0 flex-1">
+                {layoutError}
+                <div inert className="absolute inset-0">
+                  {canvas}
+                </div>
+              </div>
+              <span id={descriptionId} hidden>
+                {describeMachine(mv.graph)}
+              </span>
+            </div>
+          </ChromeContext.Provider>
+        </MachineContext.Provider>
+      </DirectionScope>
+    );
 
   return (
     <DirectionScope dir={direction}>
@@ -392,21 +462,8 @@ function MachineGraphInner(props: MachineGraphViewProps) {
             <MachineToolbar toolbarStart={toolbarStart} />
             <div className="relative flex min-h-0 flex-1">
               <div ref={column} data-mv-column className="relative min-w-0 flex-1">
-                {mv.layoutError && (
-                  <p
-                    role="status"
-                    className="absolute inset-x-3 top-3 z-10 rounded-md border bg-surface p-2 text-2xs"
-                  >
-                    Layout unavailable: {mv.layoutError}. The last diagram is retained.
-                  </p>
-                )}
-                <CanvasBoundary resetKey={mv.machineId}>
-                  <DiagramContext.Provider value={diagram}>
-                    <CanvasContext.Provider value={canvas}>
-                      <MachineCanvas />
-                    </CanvasContext.Provider>
-                  </DiagramContext.Provider>
-                </CanvasBoundary>
+                {layoutError}
+                {canvas}
                 {compact && !panelOpen && <PeekBar />}
                 {compact && (
                   <CanvasBoundary resetKey={mv.machineId} label="inspector">

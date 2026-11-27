@@ -28,6 +28,35 @@ or keyboard-focusing an enabled event deliberately computes a cached dry run;
 it never advances the current snapshot. Cache entries expire when the snapshot or
 payload changes. `runtime.guardDescriptions` may explain a blocked named guard.
 
+### Showing a machine on a page
+
+`chrome="none"` shows only the machine: a picture of it for a page, a card or a
+document. The default, `chrome="full"`, is the workspace described here.
+
+```tsx
+<div style={{ height: 360 }}>
+  <MachineGraphView document={document} readOnly chrome="none" />
+</div>
+```
+
+| With `chrome="none"`           | What happens                                                    |
+| ------------------------------ | --------------------------------------------------------------- |
+| Toolbar, status bar, inspector | Not drawn; nor are the minimap, zoom and Fit controls, palette  |
+| Ground                         | Plain surface: no dot grid and no React Flow attribution        |
+| A box under 768px wide         | Still the plain canvas: no peek bar or sheet                    |
+| Fit                            | The whole machine, centred with a margin, refitted on resize    |
+| Pointer, wheel, keys           | Nothing pans, zooms, drags or selects; the page scrolls past it |
+| Editing                        | Read-only, whatever `readOnly` says; no shortcuts are listened  |
+| Assistive technology           | One image, "{machine} statechart", described in words           |
+
+Give the box a height, as the full view needs. The drawing is inert, so no state
+or transition is a tab stop; the image's description names the states and says
+each transition as "EVENT [guard] from Source to Target" (up to 40 of each). The view is the one machine `document.rootId` names: a
+submachine cannot be opened from a picture. An inspection session still marks
+its active states. The machine sits on the `--surface` colour with nothing drawn
+behind it; React Flow's attribution is left out (React Flow is MIT licensed, so
+the notice is not required; the full view keeps it).
+
 ### Sending an event
 
 A guard is an opaque host function, so the view cannot read which payload it
