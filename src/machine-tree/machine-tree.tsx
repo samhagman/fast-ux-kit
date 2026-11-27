@@ -13,6 +13,7 @@ import {
   type MachineTreeRow,
 } from "../core/index.js";
 import { cn } from "../lib/utils.js";
+import { describeMachine } from "../machine-shared/machine-copy.js";
 import { DirectionScope, type Dir } from "../lib/direction.js";
 import {
   type MachineSimulation,
@@ -151,6 +152,14 @@ export interface MachineTreeProps extends MachineInspectionProps {
    * the same machine on one page distinct labels.
    */
   readonly label?: string;
+  /**
+   * `full` (the default): the workspace, with its toolbar, run footer and side panel. `none`: only
+   * the machine, a still picture scaled down to fit the box and centred in it (refitted when the
+   * box resizes; never enlarged past its own size), for showing a machine on a page. It is named
+   * "{label} state hierarchy" and described in words; nothing in it is a tab stop or takes a click,
+   * and the page scrolls past it. With an auto height the box takes the picture's height.
+   */
+  readonly chrome?: "full" | "none";
 }
 
 /** What a running (or idle) local simulation looks like from outside. */
@@ -235,8 +244,14 @@ export function MachineTreeRoot({
   children,
   ...props
 }: MachineTreeProps & { readonly children: React.ReactNode }) {
-  const ctl = useMachineTreeController(props);
+  const chromeless = props.chrome === "none";
+  // Chromeless leaves ⌘F and ⌘K to the page: there is no find field or palette to open.
+  const ctl = useMachineTreeController(
+    chromeless ? { ...props, captureFindShortcut: false } : props,
+  );
   const { layout, nav } = ctl;
+  // Built on an id the tree already has: no extra `useId`, so the default view's ids stay as they were.
+  const descriptionId = `${nav.helpId}-description`;
   return (
     <DirectionScope dir={layout.dir}>
       <ApiContext.Provider value={ctl.api}>
@@ -251,6 +266,15 @@ export function MachineTreeRoot({
                         ref={layout.rootRef}
                         data-slot="machine-tree"
                         dir={props.dir}
+                        // Chromeless is one picture: named, and described in words (the drawing is inert).
+                        {...(chromeless
+                          ? {
+                              "data-chrome": "none",
+                              role: "img",
+                              "aria-label": `${ctl.base.label} state hierarchy`,
+                              "aria-describedby": descriptionId,
+                            }
+                          : {})}
                         // Portalled parts (dialog, popovers) bubble here too: the focus hand-off sees them all.
                         onFocus={(event) => nav.noteFocus(event.target as HTMLElement)}
                         onKeyDown={(event) => {
@@ -270,13 +294,21 @@ export function MachineTreeRoot({
                         )}
                       >
                         {children}
-                        <GoToDialog />
-                        <TreeToasterHost
-                          id={layout.toaster.id}
-                          top={layout.toaster.top}
-                          dir={layout.dir}
-                          label={`${ctl.base.label} notifications`}
-                        />
+                        {chromeless ? (
+                          <span id={descriptionId} hidden>
+                            {describeMachine(ctl.base.rootGraph)}
+                          </span>
+                        ) : (
+                          <>
+                            <GoToDialog />
+                            <TreeToasterHost
+                              id={layout.toaster.id}
+                              top={layout.toaster.top}
+                              dir={layout.dir}
+                              label={`${ctl.base.label} notifications`}
+                            />
+                          </>
+                        )}
                         <span className="sr-only" role="status" aria-live="polite">
                           {ctl.announcement.polite}
                         </span>
@@ -296,8 +328,14 @@ export function MachineTreeRoot({
   );
 }
 
-/** The batteries-included composition. */
+/** The batteries-included composition (`chrome="none"`: the canvas alone). */
 export function MachineTree(props: MachineTreeProps) {
+  if (props.chrome === "none")
+    return (
+      <MachineTreeRoot {...props}>
+        <MachineTreeCanvas />
+      </MachineTreeRoot>
+    );
   return (
     <MachineTreeRoot {...props}>
       <MachineTreeToolbar />

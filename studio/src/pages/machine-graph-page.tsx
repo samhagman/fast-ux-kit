@@ -2,6 +2,7 @@ import * as React from "react";
 import type { MachineDocument } from "@samhagman/fast-ux-kit/core";
 import { machineLabCases } from "@/demo/machine-lab-data";
 import { MachineObservationDemo } from "@/demo/machine-observation-demo";
+import { MachinePresentationDemo } from "@/demo/machine-presentation-demo";
 import {
   MachineGraphView,
   type DistributiveOmit,
@@ -29,6 +30,7 @@ import {
  * `?readonly=1`: the read-only preset (view and simulate only). With `&controlled=1` it is a live
  * viewer: `document` + `readOnly`, no `onDocumentChange`; "Push update" plays a server changing the
  * document, and the view re-renders from the prop. `?dir=rtl`: a right-to-left page.
+ * `?chrome=none` (the Presentation button): the example as a picture on a page, `chrome="none"`.
  */
 type Host = "listen" | "clone" | "late" | "reject";
 const HOSTS: readonly Host[] = ["listen", "clone", "late", "reject"];
@@ -60,6 +62,7 @@ export function MachineGraphPage() {
   const [inspectDemo, setInspectDemo] = React.useState(
     () => new URLSearchParams(window.location.search).get("inspect") === "1",
   );
+  const [presentation, setPresentation] = React.useState(() => params.get("chrome") === "none");
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-background/60 px-4">
@@ -91,9 +94,23 @@ export function MachineGraphPage() {
         <div className="ms-auto flex items-center gap-2">
           <Button
             size="sm"
+            variant={presentation ? "secondary" : "outline"}
+            aria-pressed={presentation}
+            onClick={() => {
+              setPresentation((value) => !value);
+              setInspectDemo(false);
+            }}
+          >
+            Presentation
+          </Button>
+          <Button
+            size="sm"
             variant={inspectDemo ? "secondary" : "outline"}
             aria-pressed={inspectDemo}
-            onClick={() => setInspectDemo((value) => !value)}
+            onClick={() => {
+              setInspectDemo((value) => !value);
+              setPresentation(false);
+            }}
           >
             Inspect sample run
           </Button>
@@ -117,7 +134,18 @@ export function MachineGraphPage() {
         </div>
       </div>
       <div className="min-h-0 flex-1 p-0 sm:p-4">
-        {inspectDemo ? (
+        {presentation && !inspectDemo ? (
+          <MachinePresentationDemo view="graph" label={lab.label} dir={dir}>
+            <MachineGraphView
+              key={caseId}
+              document={lab.document}
+              readOnly
+              chrome="none"
+              dir={dir}
+              className="h-full"
+            />
+          </MachinePresentationDemo>
+        ) : inspectDemo ? (
           <MachineObservationDemo dir={dir} />
         ) : viewer ? (
           <MachineGraphView key={caseId} document={served} {...shared} readOnly />

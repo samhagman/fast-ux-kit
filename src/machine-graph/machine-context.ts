@@ -254,6 +254,8 @@ export const PANEL_W = 320;
 
 /** View-only chrome state shared by toolbar, canvas, inspector and the phone sheet. */
 export interface MachineChrome {
+  /** `chrome="none"`: only the machine, static and fitted to its box (no shell, controls or keys). */
+  readonly chromeless: boolean;
   readonly compact: boolean;
   readonly panelOpen: boolean;
   readonly setPanelOpen: (open: boolean) => void;
@@ -288,19 +290,8 @@ export const kindTag = (graph: MachineGraph, node: MachineNode) =>
   graph.nodes.find((n) => n.id === node.parentId)?.kind === "parallel"
     ? "region"
     : KIND_LABEL[node.kind];
-/** The shared `plural` (one helper for both machine components). */
-export { plural } from "../machine-shared/machine-copy.js";
-/** States as users count them: no notes, no initial pseudo-states. */
-export const countStates = (graph: MachineGraph) =>
-  graph.nodes.filter((n) => n.kind !== "note" && n.kind !== "initial").length;
-/**
- * Transitions as a reader counts them: the eventless arrow out of an initial pseudo-state is the
- * "starts here" marker (drawn without a chip, hidden from assistive tech), not a transition.
- */
-export const countTransitions = (graph: MachineGraph) => {
-  const pseudo = new Set(graph.nodes.filter((n) => n.kind === "initial").map((n) => n.id));
-  return graph.transitions.filter((t) => !(pseudo.has(t.sourceId) && !t.event)).length;
-};
+/** The shared `plural` and counts (one helper for both machine components). */
+export { plural, countStates, countTransitions } from "../machine-shared/machine-copy.js";
 
 export function stepCursor(mv: MachineGraphController, delta: number) {
   const trace = mv.snapshot?.trace ?? [];

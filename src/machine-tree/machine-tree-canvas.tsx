@@ -75,7 +75,8 @@ import { simStateOf, type SimState } from "../machine-shared/machine-sim.js";
 
 /** The scrollable dot-grid canvas holding the tree, the truncation notice and the replay cue. */
 export function MachineTreeCanvas() {
-  const { model, rows, rootGraph, documentItems, label, elements, stateRowIds } = useTreeBase();
+  const { model, rows, rootGraph, documentItems, label, elements, stateRowIds, chromeless } =
+    useTreeBase();
   const layout = useTreeLayout();
   const nav = useTreeNavigation();
   const { sim } = useTreeSimulation();
@@ -97,34 +98,78 @@ export function MachineTreeCanvas() {
         .find((el): el is HTMLElement => !!el),
   });
   useNarrowCanvas(layout.scrollerRef, layout.setCanvasNarrow);
+  const picture = React.useRef<HTMLDivElement>(null);
+  const fit = useFitToBox(layout.scrollerRef, picture, chromeless);
   const steps = sim.snapshot ? Math.max(0, sim.snapshot.trace.length - 1) : 0;
+  const drawn = roots.map((id, index) =>
+    rows.get(id)?.kind === "node" ? (
+      <StateCell key={id} id={id} />
+    ) : (
+      <MachineSection
+        key={id}
+        id={id}
+        primary={index === 0 && rows.get(id)?.machineId === rootGraph.id}
+        divided={index > 0}
+      />
+    ),
+  );
+  const truncation = model.truncated && (
+    <div
+      role="status"
+      className="flex shrink-0 items-center gap-2 border-b border-hairline bg-[color-mix(in_oklab,var(--warning)_9%,var(--surface))] px-3 py-1.5 text-[12px]"
+    >
+      <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <span>
+        Showing <bdi className="font-mono tabular-nums">{model.rows.length}</bdi> of{" "}
+        <bdi className="font-mono tabular-nums">{ctl.documentItems}</bdi> items — raise{" "}
+        <code className="font-mono text-[11px]">maxItems</code> to see all. Counts in headings are
+        document totals.
+      </span>
+    </div>
+  );
+  if (chromeless)
+    // A still picture: the outline at its own size, scaled down to fit the box and centred in it.
+    // Inert, so nothing in it is a tab stop or takes a click, hover or the wheel; the root names it.
+    return (
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {truncation}
+        <div
+          ref={ctl.scrollerRef}
+          data-mt-canvas=""
+          className="grid min-h-0 min-w-0 flex-1 place-items-center overflow-hidden bg-canvas"
+          style={CANVAS_DOTS}
+        >
+          <div
+            className="relative"
+            style={
+              fit ? { width: fit.width * fit.scale, height: fit.height * fit.scale } : undefined
+            }
+          >
+            <div
+              ref={picture}
+              data-mt-fit=""
+              inert
+              className={cn(
+                "grid w-max content-start gap-8 p-4 sm:p-6",
+                fit && "absolute start-0 top-0 origin-top-left rtl:origin-top-right",
+              )}
+              style={fit ? { transform: `scale(${fit.scale})` } : undefined}
+            >
+              {drawn}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   return (
     <div className="relative flex min-w-0 flex-1 flex-col">
-      {model.truncated && (
-        <div
-          role="status"
-          className="flex shrink-0 items-center gap-2 border-b border-hairline bg-[color-mix(in_oklab,var(--warning)_9%,var(--surface))] px-3 py-1.5 text-[12px]"
-        >
-          <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-warning" />
-          <span>
-            Showing <bdi className="font-mono tabular-nums">{model.rows.length}</bdi> of{" "}
-            <bdi className="font-mono tabular-nums">{ctl.documentItems}</bdi> items — raise{" "}
-            <code className="font-mono text-[11px]">maxItems</code> to see all. Counts in headings
-            are document totals.
-          </span>
-        </div>
-      )}
+      {truncation}
       <LookInside>
         <div
           ref={ctl.scrollerRef}
           data-mt-canvas=""
           className="min-w-0 flex-1 overflow-auto bg-canvas"
-          style={{
-            backgroundImage:
-              "radial-gradient(color-mix(in oklab, var(--foreground) 9%, transparent) 1px, transparent 1px)",
-            backgroundSize: "16px 16px",
-            scrollPaddingBottom: covered,
-          }}
+          style={{ ...CANVAS_DOTS, scrollPaddingBottom: covered }}
           onClick={(event) => event.target === event.currentTarget && ctl.select(null)}
         >
           <div
@@ -141,18 +186,7 @@ export function MachineTreeCanvas() {
             )}
             style={covered ? { paddingBottom: `calc(${covered} + 1rem)` } : undefined}
           >
-            {roots.map((id, index) =>
-              rows.get(id)?.kind === "node" ? (
-                <StateCell key={id} id={id} />
-              ) : (
-                <MachineSection
-                  key={id}
-                  id={id}
-                  primary={index === 0 && rows.get(id)?.machineId === rootGraph.id}
-                  divided={index > 0}
-                />
-              ),
-            )}
+            {drawn}
             {ctl.searching && ctl.matchIds.length === 0 && (
               <div
                 role="status"
@@ -229,6 +263,59 @@ export function MachineTreeCanvas() {
       </LookInside>
     </div>
   );
+}
+
+/** The canvas's dot grid. */
+const CANVAS_DOTS = {
+  backgroundImage:
+    "radial-gradient(color-mix(in oklab, var(--foreground) 9%, transparent) 1px, transparent 1px)",
+  backgroundSize: "16px 16px",
+} as const;
+
+/**
+ * `chrome="none"`: the scale that fits the picture (`content`, at its own size) inside the box
+ * (`box`), never above 1, refitted when either changes size. `null` until measured (and on the
+ * server), when the picture is drawn at its own size. The wrapper takes the scaled size, so a box
+ * with an auto height takes the picture's height: the box is then as tall as the picture at the
+ * width's scale, which is a fixed point (one more measure finds the same scale).
+ */
+function useFitToBox(
+  box: React.RefObject<HTMLElement | null>,
+  content: React.RefObject<HTMLElement | null>,
+  enabled: boolean,
+) {
+  const [fit, setFit] = React.useState<{
+    readonly width: number;
+    readonly height: number;
+    readonly scale: number;
+  } | null>(null);
+  React.useLayoutEffect(() => {
+    const outer = box.current;
+    const inner = content.current;
+    if (!enabled || !outer || !inner) return;
+    const measure = () => {
+      const width = inner.offsetWidth;
+      const height = inner.offsetHeight;
+      if (!width || !height || !outer.clientWidth) return;
+      const scale = Math.min(
+        1,
+        outer.clientWidth / width,
+        outer.clientHeight ? outer.clientHeight / height : 1,
+      );
+      setFit((old) =>
+        old && old.width === width && old.height === height && Math.abs(old.scale - scale) < 0.001
+          ? old
+          : { width, height, scale },
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(outer);
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, [box, content, enabled]);
+  return enabled ? fit : null;
 }
 
 /** A canvas this wide or narrower has no room for alternatives side by side: they stack. */
@@ -474,6 +561,7 @@ export const MachineSection = React.memo(function MachineSection({
     rootMachineId,
     first,
     issues,
+    chromeless,
   } = useTree();
   const flags = useRowFlags(id, first);
   const row = visible.get(id)!;
@@ -536,10 +624,12 @@ export const MachineSection = React.memo(function MachineSection({
           <Highlight text={row.label} />
         </span>
         <IssueMark messages={issues.get(id)} />
-        <span className="font-mono text-[10.5px] text-muted-foreground tabular-nums">
-          <bdi>{plural(states, "state")}</bdi> ·{" "}
-          <bdi>{plural(row.graph.transitions.length, "transition")}</bdi>
-        </span>
+        {!chromeless && (
+          <span className="font-mono text-[10.5px] text-muted-foreground tabular-nums">
+            <bdi>{plural(states, "state")}</bdi> ·{" "}
+            <bdi>{plural(row.graph.transitions.length, "transition")}</bdi>
+          </span>
+        )}
         {!primary && (
           <span
             dir="auto"
